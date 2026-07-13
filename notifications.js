@@ -1,4 +1,4 @@
-// NOTIFICATIONS v1-migré (d) — INSTRUMENTÉ (sondes [notif][probe])
+// NOTIFICATIONS v1-migré (f) — lit oropraUser (socle app) + sondes
 (function () {
   let __od_inited = false;
   OD.define('notifications', {
@@ -71,6 +71,12 @@
 
   // Utilisateur connecté : c'est une COLLECTION (e6331054), la donnée est dans .data.
   function getConnectedUser() {
+    try {
+      const fw = (WW.getFrontWindow && WW.getFrontWindow()) || window;
+      let u = fw.oropraUser;
+      if (Array.isArray(u)) u = u[0];
+      if (u && u.ID_User != null) return u;   // socle app oropraUser
+    } catch (e) {}
     const id = USERCONNECTED_VAR_ID;
     try {
       const col = WW.wwCollection && WW.wwCollection.getCollection ? WW.wwCollection.getCollection(id) : null;
@@ -86,7 +92,6 @@
       if (Array.isArray(v)) v = v[0];
       if (v) return v;
     } catch (e) {}
-    if (window.__OD_USER__) return window.__OD_USER__;
     return {};
   }
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])); }
@@ -356,9 +361,9 @@
   function getHost() { try { return D().querySelector('[data-oropra-notifs]'); } catch (e) { return null; } }
   function ensureRoot() {
     const host = getHost();
-    if (!host) { console.warn('[notif][probe] ensureRoot: HOTE INTROUVABLE'); return null; }
+    if (!host) return null;                 // pas d'hôte = pas la page Notifications -> ne rien afficher
     let root = host.querySelector('#' + ROOT_ID);
-    if (!root) { root = D().createElement('div'); root.id = ROOT_ID; host.appendChild(root); console.log('[notif][probe] root #oropra-notifs cree'); }
+    if (!root) { root = D().createElement('div'); root.id = ROOT_ID; host.appendChild(root); }
     return root;
   }
 
@@ -453,7 +458,7 @@
     const s = st();
     const root = ensureRoot();
     if (!root) return;                       // pas sur la page Notifications
-    queueMicrotask(() => { try { const r = root.getBoundingClientRect(); console.log('[notif][probe] rendu: innerHTML=' + root.innerHTML.length + ' inDOM=' + root.isConnected + ' visible=' + (!!root.offsetParent) + ' rect=' + JSON.stringify({w:Math.round(r.width),h:Math.round(r.height)}) + ' parent=' + (root.parentElement ? root.parentElement.tagName + '.' + root.parentElement.className : 'none')); } catch(e){ console.warn('[notif][probe] rendu log err', e);} });
+    queueMicrotask(() => { try { const r = root.getBoundingClientRect(); console.log('[notif][probe] rendu innerHTML=' + root.innerHTML.length + ' inDOM=' + root.isConnected + ' visible=' + (!!root.offsetParent) + ' rect=' + JSON.stringify({w:Math.round(r.width),h:Math.round(r.height)})); } catch(e){} });
 
     // Si le vendeur sélectionné n'a plus aucune notif dans la vue courante,
     // on repasse sur "toute l'équipe" (cohérent avec un menu qui ne liste que
@@ -611,7 +616,7 @@
       if (getHost() && WW.getFrontDocument && sb() && me && me.ID_User != null) { console.log('[notif][probe] -> start()'); start(); return; }
     } catch (e) { console.warn('[notif][probe] gate err', e); }
     if (tries < 60) setTimeout(() => ensureRendered(tries + 1), 250);
-    else console.warn('[notif][probe] ABANDON après 60 essais (condition jamais remplie)');
+    else console.warn('[notif][probe] ABANDON 60 essais');
   }
   ensureRendered();
 
