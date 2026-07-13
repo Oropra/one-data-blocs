@@ -1,15 +1,15 @@
 // ============================================================================
-//  NOTIFICATIONS — module One Data (OD.define)  v1 (checklist)
-//  Paramètre __anchor ; D() -> __anchor.ownerDocument ; user via socle oropraUser.
-//  L'observer interne (cycle realtime) est CONSERVÉ (exception légitime règle 3).
+//  NOTIFICATIONS — module One Data (OD.define)  v1 (checklist, top-level)
+//  __anchor ; D() -> __anchor.ownerDocument ; user via socle oropraUser.
+//  Observer realtime interne CONSERVÉ (exception règle 3).
 // ============================================================================
-(function () {
-  let __od_inited = false;
-  OD.define('notifications', {
-    mount(__anchor /*, ctx */) {
-      __anchor.setAttribute('data-oropra-notifs', '');
-      if (__od_inited) return;
-      __od_inited = true;
+console.log('[notif] script eval — OD =', typeof OD);
+OD.define('notifications', {
+  _inited: false,
+  mount(__anchor /*, ctx */) {
+    __anchor.setAttribute('data-oropra-notifs', '');
+    if (this._inited) return;
+    this._inited = true;
 /* =============================================================================
    OROPRA — Page Notifications (composant autonome)
    À coller dans le code de la page Notifications (ou un élément HTML).
@@ -79,7 +79,7 @@
       const fw = (WW.getFrontWindow && WW.getFrontWindow()) || window;
       let u = fw.oropraUser;
       if (Array.isArray(u)) u = u[0];
-      if (u && u.ID_User != null) return u;   // socle app oropraUser (source de vérité)
+      if (u && u.ID_User != null) return u;   // socle app oropraUser
     } catch (e) {}
     const id = USERCONNECTED_VAR_ID;
     try {
@@ -638,6 +638,5 @@
     obs.observe(D().body, { childList: true, subtree: true });
   } catch (e) {}
 })();
-    }
-  });
-})();
+  }
+});
