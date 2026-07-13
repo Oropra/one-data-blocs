@@ -14,13 +14,8 @@ OD.define('tutos', {
   /* ---------- À COMPLÉTER ---------- */
   // SUPABASE_URL / SUPABASE_ANON supprimés -> ctx.fn (projet du tenant)
   const INSTALL_LINK  = '[LIEN_INSTALLATION]';
-  const USER_COLLECTION_ID = 'e6331054-02e1-4f9d-b737-753455040b93'; // Userconnected
 
   /* =======================  RÔLE  ======================= */
-  function rawCollections() {
-    try { if (typeof collections !== 'undefined') return collections; } catch (e) {}
-    return win.collections || (window.wwLib && wwLib.collections) || {};
-  }
   function getRole() {
     try {
       const fw = (window.wwLib && wwLib.getFrontWindow && wwLib.getFrontWindow()) || win;
