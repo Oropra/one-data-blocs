@@ -1,18 +1,15 @@
 // ============================================================================
-//  ANNUAIRE DU GROUPE — module One Data (contrat OD.define)  v1-migré
-//  Migré depuis l'embed autoportant. Changements vs original :
-//   - racine = l'ancre `el` (el.id = 'oropra-annuaire' pour garder le CSS scopé)
-//   - Supabase : ctx.supabase (au lieu de wwLib.wwPlugins.supabase.instance)
-//   - doc = el.ownerDocument ; plus de self-boot/poll (le loader appelle mount)
-//   - VoIP Twilio (wwLib.getFrontWindow) conservé tel quel
-//  Chargé par le shell dans <div data-od-module="annuaire"></div>.
+//  ANNUAIRE DU GROUPE — module One Data (OD.define)  v1 (checklist)
+//  Rendu direct dans __anchor (pas de getElementById), ctx.supabase,
+//  doc = __anchor.ownerDocument, self-boot supprimé (loader orchestre).
+//  VoIP Twilio (wwLib.getFrontWindow) conservé.
 // ============================================================================
 OD.define('annuaire', {
-  async mount(el, ctx) {
+  async mount(__anchor, ctx) {
     const ROOT_ID = 'oropra-annuaire';
-    el.id = ROOT_ID;                       // la racine = l'ancre (CSS #oropra-annuaire OK)
-    const sb  = ctx.supabase;              // client runtime du tenant
-    const doc = el.ownerDocument || document;
+    __anchor.id = ROOT_ID;                     // conserve le CSS scopé #oropra-annuaire
+    const sb  = ctx.supabase;
+    const doc = __anchor.ownerDocument || document;
 
   // ---- rôles : libellé + niveau hiérarchique (pour tri + couleur de badge) ----
   const ROLE_META = {
@@ -191,7 +188,7 @@ OD.define('annuaire', {
   let toastEl = null, toastT = null;
   function toast(msg) {
     try {
-      const r = doc.getElementById(ROOT_ID);
+      const r = __anchor;
       const dd = (r && r.ownerDocument) || doc || document;
       if (!toastEl || !toastEl.isConnected) { toastEl = dd.createElement('div'); toastEl.className = 'an-toast'; (dd.body || dd.documentElement).appendChild(toastEl); }
       toastEl.textContent = msg || '';
@@ -458,7 +455,7 @@ OD.define('annuaire', {
 
   // ---------------------------------------------------------------- main render
   function render() {
-    const root = doc.getElementById(ROOT_ID);
+    const root = __anchor;
     if (!root || !DATA) return;
     const list = visibleUsers();
     const total = DATA.users.filter(u => state.showInactive || String(u.status).toLowerCase() === 'active').length;
@@ -503,7 +500,7 @@ OD.define('annuaire', {
 
   function bind(root) {
     const search = root.querySelector('.an-search input');
-    if (search) search.addEventListener('input', e => { state.q = e.target.value; const pos = e.target.selectionStart; render(); const ns = doc.getElementById(ROOT_ID).querySelector('.an-search input'); if (ns) { ns.focus(); try { ns.setSelectionRange(pos, pos); } catch (x) {} } });
+    if (search) search.addEventListener('input', e => { state.q = e.target.value; const pos = e.target.selectionStart; render(); const ns = __anchor.querySelector('.an-search input'); if (ns) { ns.focus(); try { ns.setSelectionRange(pos, pos); } catch (x) {} } });
     root.querySelectorAll('[data-view]').forEach(b => b.addEventListener('click', () => { state.view = b.getAttribute('data-view'); render(); }));
     root.querySelectorAll('[data-f]').forEach(el => el.addEventListener('change', e => {
       const f = el.getAttribute('data-f');
@@ -537,7 +534,7 @@ OD.define('annuaire', {
     const st = doc.createElement('style'); st.id = 'an-css'; st.textContent = CSS; head.appendChild(st);
   }
   async function boot() {
-    const root = doc.getElementById(ROOT_ID);
+    const root = __anchor;
     if (!root) return;
     ensureCss();
     root.innerHTML = '<div class="an-loading"><div class="an-spin"></div>Chargement de l\'annuaire…</div>';
@@ -549,6 +546,6 @@ OD.define('annuaire', {
       root.innerHTML = '<div class="an-err">Impossible de charger l\'annuaire.<br>' + esc(e.message || e) + '</div>';
     }
   }
-    await boot();                          // le loader garantit que l'ancre existe
+    await boot();                              // le loader garantit que l'ancre existe
   }
 });
