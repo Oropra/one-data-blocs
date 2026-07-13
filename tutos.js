@@ -4,10 +4,10 @@
 //  d'ID) ; edge via ctx.fn('tutos-coach') ; rôle via socle oropraUser.
 // ============================================================================
 OD.define('tutos', {
-  mount(el, ctx) {
+  mount(__anchor, ctx) {
   
 
-  const doc = el.ownerDocument || document;
+  const doc = __anchor.ownerDocument || document;
   const win = doc.defaultView || window;
 
   /* ---------- À COMPLÉTER ---------- */
@@ -431,7 +431,7 @@ OD.define('tutos', {
     }, d));
   }
   // montage unique dans l'ancre (le loader garantit que el existe et est unique)
-  build(el);
+  build(__anchor);
   resolveRoleThenMaybeRerender();
   }
 });
