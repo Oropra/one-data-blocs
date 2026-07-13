@@ -1,21 +1,20 @@
 // ============================================================================
-//  NOTIFICATIONS — module One Data (contrat OD.define)  v1-migré
-//  Emballage minimal : le code original est INCHANGÉ. Il était déjà conçu pour
-//  s'attacher à un hôte [data-oropra-notifs] et gérer son propre realtime.
-//   - l'ancre `el` devient cet hôte (setAttribute au montage)
-//   - init une seule fois (le module gère ensuite son cycle via son observer)
-//   - Supabase : via le plugin shimé (wwLib.wwPlugins.supabase.instance = client tenant)
-//  Chargé par le shell dans <div data-od-module="notifications"></div>.
+//  NOTIFICATIONS — module One Data (contrat OD.define)  v1-migré (b)
+//  Emballage minimal + 1 patch : D() pointe sur el.ownerDocument (le module
+//  cherchait son hôte dans getFrontDocument(), != document de l'ancre).
+//   - l'ancre `el` devient l'hôte [data-oropra-notifs]
+//   - init une seule fois ; le module gère ensuite son realtime via son observer
+//   - Supabase via le plugin shimé ; user via la collection WeWeb Userconnected
 // ============================================================================
 (function () {
   let __od_inited = false;
   OD.define('notifications', {
     mount(el /*, ctx */) {
-      el.setAttribute('data-oropra-notifs', '');   // l'ancre = l'hôte attendu par le module
-      if (__od_inited) return;                       // auto-init une seule fois
+      el.setAttribute('data-oropra-notifs', '');
+      if (__od_inited) return;
       __od_inited = true;
 
-      /* ===================== MODULE ORIGINAL — INCHANGÉ ===================== */
+      /* ===================== MODULE ORIGINAL (1 patch D()) ===================== */
 /* =============================================================================
    OROPRA — Page Notifications (composant autonome)
    À coller dans le code de la page Notifications (ou un élément HTML).
@@ -75,7 +74,7 @@
   const STATE_VERSION = 7;   // v7 = fetch de toute l'équipe + filtres (vendeur / VN-VO / média) côté client
 
   function W() { return WW.getFrontWindow(); }
-  function D() { return WW.getFrontDocument(); }
+  function D() { return el.ownerDocument || (WW.getFrontDocument && WW.getFrontDocument()) || document; }  // patch shell : doc de l'ancre
   function sb() { return WW.wwPlugins && WW.wwPlugins.supabase ? WW.wwPlugins.supabase.instance : null; }
   function readVar(id) { try { return WW.wwVariable.getValue(id); } catch (e) { return null; } }
 
