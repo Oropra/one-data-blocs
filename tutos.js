@@ -9,7 +9,6 @@ OD.define('tutos', {
 
   const doc = el.ownerDocument || document;
   const win = doc.defaultView || window;
-  const ROOT_EL = el;                         // l'ancre elle-même (pas de getElementById)
 
   /* ---------- À COMPLÉTER ---------- */
   // SUPABASE_URL / SUPABASE_ANON supprimés -> ctx.fn (projet du tenant)
@@ -431,11 +430,8 @@ OD.define('tutos', {
       if (r != null && r !== roleNum) { roleNum = r; group = groupOf(r); if (mount && !(win.location.hash || '').includes('tuto=')) renderHome(); }
     }, d));
   }
-  function start() {
-    const root = ROOT_EL; if (!root) return false;
-    if (root.dataset.tutosBuilt) return true; root.dataset.tutosBuilt = '1';
-    build(root); resolveRoleThenMaybeRerender(); return true;
-  }
-  if (!start()) { [100, 300, 600, 1000, 2000].forEach(d => setTimeout(start, d)); const obs = new MutationObserver(() => { if (start()) obs.disconnect(); }); obs.observe(doc.body || doc.documentElement, { childList: true, subtree: true }); }
+  // montage unique dans l'ancre (le loader garantit que el existe et est unique)
+  build(el);
+  resolveRoleThenMaybeRerender();
   }
 });
