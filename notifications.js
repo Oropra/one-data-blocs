@@ -1,11 +1,4 @@
-// ============================================================================
-//  NOTIFICATIONS — module One Data (contrat OD.define)  v1-migré (c)
-//  Emballage + 2 patchs :
-//   - D() pointe sur el.ownerDocument (hôte cherché dans le bon document)
-//   - getConnectedUser() : fallback window.__OD_USER__ (socle shell) si la
-//     collection WeWeb Userconnected est absente de la page
-//  Reste du code original INCHANGÉ.
-// ============================================================================
+// NOTIFICATIONS v1-migré (d) — INSTRUMENTÉ (sondes [notif][probe])
 (function () {
   let __od_inited = false;
   OD.define('notifications', {
@@ -13,8 +6,6 @@
       el.setAttribute('data-oropra-notifs', '');
       if (__od_inited) return;
       __od_inited = true;
-
-      /* ===================== MODULE ORIGINAL (2 patchs) ===================== */
 /* =============================================================================
    OROPRA — Page Notifications (composant autonome)
    À coller dans le code de la page Notifications (ou un élément HTML).
@@ -74,7 +65,7 @@
   const STATE_VERSION = 7;   // v7 = fetch de toute l'équipe + filtres (vendeur / VN-VO / média) côté client
 
   function W() { return WW.getFrontWindow(); }
-  function D() { return el.ownerDocument || (WW.getFrontDocument && WW.getFrontDocument()) || document; }  // patch shell
+  function D() { return el.ownerDocument || (WW.getFrontDocument && WW.getFrontDocument()) || document; }
   function sb() { return WW.wwPlugins && WW.wwPlugins.supabase ? WW.wwPlugins.supabase.instance : null; }
   function readVar(id) { try { return WW.wwVariable.getValue(id); } catch (e) { return null; } }
 
@@ -95,7 +86,7 @@
       if (Array.isArray(v)) v = v[0];
       if (v) return v;
     } catch (e) {}
-    if (window.__OD_USER__) return window.__OD_USER__;   // patch shell : socle ctx.user
+    if (window.__OD_USER__) return window.__OD_USER__;
     return {};
   }
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])); }
@@ -365,9 +356,9 @@
   function getHost() { try { return D().querySelector('[data-oropra-notifs]'); } catch (e) { return null; } }
   function ensureRoot() {
     const host = getHost();
-    if (!host) return null;                 // pas d'hôte = pas la page Notifications -> ne rien afficher
+    if (!host) { console.warn('[notif][probe] ensureRoot: HOTE INTROUVABLE'); return null; }
     let root = host.querySelector('#' + ROOT_ID);
-    if (!root) { root = D().createElement('div'); root.id = ROOT_ID; host.appendChild(root); }
+    if (!root) { root = D().createElement('div'); root.id = ROOT_ID; host.appendChild(root); console.log('[notif][probe] root #oropra-notifs cree'); }
     return root;
   }
 
@@ -462,6 +453,7 @@
     const s = st();
     const root = ensureRoot();
     if (!root) return;                       // pas sur la page Notifications
+    queueMicrotask(() => { try { const r = root.getBoundingClientRect(); console.log('[notif][probe] rendu: innerHTML=' + root.innerHTML.length + ' inDOM=' + root.isConnected + ' visible=' + (!!root.offsetParent) + ' rect=' + JSON.stringify({w:Math.round(r.width),h:Math.round(r.height)}) + ' parent=' + (root.parentElement ? root.parentElement.tagName + '.' + root.parentElement.className : 'none')); } catch(e){ console.warn('[notif][probe] rendu log err', e);} });
 
     // Si le vendeur sélectionné n'a plus aucune notif dans la vue courante,
     // on repasse sur "toute l'équipe" (cohérent avec un menu qui ne liste que
@@ -615,9 +607,11 @@
     tries = tries || 0;
     try {
       const me = getConnectedUser();
-      if (getHost() && WW.getFrontDocument && sb() && me && me.ID_User != null) { start(); return; }
-    } catch (e) {}
+      if (tries === 0) console.log('[notif][probe] gate', { host: !!getHost(), sb: !!sb(), meId: me && me.ID_User });
+      if (getHost() && WW.getFrontDocument && sb() && me && me.ID_User != null) { console.log('[notif][probe] -> start()'); start(); return; }
+    } catch (e) { console.warn('[notif][probe] gate err', e); }
     if (tries < 60) setTimeout(() => ensureRendered(tries + 1), 250);
+    else console.warn('[notif][probe] ABANDON après 60 essais (condition jamais remplie)');
   }
   ensureRendered();
 
@@ -638,7 +632,6 @@
     obs.observe(D().body, { childList: true, subtree: true });
   } catch (e) {}
 })();
-      /* =================== FIN MODULE ORIGINAL =================== */
     }
   });
 })();
