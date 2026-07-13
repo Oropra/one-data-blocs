@@ -1,11 +1,15 @@
-// TUTOS v1 (b) — INSTRUMENTÉ (sondes [tutos][probe])
+// ============================================================================
+//  TUTOS / Centre d'aide Delco coach — module One Data (OD.define)  v1
+//  Migré : rend DANS l'ancre `el` (aucun getElementById -> pas de collision
+//  d'ID) ; edge via ctx.fn('tutos-coach') ; rôle via socle oropraUser.
+// ============================================================================
 OD.define('tutos', {
   mount(el, ctx) {
   
 
-  el.id = 'tutos-root';
   const doc = el.ownerDocument || document;
   const win = doc.defaultView || window;
+  const ROOT_EL = el;                         // l'ancre elle-même (pas de getElementById)
 
   /* ---------- À COMPLÉTER ---------- */
   // SUPABASE_URL / SUPABASE_ANON supprimés -> ctx.fn (projet du tenant)
@@ -433,13 +437,9 @@ OD.define('tutos', {
     }, d));
   }
   function start() {
-    const root = doc.getElementById('tutos-root');
-    console.log('[tutos][probe] start root=', !!root, 'docIsAnchorDoc=', doc === el.ownerDocument);
-    if (!root) return false;
+    const root = ROOT_EL; if (!root) return false;
     if (root.dataset.tutosBuilt) return true; root.dataset.tutosBuilt = '1';
-    build(root); resolveRoleThenMaybeRerender();
-    queueMicrotask(() => { try { const r = root.getBoundingClientRect(); console.log('[tutos][probe] built innerHTML=' + root.innerHTML.length + ' inDOM=' + root.isConnected + ' visible=' + (!!root.offsetParent) + ' rect=' + JSON.stringify({w:Math.round(r.width),h:Math.round(r.height)}) + ' role=' + roleNum); } catch(e){ console.warn('[tutos][probe] err', e); } });
-    return true;
+    build(root); resolveRoleThenMaybeRerender(); return true;
   }
   if (!start()) { [100, 300, 600, 1000, 2000].forEach(d => setTimeout(start, d)); const obs = new MutationObserver(() => { if (start()) obs.disconnect(); }); obs.observe(doc.body || doc.documentElement, { childList: true, subtree: true }); }
   }
