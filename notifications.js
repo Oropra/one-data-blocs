@@ -1,4 +1,12 @@
-// NOTIFICATIONS v1-migré (f) — lit oropraUser (socle app) + sondes
+// ============================================================================
+//  NOTIFICATIONS — module One Data (contrat OD.define)  v1 (prod)
+//  Emballage + 2 patchs alignés sur l'architecture shell :
+//   - D() -> el.ownerDocument (hôte cherché dans le bon document)
+//   - getConnectedUser() -> lit le socle oropraUser (front window), comme le
+//     reste de l'app ; la collection WeWeb Userconnected n'est plus utilisée
+//     (elle était vide -> page blanche, bug d'origine désormais corrigé)
+//  Reste du code original INCHANGÉ.
+// ============================================================================
 (function () {
   let __od_inited = false;
   OD.define('notifications', {
@@ -75,7 +83,7 @@
       const fw = (WW.getFrontWindow && WW.getFrontWindow()) || window;
       let u = fw.oropraUser;
       if (Array.isArray(u)) u = u[0];
-      if (u && u.ID_User != null) return u;   // socle app oropraUser
+      if (u && u.ID_User != null) return u;   // socle app oropraUser (source de vérité)
     } catch (e) {}
     const id = USERCONNECTED_VAR_ID;
     try {
@@ -458,7 +466,6 @@
     const s = st();
     const root = ensureRoot();
     if (!root) return;                       // pas sur la page Notifications
-    queueMicrotask(() => { try { const r = root.getBoundingClientRect(); console.log('[notif][probe] rendu innerHTML=' + root.innerHTML.length + ' inDOM=' + root.isConnected + ' visible=' + (!!root.offsetParent) + ' rect=' + JSON.stringify({w:Math.round(r.width),h:Math.round(r.height)})); } catch(e){} });
 
     // Si le vendeur sélectionné n'a plus aucune notif dans la vue courante,
     // on repasse sur "toute l'équipe" (cohérent avec un menu qui ne liste que
@@ -612,11 +619,9 @@
     tries = tries || 0;
     try {
       const me = getConnectedUser();
-      if (tries === 0) console.log('[notif][probe] gate', { host: !!getHost(), sb: !!sb(), meId: me && me.ID_User });
-      if (getHost() && WW.getFrontDocument && sb() && me && me.ID_User != null) { console.log('[notif][probe] -> start()'); start(); return; }
-    } catch (e) { console.warn('[notif][probe] gate err', e); }
+      if (getHost() && WW.getFrontDocument && sb() && me && me.ID_User != null) { start(); return; }
+    } catch (e) {}
     if (tries < 60) setTimeout(() => ensureRendered(tries + 1), 250);
-    else console.warn('[notif][probe] ABANDON 60 essais');
   }
   ensureRendered();
 
