@@ -1,18 +1,14 @@
-// ============================================================================
-//  TUTOS / Centre d'aide Delco coach — module One Data (OD.define)  v1
-//  Migré : root = el ; appel edge via ctx.fn('tutos-coach') (plus d'URL/anon
-//  en dur) ; rôle via socle oropraUser (au lieu de la collection Userconnected).
-// ============================================================================
+// TUTOS v1 (b) — INSTRUMENTÉ (sondes [tutos][probe])
 OD.define('tutos', {
   mount(el, ctx) {
   
 
-  el.id = 'tutos-root';                       // l'ancre = la racine
+  el.id = 'tutos-root';
   const doc = el.ownerDocument || document;
   const win = doc.defaultView || window;
 
   /* ---------- À COMPLÉTER ---------- */
-  // SUPABASE_URL / SUPABASE_ANON supprimés -> appels via ctx.fn (projet du tenant)
+  // SUPABASE_URL / SUPABASE_ANON supprimés -> ctx.fn (projet du tenant)
   const INSTALL_LINK  = '[LIEN_INSTALLATION]';
   const USER_COLLECTION_ID = 'e6331054-02e1-4f9d-b737-753455040b93'; // Userconnected
 
@@ -25,7 +21,7 @@ OD.define('tutos', {
     try {
       const fw = (window.wwLib && wwLib.getFrontWindow && wwLib.getFrontWindow()) || win;
       let u = fw.oropraUser; if (Array.isArray(u)) u = u[0];
-      const r = u && u.ID_Role;              // socle oropraUser (au lieu de Userconnected)
+      const r = u && u.ID_Role;
       return r != null ? Number(r) : null;
     } catch (e) { return null; }
   }
@@ -437,9 +433,13 @@ OD.define('tutos', {
     }, d));
   }
   function start() {
-    const root = doc.getElementById('tutos-root'); if (!root) return false;
+    const root = doc.getElementById('tutos-root');
+    console.log('[tutos][probe] start root=', !!root, 'docIsAnchorDoc=', doc === el.ownerDocument);
+    if (!root) return false;
     if (root.dataset.tutosBuilt) return true; root.dataset.tutosBuilt = '1';
-    build(root); resolveRoleThenMaybeRerender(); return true;
+    build(root); resolveRoleThenMaybeRerender();
+    queueMicrotask(() => { try { const r = root.getBoundingClientRect(); console.log('[tutos][probe] built innerHTML=' + root.innerHTML.length + ' inDOM=' + root.isConnected + ' visible=' + (!!root.offsetParent) + ' rect=' + JSON.stringify({w:Math.round(r.width),h:Math.round(r.height)}) + ' role=' + roleNum); } catch(e){ console.warn('[tutos][probe] err', e); } });
+    return true;
   }
   if (!start()) { [100, 300, 600, 1000, 2000].forEach(d => setTimeout(start, d)); const obs = new MutationObserver(() => { if (start()) obs.disconnect(); }); obs.observe(doc.body || doc.documentElement, { childList: true, subtree: true }); }
   }
