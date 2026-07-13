@@ -1,9 +1,8 @@
 // ============================================================================
-//  NOTIFICATIONS — module One Data (OD.define)  v1 (checklist, top-level)
+//  NOTIFICATIONS — module One Data (OD.define)  v1 (checklist)
 //  __anchor ; D() -> __anchor.ownerDocument ; user via socle oropraUser.
 //  Observer realtime interne CONSERVÉ (exception règle 3).
 // ============================================================================
-console.log('[notif] script eval — OD =', typeof OD);
 OD.define('notifications', {
   _inited: false,
   mount(__anchor /*, ctx */) {
