@@ -1,5 +1,5 @@
 // ============================================================================
-//  TOP NAV — module One Data (OD.define)  v1 (étape B)
+//  TOP NAV — module One Data (OD.define)  v2 (étape B) — refresh user au montage
 //  Extrait de authDefine. Rendu dans __anchor (#nav-root) ; logo via
 //  ctx.tenant.logo_url ; ref morte Userconnected retirée.
 //  GARDÉS (constants de l'app partagée, identiques pour tous les tenants) :
@@ -655,5 +655,14 @@ OD.define('topnav', {
   }
   boot();
 })();
+    // La nav s'est peut-être construite AVANT que oropraUser soit à jour (event
+    // 'oropra-user-ready' émis par le socle avant le chargement CDN du module).
+    // On re-déclenche l'event -> onUserReady() force un rebuild avec le user courant.
+    try {
+      const W = (window.wwLib && window.wwLib.getFrontWindow && window.wwLib.getFrontWindow()) || window;
+      const fire = () => { try { W.dispatchEvent(new CustomEvent('oropra-user-ready')); } catch (e) {} };
+      fire(); setTimeout(fire, 300); setTimeout(fire, 1000);
+    } catch (e) {}
+
   }
 });
