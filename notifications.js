@@ -1,17 +1,13 @@
 // ============================================================================
-//  NOTIFICATIONS — module One Data (contrat OD.define)  v1 (prod)
-//  Emballage + 2 patchs alignés sur l'architecture shell :
-//   - D() -> el.ownerDocument (hôte cherché dans le bon document)
-//   - getConnectedUser() -> lit le socle oropraUser (front window), comme le
-//     reste de l'app ; la collection WeWeb Userconnected n'est plus utilisée
-//     (elle était vide -> page blanche, bug d'origine désormais corrigé)
-//  Reste du code original INCHANGÉ.
+//  NOTIFICATIONS — module One Data (OD.define)  v1 (checklist)
+//  Paramètre __anchor ; D() -> __anchor.ownerDocument ; user via socle oropraUser.
+//  L'observer interne (cycle realtime) est CONSERVÉ (exception légitime règle 3).
 // ============================================================================
 (function () {
   let __od_inited = false;
   OD.define('notifications', {
-    mount(el /*, ctx */) {
-      el.setAttribute('data-oropra-notifs', '');
+    mount(__anchor /*, ctx */) {
+      __anchor.setAttribute('data-oropra-notifs', '');
       if (__od_inited) return;
       __od_inited = true;
 /* =============================================================================
@@ -73,7 +69,7 @@
   const STATE_VERSION = 7;   // v7 = fetch de toute l'équipe + filtres (vendeur / VN-VO / média) côté client
 
   function W() { return WW.getFrontWindow(); }
-  function D() { return el.ownerDocument || (WW.getFrontDocument && WW.getFrontDocument()) || document; }
+  function D() { return __anchor.ownerDocument || (WW.getFrontDocument && WW.getFrontDocument()) || document; }
   function sb() { return WW.wwPlugins && WW.wwPlugins.supabase ? WW.wwPlugins.supabase.instance : null; }
   function readVar(id) { try { return WW.wwVariable.getValue(id); } catch (e) { return null; } }
 
