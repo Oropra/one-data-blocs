@@ -47,7 +47,7 @@
 // statement") qui empêche TOUT le script de s'exécuter (loader figé). Dans une
 // fonction, les `return` de garde sont parfaitement légaux.
 OD.define('activite', {
-  mount(__anchor, ctx) {
+  async mount(__anchor, ctx) {
     __anchor.id = 'act-root';
 const SUPABASE_URL = ctx.tenant.supabase_url;
 function getSupabaseKey() { return ctx.tenant.supabase_anon_key; }
@@ -61,7 +61,16 @@ const doc  = __anchor.ownerDocument || document;
 function getRoot() { return __anchor; }
 if (!getRoot()) return;
 
-const userConnected = (((wwLib.getFrontWindow && wwLib.getFrontWindow()) || window).oropraUser || {});
+// L'utilisateur applicatif est chargé par le Shell AVANT le mount initial ; en
+// navigation SPA le module peut toutefois monter à un instant limite -> on
+// patiente brièvement et on gère le cas tableau.
+{
+  const _w = (wwLib.getFrontWindow && wwLib.getFrontWindow()) || window;
+  const _uid = () => { let d = _w.oropraUser; if (Array.isArray(d)) d = d[0]; return d && d.ID_User; };
+  for (let i = 0; i < 40 && _uid() == null; i++) { await new Promise(r => setTimeout(r, 250)); }
+}
+let userConnected = (((wwLib.getFrontWindow && wwLib.getFrontWindow()) || window).oropraUser || {});
+if (Array.isArray(userConnected)) userConnected = userConnected[0] || {};
 const viewerId = userConnected.ID_User;
 const userRole = userConnected.ID_Role;
 if (viewerId == null) { const r0 = getRoot(); if (r0) r0.innerHTML = '<div style="padding:20px;color:#7a9cc4">Utilisateur non identifié.</div>'; return; }
