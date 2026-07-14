@@ -34,11 +34,21 @@ function getRoot() { return __anchor; }
 
 // self-boot retiré (le loader monte le module)
 
+// L'utilisateur applicatif peut être chargé par le socle APRÈS le montage du
+// dashboard. On l'attend brièvement (getUser socle) avant de lire viewerId, au
+// lieu d'abandonner sur "non identifié".
+{
+  const _w = (wwLib.getFrontWindow && wwLib.getFrontWindow()) || window;
+  const _uid = () => { let d = _w.oropraUser; if (Array.isArray(d)) d = d[0]; return d && d.ID_User; };
+  for (let i = 0; i < 40 && _uid() == null; i++) { await new Promise(r => setTimeout(r, 250)); }
+}
+
 const userConnected = (((wwLib.getFrontWindow && wwLib.getFrontWindow()) || window).oropraUser || {});
-const viewerId    = userConnected.ID_User;
-const viewerName  = userConnected.nomComplet || '';
-const viewerRoleUC = userConnected.ID_Role != null ? Number(userConnected.ID_Role) : null;
-const viewerSiteUC = userConnected.ID_SITE != null ? Number(userConnected.ID_SITE) : null;
+const viewerId    = (Array.isArray(userConnected) ? (userConnected[0] || {}) : userConnected).ID_User;
+const _uc          = Array.isArray(userConnected) ? (userConnected[0] || {}) : userConnected;
+const viewerName  = _uc.nomComplet || '';
+const viewerRoleUC = _uc.ID_Role != null ? Number(_uc.ID_Role) : null;
+const viewerSiteUC = _uc.ID_SITE != null ? Number(_uc.ID_SITE) : null;
 if (viewerId == null) { const r0 = getRoot(); if (r0) r0.innerHTML = '<div style="padding:20px;color:#7a9cc4">Utilisateur non identifié.</div>'; return; }
 
 function siteBus() {
