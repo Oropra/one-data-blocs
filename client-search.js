@@ -139,8 +139,13 @@ OD.define('client-search', {
 
   // 🔵 Déclenche le workflow "fiche client" (fetch + re-subscribe realtime) pour le client passé
   function triggerFicheClient(idvu) {
-    try { wwLib.wwWorkflow.executeGlobal(FICHE_CLIENT_WORKFLOW_ID, { IDVu: idvu }); }
-    catch (e) { console.warn('[crs] executeGlobal fiche client KO', e && e.message); }
+    // Workflow global 'fiche client' (ec8bcc55) DÉSACTIVÉ : reliquat de l'ancienne
+    // architecture (fetch client + re-subscribe realtime). Ces rôles sont désormais
+    // assurés par les modules (cf-fiche lit le client sélectionné ; contacts/historique
+    // gèrent leur propre realtime). Ce workflow insérait dans wa_contacts -> 409.
+    // L'appel est coupé ; la fonction reste (no-op) pour ne pas casser les appelants.
+    // try { wwLib.wwWorkflow.executeGlobal(FICHE_CLIENT_WORKFLOW_ID, { IDVu: idvu }); }
+    // catch (e) { console.warn('[crs] executeGlobal fiche client KO', e && e.message); }
   }
 
   function buildQuery(supabase) {
