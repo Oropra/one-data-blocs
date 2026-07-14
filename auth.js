@@ -95,11 +95,17 @@ OD.define('auth', {
   }
 
   function navigateAccueil() {
-    // Navigation SPA (pas de reload) : la top nav + l'historique sont démarrés
-    // juste avant (comme l'ancien workflow de connexion) et se montent via leurs
-    // observers sur la page d'accueil.
-    // Redirection accueil AVEC le préfixe de langue (WeWeb sert sous /fr/…).
-    // location.href est infaillible et respecte le préfixe ; on le déduit de l'URL.
+    // ÉDITEUR vs PROD : en éditeur, location.href recharge l'iframe de preview et
+    // emboîte un nouvel éditeur (double bootstrap). On y navigue donc en SPA.
+    // En prod, location.href avec préfixe de langue est le plus fiable (/fr/…).
+    var inEditor = false;
+    try { inEditor = (window.self !== window.top) || /-editor\.weweb\.io|weweb\.io/i.test(location.hostname); } catch (e) {}
+    if (inEditor) {
+      try { if (wwLib.wwApp && wwLib.wwApp.goTo) { wwLib.wwApp.goTo(ACCUEIL_PATH); return; } } catch (e) {}
+      try { wwLib.goTo(ACCUEIL_PATH); return; } catch (e) {}
+      return;
+    }
+    // PROD : navigation par URL avec le préfixe de langue déduit de l'URL courante.
     try {
       var m = (win.location.pathname || '').match(/^\/([a-z]{2})(\/|$)/i);
       var langPrefix = m ? '/' + m[1] : '/fr';
