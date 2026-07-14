@@ -43,7 +43,7 @@ OD.define('fiche-shell', {
   const state = { tab: 'fiche', client: null, idvu: null };
     // Onglets migrés en module OD.define -> montés par le loader dans une ancre.
     // (les autres gardent leur div par id, remplie par l'ancien bloc on-page-load)
-    const MOD = { fiche: 'cf-fiche' };
+    const MOD = { fiche: 'cf-fiche', likes: 'likes', contacts: 'contacts', rdv: 'rdv', vehicules: 'vehicules', pcom: 'pcom', entreprise: 'entreprise', historique: 'historique' };
 
   // ---------------------------------------------------------------- helpers
   function esc(s) { if (s == null) return ''; return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
@@ -262,7 +262,7 @@ OD.define('fiche-shell', {
   function openRpv() {
     const ex = doc.getElementById('fs-rpv-overlay'); if (ex) ex.remove();
     const ov = doc.createElement('div'); ov.id = 'fs-rpv-overlay';
-    ov.innerHTML = '<div class="fs-rpv-bg"></div><div class="fs-rpv-box"><button class="fs-rpv-x" aria-label="Fermer">&times;</button><div id="rpv-root"></div></div>';
+    ov.innerHTML = '<div class="fs-rpv-bg"></div><div class="fs-rpv-box"><button class="fs-rpv-x" aria-label="Fermer">&times;</button><div data-od-module="rpv"></div></div>';
     (doc.body || doc.documentElement).appendChild(ov);
     const close = () => { try { ov.remove(); } catch (e) {} };
     ov.querySelector('.fs-rpv-bg').addEventListener('click', close);
