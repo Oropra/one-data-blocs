@@ -41,6 +41,9 @@ OD.define('fiche-shell', {
   const READY = { fiche: true, likes: true, contacts: true, vehicules: true, rdv: true, pcom: true, entreprise: true, historique: true };
 
   const state = { tab: 'fiche', client: null, idvu: null };
+    // Onglets migrés en module OD.define -> montés par le loader dans une ancre.
+    // (les autres gardent leur div par id, remplie par l'ancien bloc on-page-load)
+    const MOD = { fiche: 'cf-fiche' };
 
   // ---------------------------------------------------------------- helpers
   function esc(s) { if (s == null) return ''; return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
@@ -239,7 +242,8 @@ OD.define('fiche-shell', {
     return '<div class="fs-content">' + visibleTabs().map(t => {
       const on = state.tab === t.key;
       const st = ' style="display:' + (on ? 'block' : 'none') + '"';
-      if (READY[t.key]) return '<div class="fs-pane fs-card fs-pane--mount' + (on ? ' on' : '') + '" data-pane="' + t.key + '"' + st + '><div id="' + t.mount + '"></div></div>';
+      if (READY[t.key]) if (MOD[t.key]) return '<div class="fs-pane fs-card fs-pane--mount' + (on ? ' on' : '') + '" data-pane="' + t.key + '"' + st + '><div data-od-module="' + MOD[t.key] + '"></div></div>';
+      return '<div class="fs-pane fs-card fs-pane--mount' + (on ? ' on' : '') + '" data-pane="' + t.key + '"' + st + '><div id="' + t.mount + '"></div></div>';
       return '<div class="fs-pane fs-card' + (on ? ' on' : '') + '" data-pane="' + t.key + '"' + st + '><div class="fs-ph">Onglet « ' + esc(t.label) + ' » — module à venir (prochaine brique).</div></div>';
     }).join('') + '</div>';
   }
