@@ -33,12 +33,7 @@ OD.define('pcom', {
     try { const v = wwLib.wwVariable.getValue(PC_VAR_CACHE); return (v && typeof v==='object') ? v : null; }
     catch(e){ return null; }
   }
-  function PC_writeCache(){
-    try { wwLib.wwVariable.updateValue(PC_VAR_CACHE, {
-      idClient: S.idClient, rows: S.rows,
-      fStatus: S.fStatus, fVnVo: S.fVnVo, fReseau: S.fReseau, fAffaire: S.fAffaire, fSite: S.fSite
-    }); } catch(e){ console.error('[pcom] writeCache', e); }
-  }
+  function PC_writeCache(){ /* cache WeWeb retiré (variable supprimée du projet) : l'état en mémoire (S) suffit */ }
   const _cache = PC_readCache();
   const S = {
     idClient: (_cache && _cache.idClient!=null) ? _cache.idClient : null,
