@@ -24,11 +24,7 @@ OD.define('rdv', {
     try { const v = wwLib.wwVariable.getValue(RV_VAR_CACHE); return (v && typeof v==='object') ? v : null; }
     catch(e){ return null; }
   }
-  function RV_writeCache(){
-    try { wwLib.wwVariable.updateValue(RV_VAR_CACHE, {
-      idClient: S.idClient, rows: S.rows, filter: S.filter
-    }); } catch(e){ console.error('[rdv] writeCache', e); }
-  }
+  function RV_writeCache(){ /* cache WeWeb retiré (variable supprimée du projet) : l'état en mémoire (S) suffit */ }
   const _cache = RV_readCache();
   const S = {
     idClient: (_cache && _cache.idClient!=null) ? _cache.idClient : null,
