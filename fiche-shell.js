@@ -279,9 +279,16 @@ OD.define('fiche-shell', {
   // Onglets qui reflètent les échanges (SMS, WA, appels, RPV) : on invalide leur
   // cache à l'ouverture pour afficher les nouveaux échanges sans recharger la page.
   function refreshLiveTab(key) {
-    const map = { contacts: ['__contactsState', 'oropra-contacts-root'], historique: ['__histoState', 'oropra-historique-root'] };
+    // Onglets "live" (contacts / historique) : on force un rechargement frais en
+    // RECRÉANT l'ancre -> le loader remonte le module (les observers internes ont
+    // été retirés, c'est le loader qui possède désormais le cycle de vie).
+    const map = { contacts: ['__contactsState', 'contacts'], historique: ['__histoState', 'historique'] };
     const e = map[key]; if (!e) return;
-    try { const st = window[e[0]]; if (st) { st.rows = null; st.loading = true; } const d = doc.getElementById(e[1]); if (d) d.innerHTML = ''; } catch (x) {}
+    try {
+      const st = window[e[0]]; if (st) { st.rows = null; st.loading = true; st.idvu = null; }
+      const pane = __anchor.querySelector('.fs-pane[data-pane="' + key + '"]');
+      if (pane) pane.innerHTML = '<div data-od-module="' + e[1] + '"></div>';
+    } catch (x) {}
   }
 
   function render() {
