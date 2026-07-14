@@ -98,10 +98,16 @@ OD.define('auth', {
     // Navigation SPA (pas de reload) : la top nav + l'historique sont démarrés
     // juste avant (comme l'ancien workflow de connexion) et se montent via leurs
     // observers sur la page d'accueil.
+    // Redirection accueil AVEC le préfixe de langue (WeWeb sert sous /fr/…).
+    // location.href est infaillible et respecte le préfixe ; on le déduit de l'URL.
+    try {
+      var m = (win.location.pathname || '').match(/^\/([a-z]{2})(\/|$)/i);
+      var langPrefix = m ? '/' + m[1] : '/fr';
+      win.location.href = langPrefix + ACCUEIL_PATH;
+      return;
+    } catch (e) {}
     try { if (wwLib.wwApp && wwLib.wwApp.goTo) { wwLib.wwApp.goTo(ACCUEIL_PATH); return; } } catch (e) {}
     try { wwLib.goTo(ACCUEIL_PATH); return; } catch (e) {}
-    try { if (wwLib.wwLocation && wwLib.wwLocation.goTo) { wwLib.wwLocation.goTo(ACCUEIL_PATH); return; } } catch (e) {}
-    try { win.location.href = '/fr' + ACCUEIL_PATH; } catch (e) {}
   }
 
   async function doForgot() {
