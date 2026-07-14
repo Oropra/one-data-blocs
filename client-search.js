@@ -111,7 +111,7 @@ OD.define('client-search', {
   //  - ÉDITEUR : navigation par UID (vrai SPA interne, aucune imbrication) ;
   //  - PROD : navigation par CHEMIN /fr/fiche-client (un UID en prod = route inexistante = page blanche).
   function navigateToFiche() {
-    _writeVar(FICHE_TAB_VAR, FICHE_TAB_DEFAULT);
+    // FICHE_TAB_VAR retiré : le Shell (fiche-shell) gère ses onglets en interne, ne lit plus cette variable
     if (inEditor()) {
       try { wwLib.wwApp.goTo(FICHE_CLIENT_PAGE_ID); return; } catch (e) { }
       try { wwLib.goTo(FICHE_CLIENT_PAGE_ID); return; } catch (e) { }
