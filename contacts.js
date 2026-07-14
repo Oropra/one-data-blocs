@@ -220,6 +220,7 @@ OD.define('contacts', {
   // ---- data ----
   async function load() {
     var idvu = currentIdvu();
+    console.log('[contacts][probe] load START idvu=', idvu);
     if (idvu == null) { state.rows = []; state.loading = false; return; }
     try {
       var site = readVar(VAR_SITE);
@@ -240,12 +241,15 @@ OD.define('contacts', {
         return hasRec && Number(r.voip_duration_seconds) >= 2;
       });
       state.loading = false;
-    } catch (e) { console.error('[contacts]', e); state.err = e.message || String(e); state.loading = false; }
+      console.log('[contacts][probe] load OK rows=', state.rows.length);
+    } catch (e) { console.error('[contacts][probe] load ERR', e); state.err = e.message || String(e); state.loading = false; }
   }
 
   var STYLE = '<style>#oropra-contacts-root{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.ct-wrap{display:flex;flex-direction:column;gap:10px;padding:2px}.ct-msg{text-align:center;padding:44px 20px;color:#7a98c5;font-size:14px}.ct-err{color:#e24b4a}</style>';
   function render() {
-    var root = getRoot(); if (!root) return;
+    var root = getRoot();
+    console.log('[contacts][probe] render root=', !!root, 'inDOM=', root&&root.isConnected, 'loading=', state.loading, 'err=', state.err, 'rows=', state.rows&&state.rows.length);
+    if (!root) return;
     if (state.loading) { root.innerHTML = STYLE + '<div class="ct-msg">Chargement des \u00e9changes\u2026</div>'; return; }
     if (state.err) { root.innerHTML = STYLE + '<div class="ct-msg ct-err">Erreur : ' + esc(state.err) + '</div>'; return; }
     if (!state.rows || !state.rows.length) { root.innerHTML = STYLE + '<div class="ct-msg">Aucun \u00e9change sur le cycle en cours.</div>'; return; }
@@ -258,6 +262,7 @@ OD.define('contacts', {
     if (c != null && c !== state.idvu) { state.rows = null; state.loading = true; state.err = null; state.idvu = c; render(); load().then(render); }
   }, 500);
 
+  console.log('[contacts][probe] boot idvu=', currentIdvu(), 'anchorConnected=', __anchor && __anchor.isConnected);
   if (!getRoot()) return;
   var _cur = currentIdvu();
   if (_cur !== state.idvu) { state.rows = null; state.loading = true; state.err = null; state.idvu = _cur; }
