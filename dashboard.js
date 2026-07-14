@@ -1,8 +1,7 @@
 // ============================================================================
 //  DASHBOARD — module One Data (OD.define)  v1 (checklist)
 //  Rendu dans __anchor ; SUPABASE_URL/clé -> ctx.tenant ; RPC via ctx.supabase ;
-//  self-boot retiré. Conserve window.__dash (lu par l'agenda) et
-//  VAR_DASHBOARD_READY (signal -> agenda).
+//  self-boot retiré. Conserve window.__dash (lu par l'agenda).
 // ============================================================================
 // ============================================================================
 // DASHBOARD ADAPTATIF v3 — style refondu + dashboardReady
@@ -13,7 +12,6 @@ OD.define('dashboard', {
     __anchor.id = 'dash-root';
     const SUPABASE_URL = ctx.tenant.supabase_url;
 
-const VAR_DASHBOARD_READY = 'ab8a0894-78dc-4523-8e96-07fdc56bd793';
 
 function getSupabaseKey() { return ctx.tenant.supabase_anon_key; }
 const VAR_CLIENT   = '55490583-c88b-4748-916e-4d203db07742';
@@ -313,7 +311,6 @@ function render() {
   bind();
 
   // ← dashboardReady : signale à WeWeb que le dashboard est rendu → l'agenda peut s'afficher
-  try { wwLib.wwVariable.updateValue(VAR_DASHBOARD_READY, true); } catch (e) {}
   try { (wwLib.getFrontWindow ? wwLib.getFrontWindow() : window).dispatchEvent(new Event('resize')); } catch (e) {}
 }
 
@@ -348,7 +345,6 @@ function applyPeriodDash(from, to) {
   state.selection = { level: 'all', key: null, label: 'Tout le périmètre' };
   state.busSelPending = true;
   // dashboardReady repasse à false pendant le rechargement
-  try { wwLib.wwVariable.updateValue(VAR_DASHBOARD_READY, false); } catch (e) {}
   loadData();
 }
 function openRangePickerDash(anchor) {
@@ -942,8 +938,6 @@ const STYLE = '<style>' +
 //  DÉMARRAGE
 // ============================================================================
 bindDashBus();
-// dashboardReady à false avant le chargement initial
-try { wwLib.wwVariable.updateValue(VAR_DASHBOARD_READY, false); } catch (e) {}
 loadData();
 if (roleFamily() === 'chef') loadStock();
 
