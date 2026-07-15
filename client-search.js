@@ -95,6 +95,17 @@ OD.define('client-search', {
     return isSoc ? [c.CIVILITE, c.NOM].filter(Boolean).join(' ') : [c.CIVILITE, c.NOM, c.PRENOM].filter(Boolean).join(' ');
   }
 
+
+  // Publie le client sélectionné pour fiche-shell. La variable WeWeb historique a
+  // été supprimée du projet -> on passe par un global + sessionStorage (survit à
+  // la navigation SPA et à un rechargement). L'écriture de la variable reste
+  // tentée pour compatibilité si elle réapparaît.
+  function odSetSelectedClient(obj) {
+    try { const w = (wwLib.getFrontWindow && wwLib.getFrontWindow()) || window; w.__odSelectedClient = obj; } catch (e) {}
+    try { sessionStorage.setItem('od_selected_client', JSON.stringify(obj)); } catch (e) {}
+    try { wwLib.wwVariable.updateValue('55490583-c88b-4748-916e-4d203db07742', obj); } catch (e) {}
+  }
+
   function _writeVar(varId, value) {
     try { wwLib.wwVariable.updateValue(varId, value); return; }
     catch (e) { console.warn('[crs]', varId, 'failed:', e && e.message); }
@@ -222,7 +233,7 @@ OD.define('client-search', {
 
   function selectRow(row) {
     if (bdcvnActive()) { bdcvnReturn(row.IDVu); return; }   // 🔵 retour import BDC
-    _writeVar(SELECTED_CLIENT_VAR_ID, Object.assign({}, row, { full_count: state.totalCount }));
+    odSetSelectedClient(Object.assign({}, row, { full_count: state.totalCount }));
     triggerFicheClient(row.IDVu);
     navigateToFiche();
   }
@@ -365,7 +376,7 @@ OD.define('client-search', {
       }
       // 🔵 Créé depuis l'import BDC : on renvoie le nouveau client, pas de fiche.
       if (bdcvnActive()) { state.modal = null; bdcvnReturn(inserted.IDVu); return; }
-      _writeVar(SELECTED_CLIENT_VAR_ID, Object.assign({}, inserted, { full_count: state.totalCount + 1 }));
+      odSetSelectedClient(Object.assign({}, inserted, { full_count: state.totalCount + 1 }));
       triggerFicheClient(inserted.IDVu);          // 🔵 fetch + re-subscribe realtime
       state.modal = null;
       if (FICHE_CLIENT_PAGE_ID) navigateToFiche();
