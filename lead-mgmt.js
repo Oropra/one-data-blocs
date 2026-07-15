@@ -1972,7 +1972,15 @@ function renderAll() {
 //     (l'ancienne variable WeWeb fb2cad2c n'existe plus -> "variable not found") ;
 //  3) navigation ÉDITEUR par UID / PROD par CHEMIN (un UID en prod s'inscrit tel
 //     quel dans l'URL -> route inexistante -> page blanche).
-const SELECTED_CLIENT_VAR = '55490583-c88b-4748-916e-4d203db07742';
+// Publie le client sélectionné pour fiche-shell. La variable WeWeb historique a
+  // été supprimée du projet -> on passe par un global + sessionStorage (survit à
+  // la navigation SPA et à un rechargement). L'écriture de la variable reste
+  // tentée pour compatibilité si elle réapparaît.
+  function odSetSelectedClient(obj) {
+    try { const w = (wwLib.getFrontWindow && wwLib.getFrontWindow()) || window; w.__odSelectedClient = obj; } catch (e) {}
+    try { sessionStorage.setItem('od_selected_client', JSON.stringify(obj)); } catch (e) {}
+    try { wwLib.wwVariable.updateValue('55490583-c88b-4748-916e-4d203db07742', obj); } catch (e) {}
+  }
 const PATH_FICHE_CLIENT   = '/fr/fiche-client';
 function lmInEditor() {
   try { return (window.self !== window.top) || /-editor\.weweb\.io|weweb\.io/i.test(location.hostname); }
@@ -1982,7 +1990,7 @@ async function openClientFiche(idClient, tabIndex, cardEl) {
   if (!idClient) { console.warn('[leadMgmt] Pas d\'id_client'); return; }
   if (cardEl) cardEl.classList.add('is-loading');
   try {
-    try { wwLib.wwVariable.updateValue(SELECTED_CLIENT_VAR, { IDVu: Number(idClient) }); } catch (e) {}
+    odSetSelectedClient({ IDVu: Number(idClient) });
     const targetTab = (tabIndex !== null && tabIndex !== undefined) ? tabIndex : TAB_DEFAULT;
     try { const w = (wwLib.getFrontWindow && wwLib.getFrontWindow()) || window; w.__odFicheTab = targetTab; } catch (e) {}
     if (lmInEditor()) { try { wwLib.wwApp.goTo(PAGE_FICHE_ID); return; } catch (e) {} }
