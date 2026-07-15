@@ -33,15 +33,6 @@ OD.define('kanban', {
   // L'ancienne variable d'onglet (composant Tabs natif) et la variable "client
   // sélectionné" n'existent plus dans le projet : fiche-shell rend ses propres
   // onglets et lit un global / sessionStorage.
-  // Publie le client sélectionné pour fiche-shell. La variable WeWeb historique a
-  // été supprimée du projet -> on passe par un global + sessionStorage (survit à
-  // la navigation SPA et à un rechargement). L'écriture de la variable reste
-  // tentée pour compatibilité si elle réapparaît.
-  function odSetSelectedClient(obj) {
-    try { const w = (wwLib.getFrontWindow && wwLib.getFrontWindow()) || window; w.__odSelectedClient = obj; } catch (e) {}
-    try { sessionStorage.setItem('od_selected_client', JSON.stringify(obj)); } catch (e) {}
-    try { wwLib.wwVariable.updateValue('55490583-c88b-4748-916e-4d203db07742', obj); } catch (e) {}
-  }
 
   const VAR_VIN_FICHE = 'bcb187ac-e66e-4bfb-bc48-1b7b7dfda0ba';
   const PAGE_PROPALE_UPDATE = 'efb6187d-2330-4392-86ed-bc5ad2489fed';
@@ -630,7 +621,7 @@ OD.define('kanban', {
     try {
       // fiche-shell lit l'IDVu dans SA variable et recharge le client lui-même
       // -> plus de workflow WeWeb. L'onglet voulu passe par un global.
-      odSetSelectedClient({ IDVu: Number(idClient) });
+      try { wwLib.wwVariable.updateValue('55490583-c88b-4748-916e-4d203db07742', { IDVu: Number(idClient) }); } catch (e) { }
       try { const w = (wwLib.getFrontWindow && wwLib.getFrontWindow()) || window; w.__odFicheTab = TAB_PCOM; } catch (e) { }
       kanGoTo(PAGE_FICHE_ID, PATH_FICHE_CLIENT);
     } catch (e) {
@@ -1266,7 +1257,7 @@ OD.define('kanban', {
       setBusy(true);
       try {
         const client = state.selectedClient;
-        _writeVar(SELECTED_CLIENT_VAR_ID, Object.assign({}, client)); odSetSelectedClient(Object.assign({}, client));
+        _writeVar(SELECTED_CLIENT_VAR_ID, Object.assign({}, client));
         await upsertClientStock(client);
         // (client déjà écrit dans SELECTED_CLIENT_VAR_ID ci-dessus -> fiche-shell recharge)
         // Ferme popup Like ET popup Fiche VO
@@ -1284,7 +1275,7 @@ OD.define('kanban', {
       try {
         const client = state.selectedClient;
         console.log('[vop] doPcom start', { client: client.IDVu, vin: vo.VIN });
-        _writeVar(SELECTED_CLIENT_VAR_ID, Object.assign({}, client)); odSetSelectedClient(Object.assign({}, client));
+        _writeVar(SELECTED_CLIENT_VAR_ID, Object.assign({}, client));
         console.log('[vop] doPcom writeVar OK');
         await upsertClientStock(client);
         console.log('[vop] doPcom upsertClientStock OK');
