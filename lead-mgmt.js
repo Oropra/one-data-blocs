@@ -1966,21 +1966,11 @@ function renderAll() {
 
 // --- 14. Navigation fiche client ----------------------------
 // Ouverture de la fiche client — patron aligné sur client-search :
-//  1) on écrit le client sélectionné dans SA variable (le shell fiche lit l'IDVu
-//     et recharge le client lui-même) -> plus de workflow WeWeb WF_GET_FICHE ;
-//  2) l'onglet voulu passe par un global à usage unique lu par fiche-shell
-//     (l'ancienne variable WeWeb fb2cad2c n'existe plus -> "variable not found") ;
+//  1) on écrit le client sélectionné dans SA variable (fiche-shell lit l'IDVu et
+//     recharge le client lui-même) -> plus de workflow WeWeb WF_GET_FICHE ;
+//  2) l'onglet voulu passe par un global à usage unique lu par fiche-shell ;
 //  3) navigation ÉDITEUR par UID / PROD par CHEMIN (un UID en prod s'inscrit tel
 //     quel dans l'URL -> route inexistante -> page blanche).
-// Publie le client sélectionné pour fiche-shell. La variable WeWeb historique a
-  // été supprimée du projet -> on passe par un global + sessionStorage (survit à
-  // la navigation SPA et à un rechargement). L'écriture de la variable reste
-  // tentée pour compatibilité si elle réapparaît.
-  function odSetSelectedClient(obj) {
-    try { const w = (wwLib.getFrontWindow && wwLib.getFrontWindow()) || window; w.__odSelectedClient = obj; } catch (e) {}
-    try { sessionStorage.setItem('od_selected_client', JSON.stringify(obj)); } catch (e) {}
-    try { wwLib.wwVariable.updateValue('55490583-c88b-4748-916e-4d203db07742', obj); } catch (e) {}
-  }
 const PATH_FICHE_CLIENT   = '/fr/fiche-client';
 function lmInEditor() {
   try { return (window.self !== window.top) || /-editor\.weweb\.io|weweb\.io/i.test(location.hostname); }
@@ -1990,7 +1980,7 @@ async function openClientFiche(idClient, tabIndex, cardEl) {
   if (!idClient) { console.warn('[leadMgmt] Pas d\'id_client'); return; }
   if (cardEl) cardEl.classList.add('is-loading');
   try {
-    odSetSelectedClient({ IDVu: Number(idClient) });
+    try { wwLib.wwVariable.updateValue('55490583-c88b-4748-916e-4d203db07742', { IDVu: Number(idClient) }); } catch (e) {}
     const targetTab = (tabIndex !== null && tabIndex !== undefined) ? tabIndex : TAB_DEFAULT;
     try { const w = (wwLib.getFrontWindow && wwLib.getFrontWindow()) || window; w.__odFicheTab = targetTab; } catch (e) {}
     if (lmInEditor()) { try { wwLib.wwApp.goTo(PAGE_FICHE_ID); return; } catch (e) {} }
