@@ -1965,14 +1965,29 @@ function renderAll() {
 }
 
 // --- 14. Navigation fiche client ----------------------------
+// Ouverture de la fiche client — patron aligné sur client-search :
+//  1) on écrit le client sélectionné dans SA variable (le shell fiche lit l'IDVu
+//     et recharge le client lui-même) -> plus de workflow WeWeb WF_GET_FICHE ;
+//  2) l'onglet voulu passe par un global à usage unique lu par fiche-shell
+//     (l'ancienne variable WeWeb fb2cad2c n'existe plus -> "variable not found") ;
+//  3) navigation ÉDITEUR par UID / PROD par CHEMIN (un UID en prod s'inscrit tel
+//     quel dans l'URL -> route inexistante -> page blanche).
+const SELECTED_CLIENT_VAR = '55490583-c88b-4748-916e-4d203db07742';
+const PATH_FICHE_CLIENT   = '/fr/fiche-client';
+function lmInEditor() {
+  try { return (window.self !== window.top) || /-editor\.weweb\.io|weweb\.io/i.test(location.hostname); }
+  catch (e) { return true; }
+}
 async function openClientFiche(idClient, tabIndex, cardEl) {
   if (!idClient) { console.warn('[leadMgmt] Pas d\'id_client'); return; }
   if (cardEl) cardEl.classList.add('is-loading');
   try {
-    await wwLib.executeWorkflow(WF_GET_FICHE, { IDVu: Number(idClient) });
+    try { wwLib.wwVariable.updateValue(SELECTED_CLIENT_VAR, { IDVu: Number(idClient) }); } catch (e) {}
     const targetTab = (tabIndex !== null && tabIndex !== undefined) ? tabIndex : TAB_DEFAULT;
-    wwLib.wwVariable.updateValue('fb2cad2c-cd04-42e0-8909-e3c91c8dcfac', targetTab);
-    wwLib.wwApp.goTo(PAGE_FICHE_ID);
+    try { const w = (wwLib.getFrontWindow && wwLib.getFrontWindow()) || window; w.__odFicheTab = targetTab; } catch (e) {}
+    if (lmInEditor()) { try { wwLib.wwApp.goTo(PAGE_FICHE_ID); return; } catch (e) {} }
+    try { wwLib.goTo(PATH_FICHE_CLIENT); return; } catch (e) {}
+    try { const w = (wwLib.getFrontWindow && wwLib.getFrontWindow()) || window; w.location.href = PATH_FICHE_CLIENT; } catch (e) {}
   } catch (e) {
     console.error('[leadMgmt] Erreur ouverture fiche client', e);
     if (cardEl) cardEl.classList.remove('is-loading');
