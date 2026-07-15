@@ -49,23 +49,7 @@ OD.define('fiche-shell', {
   function esc(s) { if (s == null) return ''; return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
   function cap(s) { return (s || '').toString().toLowerCase().replace(/(^|[\s\-'])([a-zà-ÿ])/g, (m, sep, c) => sep + c.toUpperCase()); }
   function readVar(id) { try { return wwLib.wwVariable.getValue(id); } catch (e) { return null; } }
-  // Client sélectionné — source robuste. La variable WeWeb historique
-  // (55490583…) a été supprimée du projet ("variable not found") : on lit d'abord
-  // le global posé par les modules appelants, puis sessionStorage (survit à un
-  // rechargement complet), et enfin la variable WeWeb si elle existe encore.
-  function selectedClient() {
-    try {
-      const w = (wwLib.getFrontWindow && wwLib.getFrontWindow()) || window;
-      if (w.__odSelectedClient && w.__odSelectedClient.IDVu != null) return w.__odSelectedClient;
-    } catch (e) {}
-    try {
-      const raw = (window.sessionStorage && sessionStorage.getItem('od_selected_client')) || null;
-      if (raw) { const o = JSON.parse(raw); if (o && o.IDVu != null) return o; }
-    } catch (e) {}
-    const v = readVar(SELECTED_CLIENT_VAR);
-    return (v && v.IDVu != null) ? v : null;
-  }
-  function currentIdvu() { const c = selectedClient(); return c && c.IDVu != null ? Number(c.IDVu) : null; }
+  function currentIdvu() { const c = readVar(SELECTED_CLIENT_VAR); return c && c.IDVu != null ? Number(c.IDVu) : null; }
   function isSoc(c) { return c && (c.idmultivu === 1 || c.idmultivu === '1'); }
   function clientName(c) {
     if (!c) return '—';
