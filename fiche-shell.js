@@ -307,6 +307,18 @@ OD.define('fiche-shell', {
   // ---------------------------------------------------------------- boot
   async function boot() {
     const root = __anchor; if (!root) return;
+    // Onglet demandé par un autre module avant navigation (lead-mgmt, kanban…).
+    // Passé par un global à usage unique — l'ancienne variable WeWeb (fb2cad2c)
+    // n'existe plus dans le projet. Accepte une clé ('pcom') ou un index (5).
+    try {
+      const w = (wwLib.getFrontWindow && wwLib.getFrontWindow()) || window;
+      let req = w.__odFicheTab;
+      if (req != null) {
+        try { delete w.__odFicheTab; } catch (e) { w.__odFicheTab = null; }
+        if (typeof req === 'number') req = (TABS[req] || {}).key;
+        if (req && TABS.some(t => t.key === req)) state.tab = req;
+      }
+    } catch (e) {}
     ensureCss();
     await loadClient();
     render();
