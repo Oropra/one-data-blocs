@@ -30,7 +30,9 @@ OD.define('kanban', {
 
   // ── Navigation : éditeur vs prod ──────────────────────────────────────────
   const VAR_ID_PROPALE = 'aac565e9-ad32-4f81-bf8d-adb611322e62';
-  const VAR_FICHE_TAB = 'fb2cad2c-cd04-42e0-8909-e3c91c8dcfac';
+  // L'ancienne variable d'onglet (liée au composant Tabs natif) n'existe plus :
+  // fiche-shell rend ses propres onglets et lit un global à usage unique.
+  const SELECTED_CLIENT_VAR = '55490583-c88b-4748-916e-4d203db07742';
   const VAR_VIN_FICHE = 'bcb187ac-e66e-4bfb-bc48-1b7b7dfda0ba';
   const PAGE_PROPALE_UPDATE = 'efb6187d-2330-4392-86ed-bc5ad2489fed';
   const PAGE_FICHE_ID = '259f1951-a2d4-4b90-ac83-0b3febe1d4ec';
@@ -616,8 +618,10 @@ OD.define('kanban', {
     if (!idClient) return;
     if (el) el.classList.add('kc-cli-loading');
     try {
-      await wwLib.executeWorkflow(WF_GET_FICHE, { IDVu: Number(idClient) });
-      try { wwLib.wwVariable.updateValue(VAR_FICHE_TAB, TAB_PCOM); } catch (e) { }
+      // fiche-shell lit l'IDVu dans SA variable et recharge le client lui-même
+      // -> plus de workflow WeWeb. L'onglet voulu passe par un global.
+      try { wwLib.wwVariable.updateValue(SELECTED_CLIENT_VAR, { IDVu: Number(idClient) }); } catch (e) { }
+      try { const w = (wwLib.getFrontWindow && wwLib.getFrontWindow()) || window; w.__odFicheTab = TAB_PCOM; } catch (e) { }
       kanGoTo(PAGE_FICHE_ID, PATH_FICHE_CLIENT);
     } catch (e) {
       console.error('[kanban] fiche client', e);
@@ -1254,12 +1258,12 @@ OD.define('kanban', {
         const client = state.selectedClient;
         _writeVar(SELECTED_CLIENT_VAR_ID, Object.assign({}, client));
         await upsertClientStock(client);
-        try { await wwLib.executeWorkflow(WF_GET_FICHE, { IDVu: Number(client.IDVu) }); } catch (e) { }
+        // (client déjà écrit dans SELECTED_CLIENT_VAR_ID ci-dessus -> fiche-shell recharge)
         // Ferme popup Like ET popup Fiche VO
         const ovLike = vopDoc.getElementById('vf-like-ov'); if (ovLike) ovLike.remove();
         const ovFiche = vopDoc.getElementById('vo-fiche-overlay'); if (ovFiche) ovFiche.remove();
-        // Écrit l'index d'onglet (TAB_LIKE = 1) dans la variable WeWeb liée au composant Tabs
-        try { wwLib.wwVariable.updateValue('fb2cad2c-cd04-42e0-8909-e3c91c8dcfac', TAB_LIKE); } catch (e) { }
+        // Onglet demandé (TAB_LIKE = 1) via le global lu par fiche-shell
+        try { const w = (wwLib.getFrontWindow && wwLib.getFrontWindow()) || window; w.__odFicheTab = TAB_LIKE; } catch (e) { }
         goToPage(PAGE_FICHE_ID);
       } catch (e) { setBusy(false, e.message || String(e)); }
     }
