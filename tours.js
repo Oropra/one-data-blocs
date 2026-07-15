@@ -286,11 +286,44 @@ OD.define('tours', {
     tour = null; curNode = null; hide();
     try { win.localStorage.removeItem('onedata_pending_tour'); } catch (e) {}
   }
+  // Navigation ÉDITEUR vs PROD — même patron éprouvé que la top nav :
+  //  - ÉDITEUR : par UID (vrai SPA interne, aucune imbrication d'éditeur).
+  //  - PROD    : par CHEMIN /fr/xxx. Un UID en prod s'inscrit tel quel dans l'URL
+  //              -> route inexistante -> PAGE BLANCHE (bug constaté).
+  const LANG_PREFIX = '/fr';
+  const PAGE_PATHS = {            // pageId -> chemin (table alignée sur la top nav)
+    '9e90d49a-215f-4c2b-b2bb-2d7c4f9aabd6': '/pipe-commercial',
+    '99519997-f935-471a-9147-b0118191b991': '/marketing',
+    '55717966-7e07-4957-9969-399198cce1ad': '/activite',
+    '1499f15f-e8cb-4561-aea8-bdeeeb080b68': '/performances',
+    'c9b4f9a6-460a-4365-8a06-95e30a13cbdb': '/objectifs',
+  };
+  function inEditor() {
+    try { return (window.self !== window.top) || /-editor\.weweb\.io|weweb\.io/i.test(location.hostname); }
+    catch (e) { return true; }
+  }
+  function goToTourPage(t) {
+    if (inEditor()) {
+      if (t.pageId) {
+        try { wwLib.wwApp.goTo(t.pageId); return true; } catch (e) {}
+        try { wwLib.goTo(t.pageId); return true; } catch (e) {}
+      }
+      return false;
+    }
+    const path = t.path || PAGE_PATHS[t.pageId];
+    if (path) {
+      const href = LANG_PREFIX + path;
+      try { wwLib.goTo(href); return true; } catch (e) {}
+      try { win.location.href = href; return true; } catch (e) {}
+    }
+    return false;
+  }
+
   function launch(tourId) {
     const t = TOURS[tourId]; if (!t) return;
     if (t.rootCheck && doc.querySelector(t.rootCheck)) { start(tourId); return; }
     try { win.localStorage.setItem('onedata_pending_tour', tourId); } catch (e) {}
-    if (t.pageId) { try { wwLib.wwApp.goTo(t.pageId); return; } catch (e) {} }
+    if (goToTourPage(t)) return;
     if (t.page) { win.location.href = t.page + '?tour=' + encodeURIComponent(tourId); return; }
     start(tourId);
   }
