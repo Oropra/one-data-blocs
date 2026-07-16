@@ -40,7 +40,6 @@ OD.define('voip-ui', {
 
   const VAR_STATUT = 'd6e8c441-31a5-4e35-9724-3181f9767292';
   const VAR_DUREE = 'ccf7985b-f492-4a3e-b278-a64a705cb650';
-  const COLL_CONTACTS = '097aa7fd-e7eb-40a0-a558-d2f4e437fb0d';
 
   const S = W.__VOIP_STATE__ || (W.__VOIP_STATE__ = {
     open: false, mode: 'incoming', answered: false, minimized: false, muted: false,
@@ -91,7 +90,7 @@ OD.define('voip-ui', {
             answered_at: seconds > 0 ? new Date(Date.now() - seconds * 1000).toISOString() : null,
             ended_at: new Date().toISOString(), duration_seconds: seconds, status: 'completed'
           })
-        }).then(() => { try { wwLib.wwCollection.updateCollectionValue(COLL_CONTACTS); } catch (e) {} });
+        });   // (rafraîchissement de l'ex-collection WeWeb retiré : elle est supprimée)
       }).catch(() => {});
   }
 
