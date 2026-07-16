@@ -27,7 +27,6 @@ OD.define('vo-liste', {
   var ROOT_ID = 'stockvo-root';
   var VAR_FICHE_VO = 'bcb187ac-e66e-4bfb-bc48-1b7b7dfda0ba';
   var WF_FICHE_VO = 'c9982ed5-2c7e-4a79-8f0f-b8fb1a0e499d';
-  var WF_DIAPORAMA = 'c1c31cbb-851a-42dc-ab6a-147c6fe2fd3e';
   var PA_ROLES = [1, 2, 3, 6, 7, 8];                      // rôles voyant le prix d'achat
   var SUPABASE_URL = ctx.tenant.supabase_url;
   var SUPABASE_KEY = ctx.tenant.supabase_anon_key;
@@ -122,11 +121,22 @@ OD.define('vo-liste', {
   function critair(row) { var n = critairNum(row); return { n: n, color: CRITAIR_COLOR[n] || '#6b7280', label: n === 99 ? 'Non classé' : "Crit'Air " + n }; }
 
   // ─────────────────────────────────────────────────────────── workflows / nav
-  function runWf(id, params) {
-    try { if (wwLib.wwWorkflow && typeof wwLib.wwWorkflow.executeGlobal === 'function') { wwLib.wwWorkflow.executeGlobal(id, params || {}); return; } } catch (e) { }
-    try { wwLib.executeWorkflow(id, params || {}); } catch (e) { console.error('[vo] runWf', id, e); }
+  // (helper runWf retiré : plus aucun workflow WeWeb n'est appelé par ce module)
+  // Diaporama depuis la liste (fiche non ouverte) : on charge les photos du VIN
+  // puis on ouvre le diaporama JS. Remplace le workflow WeWeb « Diaporama ».
+  async function openDiaporama(vin) {
+    if (!vin) return;
+    var photos = (S.photoCache && S.photoCache[vin]) || null;
+    try {
+      if (!photos) {
+        var d = await callPhotosEF(FN_PHOTOS, { vin: vin, expiresIn: 3600 });
+        photos = (d && d.photos) ? d.photos : [];
+      if (S.photoCache) S.photoCache[vin] = photos;
+      }
+    } catch (e) { console.error('[vo] openDiaporama', e); photos = []; }
+    var urls = (photos || []).map(function (p) { return p.signedUrl; }).filter(Boolean);
+    showDiaporama(urls, 0);
   }
-  function openDiaporama(vin) { runWf(WF_DIAPORAMA, { VIN: vin }); }
   function openWeb(url) { if (notEmpty(url)) { try { win.open(url, '_blank', 'noopener'); } catch (e) { window.open(url, '_blank'); } } }
 
   // ─────────────────────────────────────────────────────────── popup fiche VO
@@ -385,19 +395,8 @@ OD.define('vo-liste', {
     if (snap.tab === 'photos') bindPhotos();
   }
 
-  function openFicheDiaporama(idx) {
-    var urls = [];
-    if (ficheState.photos && ficheState.photos.length) {
-      urls = ficheState.photos.map(function (p) { return p.signedUrl; }).filter(Boolean);
-    } else {
-      urls = images(ficheState.row || {});
-      if (!urls.length && mainImage(ficheState.row || {})) urls = [mainImage(ficheState.row || {})];
-    }
-    if (!urls.length) return;
-    var vin = ficheState.vin;
-    try { wwLib.wwVariable.updateValue(VAR_DIAPORAMA, { urls: urls, index: idx || 0 }); } catch (e) { }
-    withFicheClosed(function () { runWf(WF_DIAPORAMA, { VIN: vin }); });
-  }
+  // (ancienne openFicheDiaporama qui passait par le workflow WeWeb « Diaporama »
+  //  RETIRÉE : elle était de toute façon écrasée par la version JS ci-dessous.)
 
 
   // ─────────────────────────────────────────────────────────────── Diaporama JS natif  // ─────────────────────────────────────────────────────────────── Diaporama JS natif (z-index contrôlé)
@@ -409,7 +408,13 @@ OD.define('vo-liste', {
       urls = images(ficheState.row || {});
       if (!urls.length && mainImage(ficheState.row || {})) urls = [mainImage(ficheState.row || {})];
     }
-    if (!urls.length) return;
+    showDiaporama(urls, startIdx || 0);
+  }
+
+  // Diaporama 100% JS, rendu à partir d'une liste d'URLs. Remplace le workflow
+  // WeWeb « Diaporama » et sa popup native : plus aucune dépendance à WeWeb.
+  function showDiaporama(urls, startIdx) {
+    if (!urls || !urls.length) return;
     var idx = startIdx || 0;
     var old = doc.getElementById('vf-diap-ov'); if (old) old.remove();
     function buildDiap() {
@@ -1425,8 +1430,7 @@ OD.define('vo-liste', {
       } else if (img) {
         var idx = Number(img.getAttribute('data-idx'));
         var urls = (ficheState.photos || []).map(function (p) { return p.signedUrl; }).filter(Boolean);
-        try { wwLib.wwVariable.updateValue(VAR_DIAPORAMA, { urls: urls, index: idx }); } catch (e) { }
-        runWf(WF_DIAPORAMA, { VIN: ficheState.vin });
+        showDiaporama(urls, idx);
       }
     });
   }
@@ -2505,8 +2509,7 @@ OD.define('vo-liste', {
       } else if (img) {
         var idx = Number(img.getAttribute('data-idx'));
         var urls = (ficheState.photos || []).map(function (p) { return p.signedUrl; }).filter(Boolean);
-        try { wwLib.wwVariable.updateValue(VAR_DIAPORAMA, { urls: urls, index: idx }); } catch (e) { }
-        runWf(WF_DIAPORAMA, { VIN: ficheState.vin });
+        showDiaporama(urls, idx);
       }
     });
   }
