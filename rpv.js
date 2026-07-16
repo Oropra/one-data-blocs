@@ -18,7 +18,6 @@ OD.define('rpv', {
   const VAR_SELECTED_CLIENT_ID = '55490583-c88b-4748-916e-4d203db07742'; // client sélectionné (objet CLIENT)
   const VAR_SELECTED_SITE_ID = '39fecccf-9296-43b7-b5b6-eadaa928290d'; // selected_id_site
   const WF_OUT_NEW_RPV = '7531d18e-6175-4ec4-bbb3-c309b01eea0e'; // [reusable workflow] out New RPV (ferme le popup)
-  const WF_REFRESH_CONTACTS = 'ec8bcc55-a733-4982-a946-13e10ba3b09b'; // [reusable workflow] fiche client — recharge la fiche (et l'onglet Contacts) après enregistrement
   const NEXT_ACTION_TIME = '09:00:00'; // heure appliquée à dt_activation (chip ou date)
 
   // Résultats possibles d'un RPV (resultat_rdv). closure : clôt le cycle.
@@ -288,11 +287,9 @@ OD.define('rpv', {
         } catch (eC) { console.warn('[rpv] cascade abandon:', eC && eC.message); }
       }
 
-      // Rafraîchir l'onglet Contacts (collection WeWeb) si un workflow est fourni.
-      if (WF_REFRESH_CONTACTS) {
-        try { await wwLib.executeWorkflow(WF_REFRESH_CONTACTS, {}); }
-        catch (eR) { console.warn('[rpv] refresh contacts', eR && eR.message); }
-      }
+      // (Le workflow WeWeb 'fiche client' (ec8bcc55) a été SUPPRIMÉ du projet :
+      //  il rafraîchissait une collection WeWeb devenue inutile. Le rafraîchissement
+      //  des onglets Contacts / Historique est fait juste en dessous, côté JS.)
       // Rafraîchit aussi les onglets 100% JS (Contacts / Historique), qui ont leur
       // propre cache : on invalide (rows=null) et on vide leur div -> leur
       // observateur les recharge avec le nouveau rapport.
