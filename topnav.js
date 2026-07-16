@@ -380,7 +380,10 @@ OD.define('topnav', {
         '<div class="od-sub"><div class="od-sub-inner">' +
           '<span class="od-client">' +
             '<button class="od-client-btn" data-act="fiche">' + I.person + '<span class="od-client-name"></span></button>' +
-            '<div id="oropra-client-history"></div>' +
+            // Ancre : le loader y monte le module 'client-history'. Il vivait
+            // dans auth.js et n'était initialisé qu'au login -> absent après un
+            // F5 ou en navigation. Monté ici, il est présent partout.
+            '<div id="oropra-client-history" data-od-module="client-history"></div>' +
           '</span>' +
           '<div class="od-site"><button data-toggle="site">' + I.pin.replace('<svg', '<svg class="od-pin"') +
             '<span class="od-site-name">Site</span></button>' +
