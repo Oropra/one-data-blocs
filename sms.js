@@ -15,7 +15,6 @@ OD.define('sms', {
   const SELECTED_CLIENT_VAR_ID = '55490583-c88b-4748-916e-4d203db07742';
   const SELECTED_SITE_VAR_ID = '39fecccf-9296-43b7-b5b6-eadaa928290d';
   const SMS_BODY_VAR_ID = '9fee26d2-65d3-4b66-8105-9ce1e528db9a';
-  const COLLECTION_CONTACTS = '097aa7fd-e7eb-40a0-a558-d2f4e437fb0d';
   const SUPABASE_URL = ctx.tenant.supabase_url;
   const ROOT_ID = 'oropra-sms-ui';
   const ORANGE = '#e8ae28';   // header + bouton envoi
@@ -96,7 +95,23 @@ OD.define('sms', {
     const idClient = c.IDVu != null ? c.IDVu : null;
     const idSite = readVar(SELECTED_SITE_VAR_ID) != null ? readVar(SELECTED_SITE_VAR_ID) : null;
     let idCycleCom = null;
-    try { const contacts = (typeof collections !== 'undefined') ? (collections[COLLECTION_CONTACTS] && collections[COLLECTION_CONTACTS].data) : null; if (Array.isArray(contacts)) { const f = contacts.find(x => x.idvu == idClient); idCycleCom = f ? (f.id_cycle_com != null ? f.id_cycle_com : null) : null; } } catch (e) {}
+    // Cycle com du client : requête directe sur la vue v_contacts_client (source
+    // de l'ex-collection WeWeb 097aa7fd, supprimée). On prend le contact le PLUS
+    // RÉCENT — l'ancien code prenait la 1re ligne de la collection, dont l'ordre
+    // dépendait de son tri ; « le cycle courant » est l'intention.
+    if (idClient != null) {
+      try {
+        const { data: cc } = await sb()
+          .from('v_contacts_client')
+          .select('id_cycle_com, date_contact')
+          .eq('idvu', Number(idClient))
+          .not('id_cycle_com', 'is', null)
+          .order('date_contact', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        idCycleCom = cc && cc.id_cycle_com != null ? cc.id_cycle_com : null;
+      } catch (e) { console.warn('[sms] cycle_com', e && e.message); }
+    }
     const tmp = '_t' + Date.now();
     state.messages.push({ _tmp: tmp, direction: 'outbound', body: text, status: 'sending', created_at: new Date().toISOString() });
     state.input = ''; state.sending = true;
