@@ -154,7 +154,7 @@ device.on('incoming', (call) => {
     try { window._twilioCall = null; window.parent._twilioCall = null; window.top._twilioCall = null } catch (e) { }
     if (globalThis.__ONE_DATA__) globalThis.__ONE_DATA__.call = null
     if (frontWin && frontWin.__ONE_DATA__) frontWin.__ONE_DATA__.call = null
-    try { wwLib.wwCollection.updateCollectionValue('097aa7fd-e7eb-40a0-a558-d2f4e437fb0d') } catch (e) { }
+    // (rafraîchissement de l'ex-collection WeWeb retiré : elle est supprimée)
   })
 
   // Fin d'appel
@@ -172,7 +172,7 @@ device.on('incoming', (call) => {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json', apikey: k, Authorization: `Bearer ${k}` },
             body: JSON.stringify({ ended_at: new Date().toISOString(), duration_seconds: duration, status: 'completed' })
-          }).then(() => { try { wwLib.wwCollection.updateCollectionValue('097aa7fd-e7eb-40a0-a558-d2f4e437fb0d') } catch (e) { } })
+          })
         }).catch(() => { })
     }
     try { window.parent._twilioHungUp = false } catch (e) { }
