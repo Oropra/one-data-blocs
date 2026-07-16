@@ -18,6 +18,19 @@ OD.define('rdv', {
   // navigation fiche (réutilisé) pour "ouvrir la fiche complète" depuis le sous-popup
   const RV_WF_GET_FICHE = '53250f54-d14c-4622-baf4-0b89064316b6';
   const RV_PAGE_FICHE_ID = '259f1951-a2d4-4b90-ac83-0b3febe1d4ec';
+  // Navigation ÉDITEUR vs PROD (patron top nav) : en prod, un UID s'inscrit tel
+  // quel dans l'URL -> route inexistante -> page blanche. On navigue par CHEMIN.
+  const OD_PATH_FICHE_CLIENT = '/fr/fiche-client';
+  function odInEditor() {
+    try { return (window.self !== window.top) || /-editor\.weweb\.io|weweb\.io/i.test(location.hostname); }
+    catch (e) { return true; }
+  }
+  function odGoFiche(pageId) {
+    if (odInEditor()) { try { wwLib.wwApp.goTo(pageId); return; } catch (e) {} }
+    try { wwLib.goTo(OD_PATH_FICHE_CLIENT); return; } catch (e) {}
+    try { ((wwLib.getFrontWindow && wwLib.getFrontWindow()) || window).location.href = OD_PATH_FICHE_CLIENT; } catch (e) {}
+  }
+
 
   // ─── ÉTAT (hydraté depuis la variable WeWeb pour survivre aux destructions de DOM) ──
   function RV_readCache(){
@@ -218,8 +231,12 @@ OD.define('rdv', {
   async function R_openClientFicheTab(idClient, tab){
     if(!idClient) return;
     try {
-      await wwLib.executeWorkflow(RV_WF_GET_FICHE, { IDVu: Number(idClient) });
-      wwLib.wwApp.goTo(RV_PAGE_FICHE_ID, { tab: (tab!=null?tab:0) });
+      // Le workflow WeWeb RV_WF_GET_FICHE (53250f54) a été SUPPRIMÉ du projet :
+      // on écrit le client dans SA variable (fiche-shell recharge lui-même) et
+      // l'onglet voulu passe par le global lu par fiche-shell.
+      try { wwLib.wwVariable.updateValue('55490583-c88b-4748-916e-4d203db07742', { IDVu: Number(idClient) }); } catch(e){}
+      try { const w = (wwLib.getFrontWindow && wwLib.getFrontWindow()) || window; w.__odFicheTab = (tab != null ? tab : 0); } catch(e){}
+      odGoFiche(RV_PAGE_FICHE_ID);
     } catch(e){ console.error('[rdv] openClientFicheTab', e); }
   }
 
