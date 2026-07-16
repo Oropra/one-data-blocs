@@ -177,13 +177,37 @@ OD.define('propale-vo', {
     return { prixVehicule, totalAccessoires, totalVehicule, remisePct, remisesMontant, totalRemises, cg, totalFrais, totalBDC };
   }
 
+  // Montant Y.2 : barème national par tranche de PTAC. Le PTAC n'est pas encore
+  // porté par STOCKVO — si le champ est ajouté un jour (ex. row.PTAC en kg ou en
+  // tonnes), il est pris en compte automatiquement ici.
+  function y2Montant() {
+    const cg = (window.OD && window.OD.cg) || null;
+    let ptac = null;
+    const v = ST.vehicule || {};
+    const raw = v.PTAC != null ? v.PTAC : (v.MMA != null ? v.MMA : null);
+    if (raw != null && num(raw) > 0) {
+      ptac = num(raw);
+      if (ptac > 100) ptac = ptac / 1000;   // valeur en kg -> tonnes
+    }
+    if (cg && typeof cg.y2ParPtac === 'function') return cg.y2ParPtac(ptac);
+    return num(ST.taxeParafiscale) || 34;   // repli : tranche ≤ 3,5 t
+  }
+
   function calcCG() {
     const P = ST.P;
     const cv = num(P.PuissanceFiscale);
     let Y1 = cv * ST.tarifCV;
     if (ageAns(ST.vehicule && ST.vehicule.D_1MEC) > 10) Y1 *= 0.5;
     if (P.Hybride) Y1 *= (1 - ST.exoPct/100);
-    const Y2 = P.TaxeParafiscale ? ST.taxeParafiscale : 0;
+    // Y.2 — taxe de formation professionnelle (« parafiscale ») :
+    //  • due UNIQUEMENT pour un véhicule UTILITAIRE (genre CTTE / catégorie N),
+    //    quel que soit le statut de l'acheteur (société OU particulier) ;
+    //  • une voiture particulière (VP) en est exonérée, même vendue à une société ;
+    //  • le montant dépend du PTAC, pas du département.
+    // La case à cocher indique « véhicule utilitaire ». Le montant vient du barème
+    // national (OD.cg), sur la tranche de PTAC : ≤3,5 t = 34 €, <6 t = 127 €,
+    // <11 t = 189 €, au-delà = 285 €. Sans PTAC connu -> tranche ≤ 3,5 t.
+    const Y2 = P.TaxeParafiscale ? y2Montant() : 0;
     const Y3 = ST.malus;
     const Y4 = ST.taxeGestion;
     const Y5 = ST.taxeAcheminement;
@@ -477,7 +501,7 @@ OD.define('propale-vo', {
     return mkCard('Carte grise & taxes', `
       <div class="pv-cgcb">
         <label><div class="pv-cb ${P.Hybride?'on':''}" data-act="hybride"></div>Électrique / Hybride</label>
-        <label><div class="pv-cb ${P.TaxeParafiscale?'on':''}" data-act="parafiscale"></div>Taxe parafiscale</label>
+        <label title="Taxe Y.2 de formation professionnelle : due pour les véhicules utilitaires (CTTE), que l'acheteur soit une société ou un particulier. Les voitures particulières en sont exonérées."><div class="pv-cb ${P.TaxeParafiscale?'on':''}" data-act="parafiscale"></div>Véhicule utilitaire (taxe Y.2)</label>
       </div>
       <div class="pv-row"><div class="pv-f">${fld('Puissance fiscale (CV)','PuissanceFiscale',{type:'number'}).replace(/^<div[^>]*>|<\/div>$/g,'')}</div><div class="pv-f"></div></div>
       <div id="pv-cg-detail" style="margin-top:12px"></div>`);
