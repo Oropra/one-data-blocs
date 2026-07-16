@@ -28,15 +28,6 @@ OD.define('lead-mgmt', {
 const VAR_VENDEUR_CIBLE = '7759f3ba-c260-4297-9e28-3713c305684c';
 
 // --- Configuration ------------------------------------------
-const COLLECTION_ACTIFS          = '93ff6a36-f3a7-468a-a8d0-752e610a9ccf';
-const COLLECTION_KANBAN          = '04b96bd6-36e2-42ba-9a34-0bf9867119c1';
-const COLLECTION_USER_SITES      = '2f09d34f-a0e7-430b-93d3-c86f7d0e2b24';
-const COLLECTION_KPI_SITE        = '1f10c91c-e2ee-4162-a42b-e8ba11bd991b';
-const COLLECTION_KPI_VENDEUR     = 'fbf5070a-d830-4a1b-bf43-7f9fcd9c793f';
-const COLLECTION_CLOTURES        = 'e3900e4f-e076-45ea-8dcf-32ca7f622afe';
-const COLLECTION_LEADS           = '7270d5d5-5048-46e0-a833-cffd8d8a0cbc';
-const COLLECTION_USER_CYCLES     = '74e9a691-524e-4e2a-8370-df042b116b1a';
-const COLLECTION_PREMIER_CONTACT = '1c5a6f4e-d067-4bcf-a2e4-3c7fb8ad172c';
 
 const WF_GET_FICHE     = '53250f54-d14c-4622-baf4-0b89064316b6';
 const PAGE_FICHE_ID    = '259f1951-a2d4-4b90-ac83-0b3febe1d4ec';
@@ -55,10 +46,7 @@ function siteBus() {
 }
 
 // --- 1. Récupération des données ----------------------------
-function asArray(uuid) {
-  const d = wwLib.wwCollection.getCollection(uuid)?.data;
-  return Array.isArray(d) ? [...d] : [];
-}
+// (helper asArray() retiré : plus aucune collection WeWeb n'est lue)
 
 // --- FOLD : chargement direct des 9 vues (plus de collections WeWeb) ---------
 //  Auparavant : workflow (étapes 2 & 3) + auto-fetch, lues via asArray().
