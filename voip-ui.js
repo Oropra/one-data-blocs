@@ -25,6 +25,19 @@ OD.define('voip-ui', {
   const SUPA_URL = ctx.tenant.supabase_url;
   const FICHE_PAGE_ID = '259f1951-a2d4-4b90-ac83-0b3febe1d4ec';
   const VAR_FICHE = '55490583-c88b-4748-916e-4d203db07742';
+  // Navigation ÉDITEUR vs PROD (patron top nav) : en prod, un UID s'inscrit tel
+  // quel dans l'URL -> route inexistante -> page blanche. On navigue par CHEMIN.
+  const OD_PATH_FICHE_CLIENT = '/fr/fiche-client';
+  function odInEditor() {
+    try { return (window.self !== window.top) || /-editor\.weweb\.io|weweb\.io/i.test(location.hostname); }
+    catch (e) { return true; }
+  }
+  function odGoFiche(pageId) {
+    if (odInEditor()) { try { wwLib.wwApp.goTo(pageId); return; } catch (e) {} }
+    try { wwLib.goTo(OD_PATH_FICHE_CLIENT); return; } catch (e) {}
+    try { ((wwLib.getFrontWindow && wwLib.getFrontWindow()) || window).location.href = OD_PATH_FICHE_CLIENT; } catch (e) {}
+  }
+
   const VAR_STATUT = 'd6e8c441-31a5-4e35-9724-3181f9767292';
   const VAR_DUREE = 'ccf7985b-f492-4a3e-b278-a64a705cb650';
   const COLL_CONTACTS = '097aa7fd-e7eb-40a0-a558-d2f4e437fb0d';
@@ -279,11 +292,13 @@ OD.define('voip-ui', {
       api.minimize();
     } else if (act === 'fiche') {
       if (!S.client) { console.warn('[voip-ui] pas de client'); return; }
+      // Le client passe par SA variable ; fiche-shell recharge lui-même.
+      // Le workflow global 'ec8bcc55' a été SUPPRIMÉ du projet (et provoquait le
+      // 409 wa_contacts) -> on ne l'appelle plus.
       try { wwLib.wwVariable.updateValue(VAR_FICHE, Object.assign({}, S.client, { full_count: 1 })); } catch (e2) { console.warn(e2); }
-      try { wwLib.wwWorkflow.executeGlobal('ec8bcc55-a733-4982-a946-13e10ba3b09b', { IDVu: (S.client && S.client.IDVu) || S.idvu }); } catch (e2) {}
       api.minimize(true);
-      try { wwLib.goTo(FICHE_PAGE_ID); return; } catch (e2) {}
-      try { if (wwLib.wwLocation && wwLib.wwLocation.goTo) wwLib.wwLocation.goTo({ pageId: FICHE_PAGE_ID }); } catch (e2) {}
+      odGoFiche(FICHE_PAGE_ID);
+      return;
     }
   }
 
