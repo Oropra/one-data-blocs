@@ -17,7 +17,6 @@ OD.define('rpv', {
   const RPV_ROOT_ID = 'rpv-root';
   const VAR_SELECTED_CLIENT_ID = '55490583-c88b-4748-916e-4d203db07742'; // client sélectionné (objet CLIENT)
   const VAR_SELECTED_SITE_ID = '39fecccf-9296-43b7-b5b6-eadaa928290d'; // selected_id_site
-  const WF_OUT_NEW_RPV = '7531d18e-6175-4ec4-bbb3-c309b01eea0e'; // [reusable workflow] out New RPV (ferme le popup)
   const NEXT_ACTION_TIME = '09:00:00'; // heure appliquée à dt_activation (chip ou date)
 
   // Résultats possibles d'un RPV (resultat_rdv). closure : clôt le cycle.
@@ -318,11 +317,10 @@ OD.define('rpv', {
   }
   function closePopup() {
     if (state.__closeTimer) { clearTimeout(state.__closeTimer); state.__closeTimer = null; }
-    // Overlay JS du shell (fiche 100% JS) : on la ferme directement. Sinon, fallback
-    // sur le workflow qui ferme la popup native (compatibilité ancienne fiche).
-    try { var ov = doc.getElementById('fs-rpv-overlay'); if (ov) { ov.remove(); return; } } catch (e) { }
-    try { wwLib.executeWorkflow(WF_OUT_NEW_RPV, {}); }
-    catch (e) { console.warn('[rpv] close workflow', e && e.message); }
+    // Overlay JS du shell : la fiche est 100% JS -> on la ferme directement.
+    // Le repli sur le workflow WeWeb « out New RPV » (qui fermait la popup native
+    // da11df3d) est retiré : ni le workflow ni la popup ne sont plus nécessaires.
+    try { var ov = doc.getElementById('fs-rpv-overlay'); if (ov) ov.remove(); } catch (e) { }
   }
 
   // --- Rendu : briques --------------------------------------------------------
