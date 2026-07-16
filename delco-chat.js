@@ -78,6 +78,10 @@ await (async function () {
       @import url('https://fonts.googleapis.com/css2?family=Nunito+Sans:opsz,wght@6..12,400;6..12,500;6..12,600;6..12,700;6..12,800&display=swap');
 
       #cp-root {
+        /* Le chat est monté SOUS le brief, et les deux rendent en asynchrone.
+           Sans ceci, l'ancrage de défilement de Chrome garde le chat en vue
+           quand le brief s'insère au-dessus -> la page arrive "en bas". */
+        overflow-anchor: none;
         --green:#53bda7; --blue:#2a5ea9; --lblue:#acc5e4; --orange:#fac055; --red:#d97070;
         --ink:#2a5ea9; --text:#1c2b45; --muted:#7a8aa3;
         --soft:#f5f7fb; --line:#e3eaf3;
