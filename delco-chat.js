@@ -810,7 +810,10 @@ await (async function () {
 
   await loadThreads();
   renderEmpty();
-  $input.focus();
+  // Pas de focus automatique ici : le chat est monté SOUS le brief sur /delco,
+  // et focaliser le champ ferait défiler la page jusqu'en bas à l'arrivée.
+  // Le focus reste assuré quand il est pertinent : reprise d'un prompt via le
+  // CTA « Analyser » (ci-dessous) et interactions de l'utilisateur.
 
   // ───── Reprise du contexte depuis la page Delco ─────────────
   // Si la page Delco a stocké un prompt à analyser, on le pose dans
