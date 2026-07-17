@@ -41,6 +41,15 @@ const response = await fetch(`${supabaseUrl}/functions/v1/voip-generate-token`, 
 })
 const data = await response.json()
 if (!data?.token) { console.error('❌ Token error:', data); return { success: false } }
+
+// Le token revient AVEC une identité nulle quand le compte n'a pas de numéro
+// VOIP (direction, admin, back-office). Initialiser un Device Twilio avec un
+// tel token fait claquer la websocket en boucle (close 1005) et laisse une
+// promesse non capturée. On s'arrête proprement : pas de VOIP = pas de Device.
+if (!data.identity) {
+  console.log('ℹ️ Aucun numéro VOIP pour ce compte — téléphonie désactivée')
+  return { success: false, reason: 'sans_voip' }
+}
 console.log('✅ Token récupéré pour:', data.identity)
 if (!window.Twilio) { console.error('❌ SDK Twilio toujours non disponible'); return { success: false } }
 await new Promise(r => setTimeout(r, 2000))
