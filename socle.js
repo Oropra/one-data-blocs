@@ -360,6 +360,10 @@
     // Tout le reste est "page-level" : re-monté à chaque navigation SPA.
     OD.persistent = OD.persistent || new Set([
         'topnav', 'voip-init', 'voip-ui', 'sms', 'whatsapp', 'email',
+        // Rendu DANS la top nav (elle-même persistante) : son ancre ne bouge
+        // jamais. Sans ça, chaque navigation le re-montait pour rien — une
+        // requête sur client_view_history à chaque fois.
+        'client-history',
         // Ex-blocs on-app-load devenus modules : ils portent un état global
         // (bus de site, badges, abonnements) -> montés UNE fois pour toute la
         // session, jamais re-montés en navigation.
