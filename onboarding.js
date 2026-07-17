@@ -97,6 +97,21 @@ OD.define('onboarding', {
       const r = S.rows.find(x => x.step_id === id); if (r) r.note = txt;
     }
 
+    // Rafraîchir l'instantané de flotte : l'edge function fleet-sync lit le
+    // control plane côté SERVEUR (sa clé n'entre jamais dans le navigateur).
+    async function syncFleet(btn) {
+      if (btn) { btn.disabled = true; btn.textContent = 'Synchro…'; }
+      try {
+        const r = await ctx.fn('fleet-sync', {});
+        const j = await r.json();
+        if (!r.ok || j.error) throw new Error(j.error || ('HTTP ' + r.status));
+        await load();
+      } catch (e) {
+        alert('Synchro de flotte KO : ' + (e.message || e));
+        if (btn) { btn.disabled = false; btn.textContent = 'Rafraîchir'; }
+      }
+    }
+
     // ── ce que l'écran calcule pour toi ────────────────────────────────────
     function mesActions() {
       const out = [];
@@ -123,6 +138,7 @@ OD.define('onboarding', {
       #onb-root{font-family:"Nunito Sans",system-ui,sans-serif;color:#1c2b45;padding:20px;max-width:1080px;margin:0 auto}
       .onb-h{font-size:17px;font-weight:700;margin:26px 0 10px;display:flex;align-items:baseline;gap:9px}
       .onb-h span{font-size:13px;font-weight:400;color:#7a8aa3}
+      .onb-h{width:100%}
       .onb-card{background:#f5f7fb;border-radius:10px;padding:2px 14px}
       .onb-row{display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid #e3eaf3}
       .onb-row:last-child{border-bottom:none}
@@ -241,7 +257,11 @@ OD.define('onboarding', {
         ${hRails}
         <div class="onb-leg">${dot('#5DCAA5','fait')}${dot('#EF9F27','en cours')}${dot('#E24B4A','bloquant')}${dot('#D3D1C7','à faire')}
           <span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;border:1px dashed #9aa7b8;margin-right:4px"></span>chez le client</span></div>
-        <div class="onb-h">Dérive de la flotte</div>
+        <div class="onb-h">Dérive de la flotte
+          <span>${S.fleet.length && S.fleet[0].synced_at
+            ? 'instantané du ' + new Date(S.fleet[0].synced_at).toLocaleString('fr-FR') : ''}</span>
+          <button id="onb-sync" style="margin-left:auto;font-size:12px;padding:4px 11px;border:1px solid #e3eaf3;
+            border-radius:6px;background:#fff;cursor:pointer;font-family:inherit">Rafraîchir</button></div>
         <div class="onb-card">${hFleet}</div>`;
 
       bind();
@@ -261,6 +281,8 @@ OD.define('onboarding', {
       }));
       __anchor.querySelectorAll('[data-cycle]').forEach(el => el.addEventListener('click', () =>
         cycle(Number(el.getAttribute('data-cycle')))));
+      const bs = __anchor.querySelector('#onb-sync');
+      if (bs) bs.addEventListener('click', () => syncFleet(bs));
       __anchor.querySelectorAll('[data-note]').forEach(el => {
         el.addEventListener('blur', () => saveNote(Number(el.getAttribute('data-note')), el.value.trim()));
         el.addEventListener('click', ev => ev.stopPropagation());
