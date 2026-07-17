@@ -15,6 +15,17 @@
 // ============================================================================
 OD.define('onboarding', {
   async mount(__anchor, ctx) {
+    // ── Garde tenant ────────────────────────────────────────────────────
+    // La coquille WeWeb est PARTAGÉE : la route /onboarding existe chez tous les
+    // clients. Ce module est un outil interne — il ne doit se monter que chez
+    // OROPRA. Sans cette garde, un utilisateur d'un autre tenant qui devine
+    // l'URL verrait la page (ses tables onboarding_* seraient vides, mais la
+    // page n'a rien à faire chez lui).
+    if (!ctx.tenant || ctx.tenant.slug !== 'oropra') {
+      __anchor.innerHTML = '';
+      return;
+    }
+
     __anchor.id = 'onb-root';
     const doc = __anchor.ownerDocument || document;
     const sb  = ctx.supabase;
