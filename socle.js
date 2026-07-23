@@ -45,10 +45,11 @@
     function getSlug() {
         const DEV_SLUG = 'oropra';
         // Correspondance explicite domaine -> slug (prioritaire). Ajoute chaque client.
-        const HOST_MAP = {
-            'one-data-dev.oropra.com': 'oropra',
-            'app.oropra.com': 'oropra',
-        };
+const HOST_MAP = {
+    'one-data-dev.oropra.com': 'oropra',
+    'app.oropra.com': 'oropra',
+    'oropra.one-data.fr': 'oropra',        // ← la nouvelle
+};
         const p = new URLSearchParams(location.search);
         if (p.get('tenant')) return p.get('tenant');
         const host = location.hostname;
