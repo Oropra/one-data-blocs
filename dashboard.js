@@ -117,7 +117,7 @@ OD.define('dashboard', {
     function emptyAgg() { const o = {}; for (const k of SUM_FIELDS) o[k] = 0; return o; }
     function addAgg(t, r) { for (const k of SUM_FIELDS) t[k] += num(r[k]); }
     function sumRows(rows) { const o = emptyAgg(); for (const r of rows) addAgg(o, r); return o; }
-    function mapRow(r) { const o = { id_user: Number(r.id_user), nom_complet: r.nom_complet || ('Vendeur ' + r.id_user), id_site: r.id_site != null ? Number(r.id_site) : null, nom_site: r.nom_site || ('Site ' + r.id_site), reseau: r.reseau || '(Sans réseau)', affaire: r.affaire || '(Sans affaire)', id_affaire: r.id_affaire != null ? Number(r.id_affaire) : null, vn_vo: (r.vn_vo || '').toString().toUpperCase() }; for (const k of SUM_FIELDS) o[k] = num(r[k]); return o; }
+    function mapRow(r) { const o = { id_user: Number(r.id_user), nom_complet: r.nom_complet || ('Vendeur ' + r.id_user), fonction: r.fonction || '', id_site: r.id_site != null ? Number(r.id_site) : null, nom_site: r.nom_site || ('Site ' + r.id_site), reseau: r.reseau || '(Sans réseau)', affaire: r.affaire || '(Sans affaire)', id_affaire: r.id_affaire != null ? Number(r.id_affaire) : null, vn_vo: (r.vn_vo || '').toString().toUpperCase() }; for (const k of SUM_FIELDS) o[k] = num(r[k]); return o; }
     function byVendeur(rows) { const m = {}; for (const r of rows) { const k = String(r.id_user); if (!m[k]) m[k] = { id_user: r.id_user, nom_complet: r.nom_complet, id_site: r.id_site, nom_site: r.nom_site, ...emptyAgg() }; addAgg(m[k], r); } return Object.values(m); }
     function aggBy(rows, keyFn, labelFn) { const m = {}; for (const r of rows) { const k = keyFn(r); if (k == null || k === 'null' || k === '') continue; if (!m[k]) m[k] = { key: k, label: labelFn(r), ...emptyAgg() }; addAgg(m[k], r); } return Object.values(m).sort((a, b) => b.commandes_realisees - a.commandes_realisees); }
 
@@ -496,32 +496,56 @@ OD.define('dashboard', {
       try { (wwLib.getFrontWindow ? wwLib.getFrontWindow() : window).dispatchEvent(new Event('resize')); } catch (e) {}
     }
 
-    // ══ NAVIGATION (routage des actions — patron leadMgmt/kanban) ════════
-    //  Fiche client : on écrit {IDVu} dans la variable client puis on navigue ;
-    //  le shell fiche recharge le client depuis l'IDVu (pas de WF_GET_FICHE).
-    //  PROD = chemin /fr/… (un UID en prod → page blanche).
-    const VAR_CLIENT = '55490583-c88b-4748-916e-4d203db07742';
-    const NAV = {   // ⚠️ fiche-client est le vrai chemin ; AJUSTE les autres à tes routes
-      client: '/fr/fiche-client', rdv: '/fr/agenda', propale: '/fr/pipe-commercial',
-      lead: '/fr/leadmgmt', marketing: '/fr/marketing', admin: '/fr/admin', performances: '/fr/performances'
+    // ══ NAVIGATION (calquée sur topnav.js — routes et UID réels) ═════════
+    //  ÉDITEUR : par UID (wwApp.goTo) sinon imbrication de la preview.
+    //  PROD : par CHEMIN /fr/xxx (un UID en prod → route inexistante → page blanche).
+    //  Fiche client : on écrit {IDVu} dans VAR_CLIENT puis on navigue ; le shell
+    //  fiche recharge le client depuis l'IDVu (pas de WF_GET_FICHE).
+    const LANG_PREFIX = '/fr';
+    const VAR_CLIENT  = '55490583-c88b-4748-916e-4d203db07742';
+    const P = { client: '/fiche-client', propale: '/pipe-commercial', lead: '/marketing',
+                marketing: '/marketing', admin: '/admin', performances: '/performances' };
+    const PAGE_UID = {
+      '/fiche-client':    '259f1951-a2d4-4b90-ac83-0b3febe1d4ec',
+      '/pipe-commercial': '9e90d49a-215f-4c2b-b2bb-2d7c4f9aabd6',
+      '/marketing':       '99519997-f935-471a-9147-b0118191b991',
+      '/admin':           '1d30e3ac-fdee-4cce-b9c5-190aee995d23',
+      '/performances':    '1499f15f-e8cb-4561-aea8-bdeeeb080b68'
     };
-    const NAV_ALIAS = { rdv_sans_cr: 'rdv', propales: 'propale', stock: 'propale', leads: 'lead', leads_web: 'lead', all: 'lead', admin_users: 'admin', pipeline: 'admin', coach: 'performances', decroche_vendeur: 'performances', chart: 'performances' };
-    function odGoTo(path) {
+    const NAV_ALIAS = { rdv_sans_cr: 'rdv', propales: 'propale', stock: 'propale', leads: 'lead',
+      leads_web: 'lead', all: 'lead', admin_users: 'admin', pipeline: 'admin',
+      coach: 'performances', decroche_vendeur: 'performances', chart: 'performances' };
+    function inEditor() { try { return window.self !== window.top; } catch (e) { return true; } }
+    function goPage(path) {
       if (!path) return;
-      try { if (wwLib.goTo) return wwLib.goTo(path); } catch (e) {}
-      try { if (wwLib.wwApp && wwLib.wwApp.goTo) return wwLib.wwApp.goTo(path); } catch (e) {}
-      try { (wwLib.getFrontWindow ? wwLib.getFrontWindow() : window).location.href = path; } catch (e) {}
+      const uid = PAGE_UID[path];
+      if (inEditor()) {
+        if (uid) { try { wwLib.wwApp.goTo(uid); return; } catch (e) {} try { wwLib.goTo(uid); return; } catch (e) {} }
+        return;                                   // pas d'UID → on ne tente rien en éditeur
+      }
+      const href = LANG_PREFIX + path;
+      try { wwLib.goTo(href); return; } catch (e) {}
+      try { ((wwLib.getFrontWindow && wwLib.getFrontWindow()) || window).location.href = href; } catch (e) {}
+    }
+    // L'agenda est un module de CETTE page (accueil) : on y défile au lieu de naviguer.
+    function scrollToAgenda() {
+      try {
+        const d = (wwLib.getFrontWindow && wwLib.getFrontWindow().document) || doc;
+        const el = d.getElementById('agenda-root') || d.querySelector('[data-od-module="agenda"]');
+        if (el && el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      } catch (e) {}
     }
     function todoNav(type, key) {
       type = String(type || '');
-      if (type.indexOf('source:') === 0) return odGoTo(NAV.marketing);
-      if (type.indexOf('site:') === 0) return;               // géré par le site-bus
+      if (type.indexOf('source:') === 0) return goPage(P.marketing);
+      if (type.indexOf('site:') === 0) return;              // géré par le site-bus
       const dest = NAV_ALIAS[type] || type;
+      if (dest === 'rdv') return scrollToAgenda();          // agenda = même page
       if (dest === 'client') {
         if (key != null && key !== '') { try { wwLib.wwVariable.updateValue(VAR_CLIENT, { IDVu: Number(key) }); } catch (e) {} }
-        return odGoTo(NAV.client);
+        return goPage(P.client);
       }
-      odGoTo(NAV[dest]);
+      goPage(P[dest]);
     }
 
     // ══ BINDINGS ═════════════════════════════════════════════════════════
