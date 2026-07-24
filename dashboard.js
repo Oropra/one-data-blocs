@@ -189,9 +189,17 @@ OD.define('dashboard', {
     // CONTRAT get_dashboard_daily(p_viewer_id_user, p_date_from, p_date_to)
     //   → lignes { jour date, commandes int }  (périmètre du viewer, ordonné)
     async function loadDaily(k) {
-      try { const { data, error } = await sb.rpc(RPC.daily, { p_viewer_id_user: Number(viewerId), p_date_from: state.period.from, p_date_to: state.period.to });
-        if (error) throw error; if (state.loadKey !== k) return;
-        state.daily = (data || []).map(r => ({ jour: String(r.jour).slice(0, 10), commandes: num(r.commandes) })); render();
+      const site = (state.selection && state.selection.level === 'site') ? Number(state.selection.key) : null;
+      const vv   = (state.vnvo && state.vnvo !== 'tous') ? state.vnvo.toUpperCase() : null;
+      const base = { p_viewer_id_user: Number(viewerId), p_date_from: state.period.from, p_date_to: state.period.to };
+      try {
+        // Signature scopee (site + VN/VO) : indispensable pour que la courbe colle
+        // au chiffre affiche. Repli sur l'ancienne signature si le SQL n'est pas a jour.
+        let res = await sb.rpc(RPC.daily, Object.assign({}, base, { p_id_site: site, p_vn_vo: vv }));
+        if (res.error) res = await sb.rpc(RPC.daily, base);
+        if (res.error) throw res.error;
+        if (state.loadKey !== k) return;
+        state.daily = (res.data || []).map(r => ({ jour: String(r.jour).slice(0, 10), commandes: num(r.commandes) })); render();
       } catch (e) { console.warn('[dash] ' + RPC.daily + ' (fallback run-rate)', e); state.daily = []; }
     }
     // CONTRAT get_dashboard_todo(p_viewer_id_user, p_date_from, p_date_to)
@@ -201,7 +209,7 @@ OD.define('dashboard', {
     async function loadTodo(k) {
       try { const { data, error } = await sb.rpc(RPC.todo, { p_viewer_id_user: Number(viewerId), p_date_from: state.period.from, p_date_to: state.period.to });
         if (error) throw error; if (state.loadKey !== k) return;
-        state.todo = (data || []).map(r => ({ type: r.type || 'lead', titre: r.titre || '', sous_titre: r.sous_titre || '', hot: !!r.hot, cible_type: r.cible_type, cible_id: r.cible_id })); render();
+        state.todo = (data || []).map(r => ({ type: r.type || 'lead', titre: r.titre || '', sous_titre: r.sous_titre || '', hot: !!r.hot, cible_type: r.cible_type, cible_id: r.cible_id, nb_type: num(r.nb_type) })); render();
       } catch (e) { console.warn('[dash] ' + RPC.todo + ' (fallback compteurs)', e); state.todo = null; }
     }
     // CONTRAT get_dashboard_marketing(p_viewer_id_user, p_date_from, p_date_to)
@@ -224,30 +232,71 @@ OD.define('dashboard', {
     }
 
     // ══ COMPOSANTS SVG ═══════════════════════════════════════════════════
-    function svgTrajectory(p, dailyCum) {
-      const W = 520, H = 140, pad = 10;
+    // Couleurs du graphe — SOURCE UNIQUE, partagee par le trace ET la legende.
+    function projColors(p) {
+      return {
+        real: p.verdict === 'bad' ? '#e24b4a' : p.verdict === 'warn' ? '#854f0b' : p.verdict === 'good' ? '#0f6e56' : '#2a5ea9',
+        proj: p.verdict === 'bad' ? '#e24b4a' : p.verdict === 'warn' ? '#d99a1f' : p.verdict === 'good' ? '#53bda7' : '#acc5e4',
+        obj:  '#9bb3d1'
+      };
+    }
+    function periodDays() {
       const to = new Date(state.period.to + 'T12:00:00');
       const deb = new Date(to.getFullYear(), to.getMonth(), 1), fin = new Date(to.getFullYear(), to.getMonth() + 1, 0);
-      const nTot = joursOuvres(ymd(deb), ymd(fin)) || 22;
-      const nCur = Math.max(1, Math.round(p.prorata * nTot));
-      const maxY = Math.max(p.objectif, p.land, 1) * 1.15;
-      const x = i => pad + i * (W - 2 * pad) / (nTot - 1);
-      const y = v => H - pad - v * (H - 2 * pad) / maxY;
-      const col = p.verdict === 'bad' ? '#e24b4a' : p.verdict === 'warn' ? '#854f0b' : p.verdict === 'good' ? '#0f6e56' : '#2a5ea9';
-      const pc  = p.verdict === 'bad' ? '#e24b4a' : p.verdict === 'warn' ? '#fac055' : p.verdict === 'good' ? '#53bda7' : '#acc5e4';
+      return Math.max(2, joursOuvres(ymd(deb), ymd(fin)) || 22);
+    }
+    // Garde de coherence : la courbe cumulee DOIT finir sur le realise affiche.
+    // Sinon (perimetre du RPC different du filtre en cours) on refuse le trace
+    // et on retombe sur une droite honnete plutot qu'une courbe fausse.
+    function cumForChart(dailyCum, p) {
+      if (!dailyCum || !dailyCum.length) return null;
+      const nTot = periodDays();
+      const nCur = Math.min(nTot, Math.max(1, Math.round(p.prorata * nTot)));
+      const cum = dailyCum.slice(0, nCur);
+      if (!cum.length) return null;
+      const last = cum[cum.length - 1];
+      if (!(p.realise > 0) || Math.abs(last - p.realise) > Math.max(1, p.realise * 0.02)) return null;
+      return cum;
+    }
+    function svgTrajectory(p, cum) {
+      const W = 560, H = 158, padL = 8, padR = 52, padT = 16, padB = 18;
+      const nTot = periodDays();
+      const nCur = Math.min(nTot, Math.max(1, Math.round(p.prorata * nTot)));
+      const c = projColors(p);
+      const maxY = Math.max(p.objectif, p.land, p.realise, cum ? Math.max.apply(null, cum) : 0, 1) * 1.12;
+      const x = i => padL + i * (W - padL - padR) / (nTot - 1);
+      const y = v => H - padB - v * (H - padT - padB) / maxY;
       let real;
-      if (dailyCum && dailyCum.length) { real = 'M' + x(0) + ',' + y(dailyCum[0]); dailyCum.slice(0, nCur).forEach((v, i) => real += ' L' + x(i) + ',' + y(v)); }
-      else { real = 'M' + x(0) + ',' + y(0) + ' L' + x(nCur - 1) + ',' + y(p.realise); }
+      if (cum) { real = 'M' + x(0) + ',' + y(cum[0]); cum.forEach((v, i) => real += ' L' + x(i) + ',' + y(v)); }
+      else real = 'M' + x(0) + ',' + y(0) + ' L' + x(nCur - 1) + ',' + y(p.realise);
       const proj = 'M' + x(nCur - 1) + ',' + y(p.realise) + ' L' + x(nTot - 1) + ',' + y(p.land);
       const obj  = 'M' + x(0) + ',' + y(0) + ' L' + x(nTot - 1) + ',' + y(p.objectif);
-      return '<svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" preserveAspectRatio="none" style="display:block;height:140px">' +
-        '<line x1="' + x(nCur - 1) + '" y1="' + pad + '" x2="' + x(nCur - 1) + '" y2="' + (H - pad) + '" stroke="#e8eef7" stroke-width="1.5" stroke-dasharray="3 3"/>' +
-        '<path d="' + obj + '" fill="none" stroke="#9bb3d1" stroke-width="2" stroke-dasharray="5 4" stroke-linecap="round"/>' +
-        '<path d="' + real + '" fill="none" stroke="' + col + '" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>' +
-        '<path d="' + proj + '" fill="none" stroke="' + pc + '" stroke-width="3" stroke-dasharray="2 5" stroke-linecap="round"/>' +
-        '<circle cx="' + x(nCur - 1) + '" cy="' + y(p.realise) + '" r="5" fill="' + col + '"/>' +
-        '<circle cx="' + x(nTot - 1) + '" cy="' + y(p.objectif) + '" r="4" fill="#9bb3d1"/>' +
-        '<circle cx="' + x(nTot - 1) + '" cy="' + y(p.land) + '" r="6" fill="#fff" stroke="' + pc + '" stroke-width="3"/></svg>';
+      const yL = y(p.land), yO = y(p.objectif);
+      const yOlbl = Math.abs(yL - yO) < 13 ? yO + 13 : yO;   // evite le chevauchement des libelles
+      const lbl = (vx, vy, txt, col) => '<text x="' + vx + '" y="' + vy + '" font-size="11.5" font-weight="800" fill="' + col + '" font-family="Nunito Sans,system-ui,sans-serif">' + txt + '</text>';
+      return '<svg viewBox="0 0 ' + W + ' ' + H + '" style="display:block;width:100%;height:auto" xmlns="http://www.w3.org/2000/svg">' +
+        '<line x1="' + padL + '" y1="' + y(0) + '" x2="' + x(nTot - 1) + '" y2="' + y(0) + '" stroke="#eef2f8" stroke-width="1"/>' +
+        '<line x1="' + x(nCur - 1) + '" y1="' + padT + '" x2="' + x(nCur - 1) + '" y2="' + y(0) + '" stroke="#e8eef7" stroke-width="1.5" stroke-dasharray="3 3"/>' +
+        '<path d="' + obj + '" fill="none" stroke="' + c.obj + '" stroke-width="2" stroke-dasharray="5 4" stroke-linecap="round"/>' +
+        '<path d="' + real + '" fill="none" stroke="' + c.real + '" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>' +
+        '<path d="' + proj + '" fill="none" stroke="' + c.proj + '" stroke-width="2.5" stroke-dasharray="2 5" stroke-linecap="round"/>' +
+        '<circle cx="' + x(nCur - 1) + '" cy="' + y(p.realise) + '" r="4.5" fill="' + c.real + '"/>' +
+        (p.objectif > 0 ? '<circle cx="' + x(nTot - 1) + '" cy="' + yO + '" r="3.5" fill="' + c.obj + '"/>' : '') +
+        '<circle cx="' + x(nTot - 1) + '" cy="' + yL + '" r="5.5" fill="#fff" stroke="' + c.proj + '" stroke-width="3"/>' +
+        lbl(x(nTot - 1) + 10, yL + 4, p.land, c.proj) +
+        (p.objectif > 0 ? lbl(x(nTot - 1) + 10, yOlbl + 4, p.objectif, c.obj) : '') +
+        '</svg>';
+    }
+    // Legende construite AVEC les memes couleurs et les memes pointilles que le trace.
+    function projLegend(p, simplifie) {
+      const c = projColors(p);
+      const sw = (stroke, dash) => '<svg width="18" height="8" viewBox="0 0 18 8" style="flex:none"><line x1="1.5" y1="4" x2="16.5" y2="4" stroke="' + stroke + '" stroke-width="3" stroke-linecap="round"' + (dash ? ' stroke-dasharray="' + dash + '"' : '') + '/></svg>';
+      return '<div class="d-proj-lg">' +
+        '<span class="d-lg">' + sw(c.real) + 'realise</span>'.replace('realise', 'réalisé') +
+        '<span class="d-lg">' + sw(c.obj, '5 4') + 'trajectoire objectif</span>' +
+        '<span class="d-lg">' + sw(c.proj, '2 4') + 'atterrissage prévu</span>' +
+        (simplifie ? '<span class="d-lg" style="color:#9bb3d1">· courbe simplifiée</span>' : '') +
+        '</div>';
     }
     function svgSpark(vals) {
       const W = 240, H = 46, pad = 4, max = Math.max(...vals, 1);
@@ -267,26 +316,48 @@ OD.define('dashboard', {
         (meta && meta.length ? '<div class="d-brief-meta">' + meta.map(m => '<span>' + esc(m[0]) + ' : <b>' + esc(m[1]) + '</b></span>').join('') + '</div>' : '') + '</div>';
     }
     function projCard(p, sub) {
-      const vs = p.verdict === 'bad' ? ['#a32d2d', '#fff', '⚠ retard'] : p.verdict === 'warn' ? ['#fac055', '#854f0b', 'à surveiller'] : p.verdict === 'good' ? ['#53bda7', '#fff', '✓ dans les temps'] : ['#eef2f8', '#54678a', '—'];
-      const numCol = p.verdict === 'bad' ? '#a32d2d' : p.verdict === 'warn' ? '#854f0b' : p.verdict === 'good' ? '#0f6e56' : '#2a5ea9';
+      const vs = p.verdict === 'bad' ? ['#a32d2d', '#fff', '\u26a0 retard'] : p.verdict === 'warn' ? ['#fac055', '#854f0b', 'à surveiller'] : p.verdict === 'good' ? ['#53bda7', '#fff', '\u2713 dans les temps'] : ['#eef2f8', '#54678a', '—'];
+      const numCol = projColors(p).real;
       let daily = null; if (state.daily && state.daily.length) { let c = 0; daily = state.daily.map(d => c += d.commandes); }
+      const cum = cumForChart(daily, p);
       return '<div class="d-card"><div class="d-card-hd"><span class="d-ttl">Projection fin de mois</span><span class="d-sub">' + esc(sub || 'rythme réel extrapolé') + '</span></div>' +
         '<div class="d-proj-top"><div class="d-proj-land" style="color:' + numCol + '">' + p.land + '</div>' +
         '<div class="d-proj-of">' + (p.objectif > 0 ? 'commandes prévues<br>objectif <b>' + p.objectif + '</b>' : 'commandes prévues') + '</div>' +
         '<div class="d-proj-vd" style="background:' + vs[0] + ';color:' + vs[1] + '">' + vs[2] + '</div></div>' +
-        '<div>' + svgTrajectory(p, daily) + '</div>' +
-        '<div class="d-proj-lg"><span class="d-lg"><i style="background:' + numCol + '"></i>réalisé</span><span class="d-lg"><i class="dash"></i>trajectoire objectif</span><span class="d-lg"><i style="background:#9bb3d1"></i>atterrissage prévu</span></div></div>';
+        '<div>' + svgTrajectory(p, cum) + '</div>' +
+        projLegend(p, !cum && !!daily) + '</div>';
     }
     const TODO_IC = { fire: '🔥', lead: '📨', rdv: '📅', cal: '📅', coach: '👤', propale: '📝', stock: '🚗', call: '📞', chart: '📉', default: '›' };
-    function todoCard(items, title) {
-      let rows = (items || []).slice(0, 6).map(t =>
-        '<div class="d-todo-row" data-todo="' + esc(t.cible_type || t.type) + '" data-key="' + esc(t.cible_id || '') + '">' +
+    const TODO_GROUP = { fire: 'Leads qui refroidissent', propale: 'Propales à relancer', rdv: 'Comptes-rendus manquants', cal: 'Comptes-rendus manquants', lead: 'Leads à traiter', coach: 'Coaching', stock: 'Stock à arbitrer', chart: 'À analyser', call: 'Appels à passer' };
+    function todoRow(t) {
+      return '<div class="d-todo-row" data-todo="' + esc(t.cible_type || t.type) + '" data-key="' + esc(t.cible_id || '') + '">' +
         '<div class="d-todo-ic">' + (TODO_IC[t.type] || TODO_IC.default) + '</div>' +
         '<div class="d-todo-mid"><div class="d-todo-t">' + esc(t.titre) + '</div><div class="d-todo-s">' + (t.hot ? '<span class="hot">' : '') + esc(t.sous_titre) + (t.hot ? '</span>' : '') + '</div></div>' +
-        '<div class="d-todo-go">›</div></div>').join('');
-      if (!rows) rows = '<div class="d-empty" style="color:#0f6e56">Rien d\'urgent. Bon rythme 👍</div>';
+        '<div class="d-todo-go">\u203a</div></div>';
+    }
+    function todoCard(items, title) {
+      items = items || [];
+      let body;
+      if (!items.length) body = '<div class="d-empty" style="color:#0f6e56">Rien d\'urgent. Bon rythme 👍</div>';
+      else {
+        const order = [], grp = {};
+        for (const t of items) {
+          const g = TODO_GROUP[t.type] || 'À traiter';
+          if (!grp[g]) { grp[g] = { items: [], nb: 0, type: t.cible_type || t.type }; order.push(g); }
+          grp[g].items.push(t);
+          grp[g].nb = Math.max(grp[g].nb, num(t.nb_type) || 0);
+        }
+        const perGrp = order.length > 2 ? 2 : 3;
+        body = order.map(g => {
+          const gr = grp[g], tot = Math.max(gr.nb, gr.items.length), reste = tot - Math.min(perGrp, gr.items.length);
+          return '<div class="d-todo-grp"><span>' + esc(g) + '</span><b>' + tot + '</b></div>' +
+            gr.items.slice(0, perGrp).map(todoRow).join('') +
+            (reste > 0 ? '<div class="d-todo-rest" data-todo="' + esc(gr.type) + '">+ ' + reste + ' autres</div>' : '');
+        }).join('');
+        body += '<div class="d-todo-more" data-todo="all">Voir toute ma liste \u2192</div>';
+      }
       return '<div class="d-card d-act"><div class="d-card-hd"><span class="d-ttl act">' + esc(title || 'À faire maintenant') + '</span><span class="d-sub">priorisé pour toi</span></div>' +
-        '<div class="d-todo">' + rows + '<div class="d-todo-more" data-todo="all">Voir toute ma liste →</div></div></div>';
+        '<div class="d-todo">' + body + '</div></div>';
     }
     // Fallback pile d'actions : synthétise depuis les compteurs get_dashboard
     function todoFallback(agg) {
@@ -552,9 +623,9 @@ OD.define('dashboard', {
     function bind() {
       const root = getRoot(); if (!root) return;
       const rg = root.querySelector('#d-range'); if (rg) rg.addEventListener('click', () => openRangePicker(rg));
-      const ss = root.querySelector('#d-site'); if (ss) ss.addEventListener('change', () => { const v = ss.value || null; state.selection = v ? { level: 'site', key: v, label: (ss.options[ss.selectedIndex] || {}).text || v } : { level: 'all', key: null, label: 'Tout le périmètre' }; if (v) { const b = siteBus(); if (b) b.setSiteId(Number(v)); } render(); });
-      root.querySelectorAll('[data-vnvo]').forEach(b => b.addEventListener('click', () => { state.vnvo = b.getAttribute('data-vnvo'); render(); }));
-      root.querySelectorAll('[data-clear]').forEach(b => b.addEventListener('click', () => { state.selection = { level: 'all', key: null, label: 'Tout le périmètre' }; render(); }));
+      const ss = root.querySelector('#d-site'); if (ss) ss.addEventListener('change', () => { const v = ss.value || null; state.selection = v ? { level: 'site', key: v, label: (ss.options[ss.selectedIndex] || {}).text || v } : { level: 'all', key: null, label: 'Tout le périmètre' }; if (v) { const b = siteBus(); if (b) b.setSiteId(Number(v)); } state.daily = null; if (FLAGS.daily) loadDaily(state.loadKey); render(); });
+      root.querySelectorAll('[data-vnvo]').forEach(b => b.addEventListener('click', () => { state.vnvo = b.getAttribute('data-vnvo'); state.daily = null; if (FLAGS.daily) loadDaily(state.loadKey); render(); }));
+      root.querySelectorAll('[data-clear]').forEach(b => b.addEventListener('click', () => { state.selection = { level: 'all', key: null, label: 'Tout le périmètre' }; state.daily = null; if (FLAGS.daily) loadDaily(state.loadKey); render(); }));
       root.querySelectorAll('[data-fire]').forEach(b => b.addEventListener('click', () => { const k = b.getAttribute('data-fire'); if (k && k.indexOf('site:') === 0) { const id = k.slice(5); const bus = siteBus(); if (bus) bus.setSiteId(Number(id)); state.selection = { level: 'site', key: id, label: b.querySelector('.d-fire-nm').textContent }; render(); } }));
       root.querySelectorAll('[data-nav]').forEach(b => b.addEventListener('click', () => todoNav(b.getAttribute('data-nav'))));
       // Pile d'actions : à toi de router selon cible_type/cible_id vers fiche client / lead / RDV.
@@ -610,6 +681,10 @@ OD.define('dashboard', {
     '#dash-root .d-todo-mid{flex:1;min-width:0}#dash-root .d-todo-t{font-size:13.5px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}' +
     '#dash-root .d-todo-s{font-size:11.5px;color:var(--grey);font-weight:600;margin-top:1px}#dash-root .d-todo-s .hot{color:var(--act-dk);font-weight:800}' +
     '#dash-root .d-todo-go{font-size:18px;color:var(--act);font-weight:800}' +
+    '#dash-root .d-todo-grp{display:flex;align-items:center;justify-content:space-between;font-size:10.5px;font-weight:900;letter-spacing:.05em;text-transform:uppercase;color:var(--act-dk);padding:9px 3px 3px}' +
+    '#dash-root .d-todo-grp b{background:#fff;border:1px solid var(--act-line);border-radius:999px;padding:1px 9px;font-size:11px}' +
+    '#dash-root .d-todo-rest{font-size:11.5px;font-weight:800;color:var(--act-dk);opacity:.8;padding:3px 3px 0;cursor:pointer}' +
+    '#dash-root .d-todo-rest:hover{text-decoration:underline}' +
     '#dash-root .d-todo-more{text-align:center;font-size:12px;font-weight:800;color:var(--act-dk);padding:8px;cursor:pointer;border-radius:9px}#dash-root .d-todo-more:hover{background:#fff}' +
     '#dash-root .d-sigs{display:grid;grid-template-columns:repeat(3,1fr);gap:11px}' +
     '#dash-root .d-sig{border:1px solid var(--line2);border-radius:13px;padding:13px 14px;background:var(--fill)}' +
