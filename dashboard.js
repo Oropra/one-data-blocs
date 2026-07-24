@@ -328,7 +328,10 @@ OD.define('dashboard', {
         projLegend(p, !cum && !!daily) + '</div>';
     }
     const TODO_IC = { fire: '🔥', lead: '📨', rdv: '📅', cal: '📅', coach: '👤', propale: '📝', stock: '🚗', call: '📞', chart: '📉', default: '›' };
-    const TODO_GROUP = { fire: 'Leads qui refroidissent', propale: 'Propales à relancer', rdv: 'Comptes-rendus manquants', cal: 'Comptes-rendus manquants', lead: 'Leads à traiter', coach: 'Coaching', stock: 'Stock à arbitrer', chart: 'À analyser', call: 'Appels à passer' };
+    const TODO_GROUP = { fire: 'Leads qui refroidissent', propale: 'Propales à relancer', rdv: 'Comptes-rendus manquants', cal: 'Comptes-rendus manquants', lead: 'Leads à traiter', coach: 'Coaching', stock: 'Stock à arbitrer', chart: 'À analyser', call: 'Appels à passer', hygiene: 'Hygiène du pipe' };
+    // Destination d'un lien de GROUPE : toujours une LISTE (jamais une fiche,
+    // qui exigerait un id_client — c'etait le bug du « + N autres »).
+    const TODO_DEST = { propale: 'propale', fire: 'propale', hygiene: 'propale', stock: 'propale', rdv: 'rdv', cal: 'rdv', lead: 'lead', coach: 'performances', chart: 'performances', call: 'propale' };
     function todoRow(t) {
       return '<div class="d-todo-row" data-todo="' + esc(t.cible_type || t.type) + '" data-key="' + esc(t.cible_id || '') + '">' +
         '<div class="d-todo-ic">' + (TODO_IC[t.type] || TODO_IC.default) + '</div>' +
@@ -343,16 +346,20 @@ OD.define('dashboard', {
         const order = [], grp = {};
         for (const t of items) {
           const g = TODO_GROUP[t.type] || 'À traiter';
-          if (!grp[g]) { grp[g] = { items: [], nb: 0, type: t.cible_type || t.type }; order.push(g); }
+          if (!grp[g]) { grp[g] = { items: [], nb: 0, famille: t.type }; order.push(g); }
           grp[g].items.push(t);
           grp[g].nb = Math.max(grp[g].nb, num(t.nb_type) || 0);
         }
         const perGrp = order.length > 2 ? 2 : 3;
         body = order.map(g => {
-          const gr = grp[g], tot = Math.max(gr.nb, gr.items.length), reste = tot - Math.min(perGrp, gr.items.length);
+          const gr = grp[g], hyg = gr.famille === 'hygiene';
+          const tot = Math.max(gr.nb, gr.items.length), reste = tot - Math.min(perGrp, gr.items.length);
+          const dest = TODO_DEST[gr.famille] || 'performances';
+          if (hyg) return '<div class="d-todo-grp hyg"><span>' + esc(g) + '</span></div>' +
+            gr.items.map(t => '<div class="d-todo-hyg" data-todo="' + esc(dest) + '"><b>' + esc(t.titre) + '</b><span>' + esc(t.sous_titre) + '</span></div>').join('');
           return '<div class="d-todo-grp"><span>' + esc(g) + '</span><b>' + tot + '</b></div>' +
             gr.items.slice(0, perGrp).map(todoRow).join('') +
-            (reste > 0 ? '<div class="d-todo-rest" data-todo="' + esc(gr.type) + '">+ ' + reste + ' autres</div>' : '');
+            (reste > 0 ? '<div class="d-todo-rest" data-todo="' + esc(dest) + '">+ ' + reste + ' autres</div>' : '');
         }).join('');
         body += '<div class="d-todo-more" data-todo="all">Voir toute ma liste \u2192</div>';
       }
@@ -584,7 +591,7 @@ OD.define('dashboard', {
       '/performances':    '1499f15f-e8cb-4561-aea8-bdeeeb080b68'
     };
     const NAV_ALIAS = { rdv_sans_cr: 'rdv', propales: 'propale', stock: 'propale', leads: 'lead',
-      leads_web: 'lead', all: 'lead', admin_users: 'admin', pipeline: 'admin',
+      leads_web: 'lead', all: 'propale', admin_users: 'admin', pipeline: 'admin',
       coach: 'performances', decroche_vendeur: 'performances', chart: 'performances' };
     function inEditor() { try { return window.self !== window.top; } catch (e) { return true; } }
     function goPage(path) {
@@ -683,6 +690,11 @@ OD.define('dashboard', {
     '#dash-root .d-todo-go{font-size:18px;color:var(--act);font-weight:800}' +
     '#dash-root .d-todo-grp{display:flex;align-items:center;justify-content:space-between;font-size:10.5px;font-weight:900;letter-spacing:.05em;text-transform:uppercase;color:var(--act-dk);padding:9px 3px 3px}' +
     '#dash-root .d-todo-grp b{background:#fff;border:1px solid var(--act-line);border-radius:999px;padding:1px 9px;font-size:11px}' +
+    '#dash-root .d-todo-grp.hyg{color:var(--grey);margin-top:4px}' +
+    '#dash-root .d-todo-hyg{background:#fff;border:1px dashed var(--line2);border-radius:11px;padding:10px 13px;cursor:pointer}' +
+    '#dash-root .d-todo-hyg b{display:block;font-size:12.5px;font-weight:800;color:var(--grey)}' +
+    '#dash-root .d-todo-hyg span{font-size:11.5px;color:var(--grey-lt);font-weight:600}' +
+    '#dash-root .d-todo-hyg:hover{border-color:var(--grey-lt)}' +
     '#dash-root .d-todo-rest{font-size:11.5px;font-weight:800;color:var(--act-dk);opacity:.8;padding:3px 3px 0;cursor:pointer}' +
     '#dash-root .d-todo-rest:hover{text-decoration:underline}' +
     '#dash-root .d-todo-more{text-align:center;font-size:12px;font-weight:800;color:var(--act-dk);padding:8px;cursor:pointer;border-radius:9px}#dash-root .d-todo-more:hover{background:#fff}' +
