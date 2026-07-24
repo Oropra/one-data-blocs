@@ -123,12 +123,25 @@ OD.define('dashboard', {
     // Filtre commun aux DEUX sources → jamais de divergence de périmètre.
     function inScope(r) {
       const s = state.selection;
-      if (s.level === 'site'   && String(r.id_site) !== String(s.key)) return false;
-      if (s.level === 'reseau' && r.reseau !== s.key) return false;
+      if (s.level === 'site'    && String(r.id_site) !== String(s.key)) return false;
+      if (s.level === 'vendeur' && String(r.id_user) !== String(s.key)) return false;
+      if (s.level === 'reseau'  && r.reseau !== s.key) return false;
       if (state.vnvo === 'vn' && !(r.vn_vo || '').includes('VN')) return false;
       if (state.vnvo === 'vo' && !(r.vn_vo || '').includes('VO')) return false;
       return true;
     }
+    // Auto-réparation : une sélection qui ne désigne plus rien (donnée rechargée,
+    // période changée, identifiant erroné) est annulée au lieu de vider l'écran.
+    function selectionValide() {
+      const s = state.selection, rows = state.rawData || [];
+      if (!s || s.level === 'all') return true;
+      if (!rows.length) return true;
+      if (s.level === 'site')    return rows.some(r => String(r.id_site) === String(s.key));
+      if (s.level === 'vendeur') return rows.some(r => String(r.id_user) === String(s.key));
+      if (s.level === 'reseau')  return rows.some(r => r.reseau === s.key);
+      return false;
+    }
+    function resetSelection() { state.selection = { level: 'all', key: null, label: 'Tout le périmètre' }; }
     const dRows = () => (state.rawData || []).filter(inScope);
     const aRows = () => (state.act || []).filter(inScope);
 
@@ -292,7 +305,7 @@ OD.define('dashboard', {
       const p = projection(t.commandes_realisees, t.objectif_commandes);
       if (alerteObjectif(t.objectif_commandes)) {
         return carte('Projection fin de mois', sub,
-          '<div class="d-warn"><b>Objectifs non saisis</b>' +
+          '<div class="d-warn"><span class="d-warn-t">Objectifs non saisis</span>' +
           '<span>On est le ' + moisRef().jour + ' du mois et aucun objectif de commandes n\'est renseigné sur ce périmètre. ' +
           'La projection ne peut pas être calculée — à saisir dans <b>Objectifs</b>.</span>' +
           '<div class="d-warn-n">' + fr(t.commandes_realisees) + ' commandes réalisées à ce jour</div></div>');
@@ -307,8 +320,9 @@ OD.define('dashboard', {
         tr.svg + legende(p, tr.approx));
     }
     function cartePouls() {
+      if (!state.act) return carte('Le pouls', null, '<div class="d-empty">Chargement de l\'activité…</div>');
       const s = serieJours();
-      if (!s || s.length < 2) return carte('Le pouls', null, '<div class="d-empty">Activité en cours de chargement…</div>');
+      if (!s || s.length < 2) return carte('Le pouls', null, '<div class="d-empty">Aucune activité enregistrée sur la période.</div>');
       const vals = s.map(x => x.n), n = vals.length;
       const f = vals.slice(-7).reduce((a, b) => a + b, 0), pr = vals.slice(-14, -7).reduce((a, b) => a + b, 0);
       const jf = Math.min(7, n), jp = Math.max(0, Math.min(7, n - 7));
@@ -355,7 +369,7 @@ OD.define('dashboard', {
           '<span class="d-lst-v">0 contact<small>' + esc(v.nom_site || '') + '</small></span></div>').join('') +
         (inact.length > 6 ? '<div class="d-lst-more">+ ' + (inact.length - 6) + ' autres</div>' : '') + '</div>', 'd-alert');
     }
-    function carteRetard(titre, keyFn, labelFn) {
+    function carteRetard(titre, type, keyFn, labelFn) {
       const pr = prorata();
       const g = groupBy(dRows(), keyFn, labelFn, SUM_D)
         .filter(x => x.objectif_commandes > 0)
@@ -366,7 +380,7 @@ OD.define('dashboard', {
       if (!g.length) return carte(titre, null, '<div class="d-empty">Aucun objectif renseigné sur ce périmètre.</div>');
       if (!bad.length) return carte(titre, null, '<div class="d-ok">✓ Tout le monde est au rythme (prorata ' + Math.round(pr * 100) + ' %)</div>');
       return carte(titre, 'écart au prorata (' + Math.round(pr * 100) + ' %)',
-        '<div class="d-lst">' + bad.slice(0, 6).map(x => '<div class="d-lst-r' + (x.ecart < -25 ? ' alert' : ' warn') + '" data-site="' + esc(x.key) + '">' +
+        '<div class="d-lst">' + bad.slice(0, 6).map(x => '<div class="d-lst-r' + (x.ecart < -25 ? ' alert' : ' warn') + '" data-pick="' + esc(type) + ':' + esc(x.key) + '">' +
           '<span class="d-lst-n">' + esc(x.label) + '</span><span class="d-lst-v">' + x.ecart + ' pts<small>' + fr(x.re) + ' / ' + fr(x.ob) + '</small></span></div>').join('') + '</div>');
     }
     function carteClassement(titre) {
@@ -470,7 +484,7 @@ OD.define('dashboard', {
       return bandeau('Mon équipe', phrase, [['Périmètre', state.selection.level === 'site' ? state.selection.label : 'Tous mes sites'],
         ['Équipe', nb + ' vendeurs'], ['Prorata mois', Math.round(p.prorata * 100) + ' %']]) +
         filtres() + '<div class="d-g">' + carteInactifs('Qui a besoin de moi') + carteProjection('équipe') +
-        carteRetard('Vendeurs sous le rythme', r => String(r.id_user), r => r.nom_complet) + cartePouls() +
+        carteRetard('Vendeurs sous le rythme', 'vendeur', r => String(r.id_user), r => r.nom_complet) + cartePouls() +
         carteEntonnoir() + carteQualite() + carteLeads() + carteStock() + '</div>';
     }
     function vueDirecteur(titre) {  // « Le mois est-il tenu, et où ça coince ? »
@@ -485,7 +499,7 @@ OD.define('dashboard', {
       return bandeau(titre || 'Le groupe', phrase, [['Périmètre', sites.length + ' sites'],
         ['Équipe', parVendeur(dRows(), SUM_D).length + ' vendeurs'], ['Prorata mois', Math.round(pr * 100) + ' %']]) +
         filtres() + '<div class="d-g">' + carteProjection('groupe') +
-        carteRetard('Sites sous le rythme', r => String(r.id_site), r => r.nom_site) +
+        carteRetard('Sites sous le rythme', 'site', r => String(r.id_site), r => r.nom_site) +
         cartePouls() + carteEntonnoir() + carteInactifs('Vendeurs sans activité') + carteQualite() + carteStock() + '</div>';
     }
     function vueMarketing() { // périmètre = les MARQUES du user (v_user_perimeter, rôle 5)
@@ -497,7 +511,7 @@ OD.define('dashboard', {
       return bandeau('Mes marques', phrase, [['Marques', reseaux.length + ''], ['Sites', groupBy(dRows(), r => String(r.id_site), r => r.nom_site, SUM_D).length + ''],
         ['Entrants', fr(a.nb_entrants)]]) +
         filtres() + '<div class="d-g">' + carteLeads() + carteEntonnoir() + carteQualite() + cartePouls() +
-        carteRetard('Sites sous le rythme', r => String(r.id_site), r => r.nom_site) +
+        carteRetard('Sites sous le rythme', 'site', r => String(r.id_site), r => r.nom_site) +
         carte('Par marque', 'commandes de la période',
           '<div class="d-lst">' + reseaux.slice(0, 8).map(x => '<div class="d-lst-r"><span class="d-lst-n">' + esc(x.label) + '</span>' +
             '<span class="d-lst-v">' + fr(x.commandes_realisees) + '<small>' + (x.objectif_commandes > 0 ? 'obj. ' + fr(x.objectif_commandes) : 'sans objectif') + '</small></span></div>').join('') + '</div>') +
@@ -527,16 +541,21 @@ OD.define('dashboard', {
       if (arr.length > 1) { h += '<select class="d-sel" id="d-site"><option value="">Tout le périmètre</option>' +
         arr.map(s => '<option value="' + esc(s.id) + '"' + (state.selection.level === 'site' && String(state.selection.key) === s.id ? ' selected' : '') + '>' + esc(s.nom) + '</option>').join('') + '</select>'; }
       h += '<div class="d-tg">' + [['tous', 'Tous'], ['vn', 'VN'], ['vo', 'VO']].map(o =>
-        '<button type="button" class="' + (state.vnvo === o[0] ? 'on' : '') + '" data-vnvo="' + o[0] + '">' + o[1] + '</button>').join('') + '</div></div>';
-      return h;
+        '<button type="button" class="' + (state.vnvo === o[0] ? 'on' : '') + '" data-vnvo="' + o[0] + '">' + o[1] + '</button>').join('') + '</div>';
+      if (state.selection.level !== 'all')
+        h += '<span class="d-chip">' + esc(state.selection.label) + '<button type="button" data-reset="1" title="Retirer le filtre">×</button></span>';
+      return h + '</div>';
     }
     function squelette() { const b = '<div class="d-sk"></div>'; return '<div class="d-c">' + b + b + b + '</div><div class="d-g"><div class="d-c">' + b + b + '</div><div class="d-c">' + b + b + '</div></div>'; }
     function render() {
       const root = getRoot(); if (!root) return;
+      // Filet : une sélection devenue invalide est annulée AVANT tout calcul.
+      if (state.rawData && state.rawData.length && !selectionValide()) resetSelection();
       let body;
       if (state.err) body = '<div class="d-c"><div class="d-empty" style="color:' + COL.redDk + '">Erreur : ' + esc(state.err) + '</div></div>';
       else if (!state.rawData) body = squelette();
       else if (!state.rawData.length) body = '<div class="d-c"><div class="d-empty">Aucune donnée sur ce périmètre pour la période choisie.</div></div>';
+      else if (!dRows().length) body = filtres() + '<div class="d-c"><div class="d-empty">Aucune donnée pour ce filtre.<br><b data-reset="1" style="color:#2a5ea9;cursor:pointer">Revenir à tout le périmètre</b></div></div>';
       else {
         try {
           const f = famille();
@@ -561,12 +580,18 @@ OD.define('dashboard', {
         render();
       });
       root.querySelectorAll('[data-vnvo]').forEach(b => b.addEventListener('click', () => { state.vnvo = b.getAttribute('data-vnvo'); render(); }));
-      root.querySelectorAll('[data-site]').forEach(el => el.addEventListener('click', () => {
-        const id = el.getAttribute('data-site'); if (!id) return;
-        state.selection = { level: 'site', key: id, label: (el.querySelector('.d-lst-n') || {}).textContent || id };
-        const b = bus(); if (b) try { b.setSiteId(Number(id)); } catch (e) {}
+      root.querySelectorAll('[data-pick]').forEach(el => el.addEventListener('click', () => {
+        const raw = el.getAttribute('data-pick') || '', i = raw.indexOf(':');
+        if (i < 0) return;
+        const lvl = raw.slice(0, i), id = raw.slice(i + 1);
+        if (!id || (lvl !== 'site' && lvl !== 'vendeur')) return;
+        const nm = el.querySelector('.d-lst-n');
+        state.selection = { level: lvl, key: id, label: (nm && nm.textContent) || id };
+        // Le site-bus ne reçoit QUE des identifiants de site (jamais un id_user).
+        if (lvl === 'site') { const b = bus(); if (b) try { b.setSiteId(Number(id)); } catch (e) {} }
         render();
       }));
+      root.querySelectorAll('[data-reset]').forEach(el => el.addEventListener('click', () => { resetSelection(); render(); }));
     }
 
     // ── Sélecteur de période ─────────────────────────────────────────────
@@ -647,6 +672,9 @@ OD.define('dashboard', {
     '#dash-root .d-sel{border:1.5px solid #e8eef7;border-radius:9px;padding:7px 11px;font-size:12px;font-family:inherit;font-weight:600;color:#2c2c2a;background:#fff}' +
     '#dash-root .d-tg{display:inline-flex;background:#f7f9fc;border-radius:9px;padding:3px}' +
     '#dash-root .d-tg button{border:0;background:transparent;font-family:inherit;font-weight:800;font-size:12px;color:#54678a;padding:6px 13px;border-radius:7px;cursor:pointer}' +
+    '#dash-root .d-chip{display:inline-flex;align-items:center;gap:7px;background:#eef4fc;border:1px solid #d6e4f6;color:#1F4A85;font-size:12px;font-weight:800;padding:6px 8px 6px 12px;border-radius:9px}' +
+    '#dash-root .d-chip button{border:0;background:#fff;color:#54678a;width:18px;height:18px;line-height:16px;border-radius:50%;cursor:pointer;font-size:13px;font-family:inherit;font-weight:800;padding:0}' +
+    '#dash-root .d-chip button:hover{background:#e24b4a;color:#fff}' +
     '#dash-root .d-tg button.on{background:#fff;color:#2a5ea9;box-shadow:0 1px 4px rgba(42,94,169,.15)}' +
     '#dash-root .d-g{display:grid;grid-template-columns:1.3fr 1fr;gap:16px;margin-top:16px;align-items:start}' +
     '#dash-root .d-c{background:#fff;border:1px solid #e8eef7;border-radius:16px;padding:18px 19px}' +
@@ -661,7 +689,7 @@ OD.define('dashboard', {
     '#dash-root .d-lgd{display:flex;gap:16px;margin-top:8px;font-size:11px;font-weight:700;color:#54678a;flex-wrap:wrap}' +
     '#dash-root .d-lgd span{display:flex;align-items:center;gap:6px}' +
     '#dash-root .d-warn{background:#fff8ec;border:1px solid #f4e2bf;border-radius:12px;padding:15px}' +
-    '#dash-root .d-warn b{display:block;font-size:14px;color:#854f0b;margin-bottom:5px}' +
+    '#dash-root .d-warn .d-warn-t{display:block;font-size:14px;font-weight:900;color:#854f0b;margin-bottom:5px}' +
     '#dash-root .d-warn span{font-size:12.5px;color:#54678a;font-weight:600;line-height:1.5}' +
     '#dash-root .d-warn-n{margin-top:10px;font-size:15px;font-weight:900;color:#1F4A85}' +
     '#dash-root .d-warn-s{margin-top:10px;font-size:11.5px;color:#854f0b;font-weight:700;background:#fff8ec;border-radius:9px;padding:8px 10px}' +
@@ -709,6 +737,7 @@ OD.define('dashboard', {
 
     // ══ DÉMARRAGE ════════════════════════════════════════════════════════
     bindBus();
+    render();          // rendu immédiat au (re)montage — ne pas attendre le réseau
     load(false);
     [300, 900, 2000].forEach(d => setTimeout(() => { const r = getRoot(); if (r && !r.querySelector('.dash')) render(); }, d));
   }
