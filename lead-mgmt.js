@@ -74,11 +74,14 @@ async function fetchCyclesData(vendeurCible) {
 // Cible initiale : un vendeur ne voit que ses cycles ; un manager voit tout (null).
 const __initialVendeurCible = (userConnected.ID_Role === ROLE_VENDEUR) ? userConnected.ID_User : null;
 
-const [__perim, __kpiSite, __kpiVend, __cycles, __clotures, __leads, __userCycles, __premier] = await Promise.all([
+// PERF : les cycles (v_cycles_actifs / v_cycles_kanban, les 2 vues les plus
+// lourdes) ne sont PLUS chargés au montage. Ils le sont à la demande, à l'entrée
+// de « Suivi leads » (voir ensureCycles), scopés au vendeur ciblé. Un manager sur
+// « Synthèse » (page par défaut) n'en charge aucun -> premier affichage rapide.
+const [__perim, __kpiSite, __kpiVend, __clotures, __leads, __userCycles, __premier] = await Promise.all([
   sb.from('v_user_perimeter').select('*').eq('viewer_id_user', userConnected.ID_User),
   sb.from('v_lead_kpi_site').select('*'),
   sb.from('v_lead_kpi_vendeur').select('*'),
-  fetchCyclesData(__initialVendeurCible),
   sb.from('v_cloture_cycle').select('*'),
   sb.from('v_leads').select('*'),
   sb.from('v_user_cycles_recent').select('*'),
@@ -87,8 +90,9 @@ const [__perim, __kpiSite, __kpiVend, __cycles, __clotures, __leads, __userCycle
 [__perim, __kpiSite, __kpiVend, __clotures, __leads, __userCycles, __premier]
   .forEach(r => { if (r && r.error) console.error('[leadMgmt] chargement vue', r.error); });
 
-let dataActifs           = __cycles.actifs;
-let dataKanban           = __cycles.kanban;
+let dataActifs           = [];   // chargés à la demande (ensureCycles)
+let dataKanban           = [];
+let cyclesLoadedFor      = undefined;   // cible (idUser|null) pour laquelle les cycles sont chargés
 const userSites          = __perim.data || [];
 const dataKpiSite        = __kpiSite.data || [];
 const dataKpiVend        = __kpiVend.data || [];
@@ -1649,7 +1653,7 @@ function renderSectionSuiviLeads() {
     html += '</div>';
   }
   html += '<div class="lm-subtoggle">';
-  html += '<button type="button" class="lm-subtoggle-btn' + (state.view === 'a_traiter' ? ' active' : '') + '" data-view="a_traiter">À traiter</button>';
+  html += '<button type="button" class="lm-subtoggle-btn' + (state.view === 'a_traiter' ? ' active' : '') + '" data-view="a_traiter">Cycles actifs</button>';
   html += '<button type="button" class="lm-subtoggle-btn' + (state.view === 'pipeline'  ? ' active' : '') + '" data-view="pipeline">Pipeline</button>';
   html += '</div>';
   if (state.cyclesLoading) {
@@ -1939,7 +1943,7 @@ function renderAll() {
     else                                    html += renderSectionSuiviLeads();
   } else {
     html += '<div class="lm-toggle">';
-    html += '<button type="button" class="lm-toggle-btn' + (state.view === 'a_traiter' ? ' active' : '') + '" data-view="a_traiter">À traiter</button>';
+    html += '<button type="button" class="lm-toggle-btn' + (state.view === 'a_traiter' ? ' active' : '') + '" data-view="a_traiter">Cycles actifs</button>';
     html += '<button type="button" class="lm-toggle-btn' + (state.view === 'pipeline'  ? ' active' : '') + '" data-view="pipeline">Pipeline</button>';
     html += '</div>';
     if (state.view === 'pipeline') html += renderViewKanban();
@@ -1980,6 +1984,30 @@ async function openClientFiche(idClient, tabIndex, cardEl) {
   }
 }
 
+// Charge les cycles pour la vue « Suivi leads » si pas déjà chargés pour cette
+// cible. cible = idUser (vendeur ciblé) ou null (tout le périmètre du manager).
+async function ensureCycles(cible) {
+  const c = (cible != null ? Number(cible) : null);
+  if (state.cyclesLoading) return;
+  if (cyclesLoadedFor === c) return;   // déjà chargés pour cette cible
+  state.cyclesLoading = true;
+  if (window.__renderLeadMgmt) window.__renderLeadMgmt();
+  try {
+    const cy = await fetchCyclesData(c);
+    dataActifs = cy.actifs;
+    dataKanban = cy.kanban;
+    cyclesLoadedFor = c;
+  } catch (e) {
+    console.error('[leadMgmt] ensureCycles', e);
+  } finally {
+    state.cyclesLoading = false;
+    if (window.__renderLeadMgmt) window.__renderLeadMgmt();
+  }
+}
+function cibleCourante() {
+  return state.selectedVendeur ? state.selectedVendeur.id_user : __initialVendeurCible;
+}
+
 async function selectVendeurCible(idUser) {
   state.cyclesLoading = true;
   renderAll();
@@ -1988,6 +2016,7 @@ async function selectVendeurCible(idUser) {
     const cy = await fetchCyclesData(idUser);   // FOLD : refetch direct au lieu de fetchCollection
     dataActifs = cy.actifs;
     dataKanban = cy.kanban;
+    cyclesLoadedFor = (idUser != null ? Number(idUser) : null);
   } catch (e) {
     console.error('[leadMgmt] Erreur refetch cycles', e);
   } finally {
@@ -2006,6 +2035,7 @@ function bindEvents() {
       }
       state.section = newSection;
       renderAll();
+      if (newSection === 'suivi_leads') ensureCycles(cibleCourante());   // chargement à la demande
     });
   });
   root.querySelectorAll('.lm-toggle-btn[data-view], .lm-subtoggle-btn[data-view]').forEach(el => {
@@ -2109,8 +2139,12 @@ window.__renderLeadMgmt = renderAll;
 
 renderAll();
 
-if (isVendeur && state.selectedVendeur) {
-  selectVendeurCible(state.selectedVendeur.id_user);
+// Chargement initial des cycles UNIQUEMENT si on arrive sur « Suivi leads »
+// (vendeur par défaut, ou manager pré-filtré depuis le dashboard). Un manager
+// sur « Synthèse » (défaut) n'en charge aucun -> premier affichage rapide.
+if (state.section === 'suivi_leads') {
+  if (state.selectedVendeur) selectVendeurCible(state.selectedVendeur.id_user);
+  else ensureCycles(cibleCourante());
 }
 
 // Bascule .lm-narrow d'après la largeur RÉELLE de #lead-mgmt-root (repli des @media).
