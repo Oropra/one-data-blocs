@@ -55,11 +55,13 @@ OD.define('dashboard', {
     if (state.act     === undefined) state.act     = null;   // get_activite_equipe
     if (state.stock   === undefined) state.stock   = null;
     if (state.leads   === undefined) state.leads   = null;
-    if (!state.selection) state.selection = { level: 'all', key: null, label: 'Tout le périmètre' };
-    if (!state.vnvo) state.vnvo = 'tous';
+    // Montage = nouvelle arrivée sur l'accueil : on repart TOUJOURS sans filtre ni
+    // détail ouvert (corrige le retour accueil / logo qui laissait un état collé).
+    state.selection = { level: 'all', key: null, label: 'Tout le périmètre' };
+    state.detail = null;
+    state.vnvo = 'tous';
     if (state.viewerId != null && String(state.viewerId) !== String(viewerId)) {
       state.rawData = state.act = state.stock = state.leads = null;
-      state.selection = { level: 'all', key: null, label: 'Tout le périmètre' };
     }
     state.viewerId = viewerId;
     state.viewerRole = state.viewerRole != null ? state.viewerRole : viewerRole;
@@ -365,7 +367,7 @@ OD.define('dashboard', {
       if (!state.act) return carte(titre, null, '<div class="d-empty">Chargement…</div>');
       if (!inact.length) return carte(titre, null, '<div class="d-ok">✓ Tous les vendeurs ont eu de l\'activité sur la période</div>');
       return carte(titre, inact.length + ' sans aucune activité',
-        '<div class="d-lst">' + inact.slice(0, 6).map(v => '<div class="d-lst-r alert" data-pick="vendeur:' + esc(v.id_user) + '"><span class="d-lst-n">' + esc(v.nom_complet) + '</span>' +
+        '<div class="d-lst">' + inact.slice(0, 6).map(v => '<div class="d-lst-r alert" data-detail="vendeur:' + esc(v.id_user) + '"><span class="d-lst-n">' + esc(v.nom_complet) + '</span>' +
           '<span class="d-lst-v">0 contact<small>' + esc(v.nom_site || '') + '</small></span></div>').join('') +
         (inact.length > 6 ? '<div class="d-lst-more">+ ' + (inact.length - 6) + ' autres</div>' : '') + '</div>', 'd-alert');
     }
@@ -385,7 +387,7 @@ OD.define('dashboard', {
       if (!g.length) return carte(titre, null, '<div class="d-empty">Aucun objectif renseigné sur ce périmètre.</div>');
       if (!bad.length) return carte(titre, null, '<div class="d-ok">✓ Tout le monde est au rythme (prorata ' + Math.round(pr * 100) + ' %)</div>');
       return carte(titre, bad.length + ' sous le rythme · prorata ' + Math.round(pr * 100) + ' %',
-        '<div class="d-lst">' + bad.slice(0, 6).map(x => '<div class="d-lst-r' + (x.ecart < -25 ? ' alert' : ' warn') + '" data-pick="' + esc(type) + ':' + esc(x.key) + '">' +
+        '<div class="d-lst">' + bad.slice(0, 6).map(x => '<div class="d-lst-r' + (x.ecart < -25 ? ' alert' : ' warn') + '" ' + (type === 'vendeur' ? 'data-detail="vendeur:' + esc(x.key) + '"' : 'data-pick="' + esc(type) + ':' + esc(x.key) + '"') + '>' +
           '<span class="d-lst-n">' + esc(x.label) + '</span><span class="d-lst-v">' + x.ecart + ' pts<small>' + fr(x.re) + ' / ' + fr(x.ob) + '</small></span></div>').join('') + '</div>');
     }
     function carteClassement(titre) {
@@ -396,7 +398,7 @@ OD.define('dashboard', {
         '<div class="d-rk">' + v.slice(0, 7).map((x, i) => {
           const me = String(x.id_user) === String(viewerId);
           const col = i === 0 ? COL.green : me ? COL.blue : '#acc5e4';
-          return '<div class="d-rk-r' + (me ? ' me' : '') + '"><span class="d-rk-p">' + (i + 1) + '</span>' +
+          return '<div class="d-rk-r' + (me ? ' me' : '') + '" data-detail="vendeur:' + esc(x.id_user) + '"><span class="d-rk-p">' + (i + 1) + '</span>' +
             '<span class="d-rk-n">' + esc(x.nom_complet) + (me ? ' (vous)' : '') + '</span>' +
             '<div class="d-rk-b"><i style="width:' + Math.max(5, Math.round(x.commandes_realisees / max * 100)) + '%;background:' + col + '"></i></div>' +
             '<span class="d-rk-v">' + fr(x.commandes_realisees) + '</span></div>';
@@ -405,12 +407,12 @@ OD.define('dashboard', {
     // rows OBLIGATOIRE : la carte ne choisit jamais son périmètre toute seule.
     function carteJournee(rows) {
       const t = sum(rows, SUM_D);
-      const it = [['RDV aujourd\'hui', t.rdv_aujourdhui, COL.blue], ['RDV à venir', t.rdv_a_venir, COL.greenDk],
-                  ['CR manquants', t.rdv_sans_cr, t.rdv_sans_cr > 0 ? COL.amberDk : COL.grey],
-                  ['Leads à traiter', t.leads_a_traiter, t.leads_a_traiter > 0 ? COL.redDk : COL.grey],
-                  ['Cycles ouverts', t.cycles_ouverts, COL.grey]];
-      return carte('Ma journée', 'agenda ci-dessous',
-        '<div class="d-kpi">' + it.map(x => '<div class="d-kpi-i"><b style="color:' + x[2] + '">' + fr(x[1]) + '</b><span>' + x[0] + '</span></div>').join('') + '</div>');
+      const it = [['RDV aujourd\'hui', t.rdv_aujourdhui, COL.blue, 'rdv'], ['RDV à venir', t.rdv_a_venir, COL.greenDk, 'rdv'],
+                  ['CR manquants', t.rdv_sans_cr, t.rdv_sans_cr > 0 ? COL.amberDk : COL.grey, 'rdv'],
+                  ['Leads à traiter', t.leads_a_traiter, t.leads_a_traiter > 0 ? COL.redDk : COL.grey, 'leads'],
+                  ['Cycles ouverts', t.cycles_ouverts, COL.grey, 'cycles']];
+      return carte('Ma journée', 'cliquez pour le détail', 
+        '<div class="d-kpi">' + it.map(x => '<div class="d-kpi-i" data-detail="moi:' + x[3] + '"><b style="color:' + x[2] + '">' + fr(x[1]) + '</b><span>' + esc(x[0]) + '</span></div>').join('') + '</div>');
     }
     function carteStock() {
       if (!state.stock || !state.stock.length) return '';
@@ -432,7 +434,7 @@ OD.define('dashboard', {
       const t = sum(dRows(), SUM_D);
       const v = parVendeur(dRows(), SUM_D).filter(x => x.leads_a_traiter > 0).sort((a, b) => b.leads_a_traiter - a.leads_a_traiter);
       return carte('Leads à traiter', t.leads_a_traiter + ' cycles concernés',
-        v.length ? '<div class="d-lst">' + v.slice(0, 6).map(x => '<div class="d-lst-r' + (x.leads_a_traiter > 5 ? ' alert' : ' warn') + '" data-pick="vendeur:' + esc(x.id_user) + '">' +
+        v.length ? '<div class="d-lst">' + v.slice(0, 6).map(x => '<div class="d-lst-r' + (x.leads_a_traiter > 5 ? ' alert' : ' warn') + '" data-detail="vendeur:' + esc(x.id_user) + '">' +
           '<span class="d-lst-n">' + esc(x.nom_complet) + '</span><span class="d-lst-v">' + fr(x.leads_a_traiter) + '<small>' + esc(x.nom_site || '') + '</small></span></div>').join('') + '</div>'
           : '<div class="d-ok">✓ Aucun lead en attente</div>');
     }
@@ -539,6 +541,68 @@ OD.define('dashboard', {
       return vueDirecteur('Plateforme').replace('<div class="d-g">', '<div class="d-g">' + couv);
     }
 
+    // ══ PANNEAU DE DÉTAIL (contenu réel, 100% depuis les données déjà chargées) ══
+    function scrollAgenda() {
+      try {
+        const d = (wwLib.getFrontWindow && wwLib.getFrontWindow().document) || doc;
+        const el = d.getElementById('agenda-root') || d.querySelector('[data-od-module="agenda"]');
+        if (el && el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      } catch (e) {}
+    }
+    function miniKpi(arr) {
+      return '<div class="d-kpi">' + arr.map(x => '<div class="d-kpi-i"><b style="color:' + (x[2] || COL.blueDk) + '">' + fr(x[1]) + '</b><span>' + esc(x[0]) + '</span></div>').join('') + '</div>';
+    }
+    function miniFunnel(a) {
+      const et = [['Contacts', a.nb_contacts, '#acc5e4'], ['Propales', a.nb_propales_creees, COL.blue], ['BDC', a.nb_bdc, COL.green], ['Commandes', a.nb_wins, COL.amber]];
+      const max = Math.max.apply(null, et.map(e => e[1]).concat([1]));
+      let h = '<div class="d-fn">';
+      et.forEach((e, i) => { h += '<div class="d-fn-b" style="width:' + Math.max(16, Math.round(e[1] / max * 100)) + '%;background:' + e[2] + '"><b>' + fr(e[1]) + '</b><span>' + e[0] + '</span></div>';
+        if (i < et.length - 1) { const c = e[1] > 0 ? Math.round(et[i + 1][1] / e[1] * 100) : 0; h += '<div class="d-fn-c">↓ ' + c + ' %</div>'; } });
+      return h + '</div>';
+    }
+    function detailCard() {
+      if (!state.detail) return '';
+      const i = state.detail.indexOf(':'); if (i < 0) return '';
+      const kind = state.detail.slice(0, i), key = state.detail.slice(i + 1);
+      let idu, theme = null;
+      if (kind === 'vendeur') idu = key;
+      else if (kind === 'moi') { idu = String(viewerId); theme = key; }
+      else return '';
+      const drows = (state.rawData || []).filter(r => String(r.id_user) === String(idu) && inScope(r));
+      if (!drows.length) return '';
+      const nom = drows[0].nom_complet || ('Vendeur ' + idu);
+      const site = drows.map(r => r.nom_site).filter((v, j, arr) => v && arr.indexOf(v) === j).join(' · ');
+      const dd = sum(drows, SUM_D);
+      const arows = (state.act || []).filter(r => String(r.id_user) === String(idu) && inScope(r));
+      const aa = sum(arows, SUM_A);
+      const p = projection(dd.commandes_realisees, dd.objectif_commandes);
+      const tx = dd.nb_propales_tx > 0 ? Math.round(dd.nb_wins_tx / dd.nb_propales_tx * 100) : 0;
+      const vc = p.verdict === 'bad' ? COL.redDk : p.verdict === 'warn' ? COL.amberDk : p.verdict === 'good' ? COL.greenDk : COL.blueDk;
+      const canaux = [['WhatsApp', aa.nb_whatsapp], ['Appels', aa.nb_voip], ['SMS', aa.nb_sms], ['Emails', 0], ['RPV', aa.nb_rpv]].filter(c => c[1] > 0).map(c => [c[0], c[1], COL.blueDk]);
+      const titre = kind === 'moi' ? 'Mon détail' : nom;
+      return '<div class="d-c d-full d-detail">' +
+        '<div class="d-detail-h"><div><span class="d-detail-t">' + esc(titre) + '</span>' +
+          (site ? '<span class="d-detail-s">' + esc(site) + '</span>' : '') + '</div>' +
+          '<button type="button" data-detail-close="1" class="d-detail-x" title="Fermer">×</button></div>' +
+        '<div class="d-detail-g">' +
+          '<div class="d-detail-col"><div class="d-detail-lbl">Résultats</div>' +
+            miniKpi([['Commandes', dd.commandes_realisees, vc], ['Objectif', dd.objectif_commandes, COL.grey],
+                     ['Projection', p.land, vc], ['Transfo ' + tx + ' %', dd.nb_wins_tx, COL.blueDk],
+                     ['Financements', dd.financements_realises, COL.blueDk]]) + '</div>' +
+          '<div class="d-detail-col"><div class="d-detail-lbl">' + (kind === 'moi' ? 'Ma journée' : 'Sa journée') + '</div>' +
+            miniKpi([['RDV auj.', dd.rdv_aujourdhui, COL.blue], ['RDV à venir', dd.rdv_a_venir, COL.greenDk],
+                     ['CR manquants', dd.rdv_sans_cr, dd.rdv_sans_cr > 0 ? COL.amberDk : COL.grey],
+                     ['Leads', dd.leads_a_traiter, dd.leads_a_traiter > 0 ? COL.redDk : COL.grey],
+                     ['Cycles', dd.cycles_ouverts, COL.grey]]) +
+            (theme === 'rdv' ? '<button type="button" data-agenda="1" class="d-detail-ag">Voir dans l\'agenda ↓</button>' : '') + '</div>' +
+          '<div class="d-detail-col"><div class="d-detail-lbl">Activité — ' + fr(aa.nb_contacts) + ' contacts</div>' +
+            (canaux.length ? miniKpi(canaux) : '<div class="d-empty">Aucun échange sur la période</div>') +
+            '<div class="d-detail-lbl" style="margin-top:12px">Qualité des échanges</div>' +
+            miniKpi([['Chocs', aa.nb_chocs, COL.greenDk], ['Relances', aa.nb_relances, COL.blue], ['Abandons', aa.nb_abandons, COL.redDk]]) + '</div>' +
+          '<div class="d-detail-col"><div class="d-detail-lbl">Entonnoir</div>' + miniFunnel(aa) + '</div>' +
+        '</div></div>';
+    }
+
     // ══ FILTRES / SHELL ══════════════════════════════════════════════════
     function filtres() {
       const sites = {}; for (const r of (state.rawData || [])) if (r.id_site != null) sites[String(r.id_site)] = r.nom_site;
@@ -569,6 +633,9 @@ OD.define('dashboard', {
                : f === 'admin' ? vueAdmin() : vueDirecteur();
         } catch (e) { console.error('[dash] render', e); body = '<div class="d-c"><div class="d-empty" style="color:' + COL.redDk + '">Erreur d\'affichage : ' + esc(e && e.message) + '</div></div>'; }
       }
+      const dc = detailCard();
+      if (state.detail && !dc) state.detail = null;            // cible disparue -> on referme
+      if (dc) body = body.replace('<div class="d-g">', dc + '<div class="d-g">');
       root.innerHTML = '<div class="dash">' + CSS +
         '<div class="d-pb"><span>Période</span><button type="button" id="d-range">📅 ' + esc(fmtPeriod()) + ' ▾</button></div>' +
         body + '</div>';
@@ -598,6 +665,13 @@ OD.define('dashboard', {
         render();
       }));
       root.querySelectorAll('[data-reset]').forEach(el => el.addEventListener('click', () => { resetSelection(); render(); }));
+      root.querySelectorAll('[data-detail]').forEach(el => el.addEventListener('click', () => {
+        const v = el.getAttribute('data-detail');
+        state.detail = (state.detail === v) ? null : v;   // reclic = referme
+        render();
+      }));
+      root.querySelectorAll('[data-detail-close]').forEach(el => el.addEventListener('click', () => { state.detail = null; render(); }));
+      root.querySelectorAll('[data-agenda]').forEach(el => el.addEventListener('click', () => scrollAgenda()));
     }
 
     // ── Sélecteur de période ─────────────────────────────────────────────
@@ -715,6 +789,18 @@ OD.define('dashboard', {
     '#dash-root .d-lst-r{display:flex;align-items:center;gap:11px;padding:10px 12px;border-radius:11px;background:#f7f9fc;border:1px solid #e8eef7;border-left:3px solid #acc5e4}' +
     '#dash-root .d-lst-r[data-pick]{cursor:pointer}#dash-root .d-lst-r[data-pick]:hover{background:#fff;box-shadow:0 4px 12px -6px rgba(42,94,169,.35)}' +
     '#dash-root .d-lst-r[data-pick]::after{content:"›";color:#9bb3d1;font-weight:900;font-size:16px;margin-left:2px}' +
+    '#dash-root .d-lst-r[data-detail]{cursor:pointer}#dash-root .d-lst-r[data-detail]:hover{background:#fff;box-shadow:0 4px 12px -6px rgba(42,94,169,.35)}' +
+    '#dash-root .d-lst-r[data-detail]::after{content:"\u203a";color:#9bb3d1;font-weight:900;font-size:16px;margin-left:2px}' +
+    '#dash-root .d-rk-r[data-detail]{cursor:pointer;border-radius:8px;margin:0 -6px;padding:3px 6px}#dash-root .d-rk-r[data-detail]:hover{background:#f2f7fd}' +
+    '#dash-root .d-kpi-i[data-detail]{cursor:pointer;transition:.12s}#dash-root .d-kpi-i[data-detail]:hover{border-color:#acc5e4;background:#fff;box-shadow:0 4px 12px -7px rgba(42,94,169,.4)}' +
+    '#dash-root .d-detail{border-color:#cfe0f5;background:linear-gradient(180deg,#fbfdff,#fff)}' +
+    '#dash-root .d-detail-h{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:14px}' +
+    '#dash-root .d-detail-t{font-size:17px;font-weight:900;color:#1F4A85;display:block}' +
+    '#dash-root .d-detail-s{font-size:12px;font-weight:700;color:#9bb3d1}' +
+    '#dash-root .d-detail-x{border:1px solid #e8eef7;background:#fff;color:#54678a;width:30px;height:30px;border-radius:9px;cursor:pointer;font-size:20px;line-height:1;font-family:inherit}#dash-root .d-detail-x:hover{background:#e24b4a;color:#fff;border-color:#e24b4a}' +
+    '#dash-root .d-detail-g{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:16px}' +
+    '#dash-root .d-detail-lbl{font-size:11px;font-weight:900;letter-spacing:.05em;text-transform:uppercase;color:#54678a;margin-bottom:8px}' +
+    '#dash-root .d-detail-ag{margin-top:10px;width:100%;border:1.5px solid #acc5e4;background:#eef4fc;color:#1F4A85;font-weight:800;font-size:12.5px;padding:9px;border-radius:10px;cursor:pointer;font-family:inherit}#dash-root .d-detail-ag:hover{background:#2a5ea9;color:#fff;border-color:#2a5ea9}' +
     '#dash-root .d-lst-r.warn{border-left-color:#fac055;background:#fffaf0}' +
     '#dash-root .d-lst-r.alert{border-left-color:#e24b4a;background:#fff5f4}' +
     '#dash-root .d-lst-n{flex:1;font-size:13px;font-weight:800;color:#1F4A85;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}' +
