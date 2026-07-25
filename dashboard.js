@@ -365,21 +365,26 @@ OD.define('dashboard', {
       if (!state.act) return carte(titre, null, '<div class="d-empty">Chargement…</div>');
       if (!inact.length) return carte(titre, null, '<div class="d-ok">✓ Tous les vendeurs ont eu de l\'activité sur la période</div>');
       return carte(titre, inact.length + ' sans aucune activité',
-        '<div class="d-lst">' + inact.slice(0, 6).map(v => '<div class="d-lst-r alert"><span class="d-lst-n">' + esc(v.nom_complet) + '</span>' +
+        '<div class="d-lst">' + inact.slice(0, 6).map(v => '<div class="d-lst-r alert" data-pick="vendeur:' + esc(v.id_user) + '"><span class="d-lst-n">' + esc(v.nom_complet) + '</span>' +
           '<span class="d-lst-v">0 contact<small>' + esc(v.nom_site || '') + '</small></span></div>').join('') +
         (inact.length > 6 ? '<div class="d-lst-more">+ ' + (inact.length - 6) + ' autres</div>' : '') + '</div>', 'd-alert');
     }
-    function carteRetard(titre, type, keyFn, labelFn) {
+    // Calcul PARTAGÉ par le bandeau et la carte : impossible qu'ils se contredisent.
+    function sousRythme(keyFn, labelFn) {
       const pr = prorata();
       const g = groupBy(dRows(), keyFn, labelFn, SUM_D)
         .filter(x => x.objectif_commandes > 0)
         .map(x => ({ label: x.label, key: x.key, re: x.commandes_realisees, ob: x.objectif_commandes,
                      ecart: Math.round((x.commandes_realisees / x.objectif_commandes - pr) * 100) }))
         .sort((a, b) => a.ecart - b.ecart);
-      const bad = g.filter(x => x.ecart < -10);
+      return { tous: g, bad: g.filter(x => x.ecart < -10) };
+    }
+    function carteRetard(titre, type, keyFn, labelFn) {
+      const pr = prorata();
+      const sr = sousRythme(keyFn, labelFn), g = sr.tous, bad = sr.bad;
       if (!g.length) return carte(titre, null, '<div class="d-empty">Aucun objectif renseigné sur ce périmètre.</div>');
       if (!bad.length) return carte(titre, null, '<div class="d-ok">✓ Tout le monde est au rythme (prorata ' + Math.round(pr * 100) + ' %)</div>');
-      return carte(titre, 'écart au prorata (' + Math.round(pr * 100) + ' %)',
+      return carte(titre, bad.length + ' sous le rythme · prorata ' + Math.round(pr * 100) + ' %',
         '<div class="d-lst">' + bad.slice(0, 6).map(x => '<div class="d-lst-r' + (x.ecart < -25 ? ' alert' : ' warn') + '" data-pick="' + esc(type) + ':' + esc(x.key) + '">' +
           '<span class="d-lst-n">' + esc(x.label) + '</span><span class="d-lst-v">' + x.ecart + ' pts<small>' + fr(x.re) + ' / ' + fr(x.ob) + '</small></span></div>').join('') + '</div>');
     }
@@ -397,8 +402,9 @@ OD.define('dashboard', {
             '<span class="d-rk-v">' + fr(x.commandes_realisees) + '</span></div>';
         }).join('') + '</div>');
     }
-    function carteJournee() {
-      const t = sum(dRows(), SUM_D);
+    // rows OBLIGATOIRE : la carte ne choisit jamais son périmètre toute seule.
+    function carteJournee(rows) {
+      const t = sum(rows, SUM_D);
       const it = [['RDV aujourd\'hui', t.rdv_aujourdhui, COL.blue], ['RDV à venir', t.rdv_a_venir, COL.greenDk],
                   ['CR manquants', t.rdv_sans_cr, t.rdv_sans_cr > 0 ? COL.amberDk : COL.grey],
                   ['Leads à traiter', t.leads_a_traiter, t.leads_a_traiter > 0 ? COL.redDk : COL.grey],
@@ -426,7 +432,7 @@ OD.define('dashboard', {
       const t = sum(dRows(), SUM_D);
       const v = parVendeur(dRows(), SUM_D).filter(x => x.leads_a_traiter > 0).sort((a, b) => b.leads_a_traiter - a.leads_a_traiter);
       return carte('Leads à traiter', t.leads_a_traiter + ' cycles concernés',
-        v.length ? '<div class="d-lst">' + v.slice(0, 6).map(x => '<div class="d-lst-r' + (x.leads_a_traiter > 5 ? ' alert' : ' warn') + '">' +
+        v.length ? '<div class="d-lst">' + v.slice(0, 6).map(x => '<div class="d-lst-r' + (x.leads_a_traiter > 5 ? ' alert' : ' warn') + '" data-pick="vendeur:' + esc(x.id_user) + '">' +
           '<span class="d-lst-n">' + esc(x.nom_complet) + '</span><span class="d-lst-v">' + fr(x.leads_a_traiter) + '<small>' + esc(x.nom_site || '') + '</small></span></div>').join('') + '</div>'
           : '<div class="d-ok">✓ Aucun lead en attente</div>');
     }
@@ -435,7 +441,7 @@ OD.define('dashboard', {
     // La question du matin décide de la carte qui occupe le haut de l'écran.
     function vueVendeur() {   // « Où j'en suis, et qui je vois aujourd'hui ? »
       const mine = dRows().filter(r => String(r.id_user) === String(viewerId));
-      const t = sum(mine.length ? mine : [], SUM_D);
+      const t = sum(mine, SUM_D);   // ← unique source de vérité de cette vue
       const p = projection(t.commandes_realisees, t.objectif_commandes);
       const cls = parVendeur(dRows(), SUM_D).sort((a, b) => b.commandes_realisees - a.commandes_realisees);
       const pos = cls.findIndex(x => String(x.id_user) === String(viewerId)) + 1;
@@ -446,7 +452,7 @@ OD.define('dashboard', {
         (t.rdv_aujourdhui > 0 ? ' <b>' + fr(t.rdv_aujourdhui) + ' RDV</b> aujourd\'hui.' : '');
       return bandeau('Ma journée', phrase, [['Ma position', pos > 0 ? pos + (pos === 1 ? 'er' : 'e') + ' / ' + cls.length : '—'],
         ['Pipeline', fr(t.cycles_ouverts) + ' cycles'], ['Prorata mois', Math.round(p.prorata * 100) + ' %']]) +
-        filtres() + '<div class="d-g">' + carteProjectionPerso(mine) + carteJournee() + carteEntonnoirPerso(mine) + carteClassement('Ma position dans l\'équipe') + '</div>';
+        filtres() + '<div class="d-g">' + carteProjectionPerso(mine) + carteJournee(mine) + carteEntonnoirPerso(mine) + carteClassement('Ma position dans l\'équipe') + '</div>';
     }
     function carteProjectionPerso(mine) {
       const t = sum(mine, SUM_D), p = projection(t.commandes_realisees, t.objectif_commandes);
@@ -491,7 +497,7 @@ OD.define('dashboard', {
       const t = sum(dRows(), SUM_D), p = projection(t.commandes_realisees, t.objectif_commandes);
       const sites = groupBy(dRows(), r => String(r.id_site), r => r.nom_site, SUM_D);
       const pr = prorata();
-      const bad = sites.filter(s => s.objectif_commandes > 0 && (s.commandes_realisees / s.objectif_commandes) < pr - 0.10);
+      const bad = sousRythme(r => String(r.id_site), r => r.nom_site).bad;   // même calcul que la carte
       const phrase = (p.objectif > 0 ? 'Le groupe atterrit à <b>' + fr(p.land) + ' commandes</b> pour un objectif de <b>' + fr(p.objectif) + '</b>' +
           (p.verdict === 'bad' ? ' — <dn>' + fr(p.objectif - p.land) + ' de retard</dn>.' : p.verdict === 'good' ? ' — <up>dans les temps</up>.' : '.')
           : '<b>' + fr(t.commandes_realisees) + ' commandes</b> réalisées.') +
@@ -513,7 +519,7 @@ OD.define('dashboard', {
         filtres() + '<div class="d-g">' + carteLeads() + carteEntonnoir() + carteQualite() + cartePouls() +
         carteRetard('Sites sous le rythme', 'site', r => String(r.id_site), r => r.nom_site) +
         carte('Par marque', 'commandes de la période',
-          '<div class="d-lst">' + reseaux.slice(0, 8).map(x => '<div class="d-lst-r"><span class="d-lst-n">' + esc(x.label) + '</span>' +
+          '<div class="d-lst">' + reseaux.slice(0, 8).map(x => '<div class="d-lst-r" data-pick="reseau:' + esc(x.key) + '"><span class="d-lst-n">' + esc(x.label) + '</span>' +
             '<span class="d-lst-v">' + fr(x.commandes_realisees) + '<small>' + (x.objectif_commandes > 0 ? 'obj. ' + fr(x.objectif_commandes) : 'sans objectif') + '</small></span></div>').join('') + '</div>') +
         '</div>';
     }
@@ -584,7 +590,7 @@ OD.define('dashboard', {
         const raw = el.getAttribute('data-pick') || '', i = raw.indexOf(':');
         if (i < 0) return;
         const lvl = raw.slice(0, i), id = raw.slice(i + 1);
-        if (!id || (lvl !== 'site' && lvl !== 'vendeur')) return;
+        if (!id || (lvl !== 'site' && lvl !== 'vendeur' && lvl !== 'reseau')) return;
         const nm = el.querySelector('.d-lst-n');
         state.selection = { level: lvl, key: id, label: (nm && nm.textContent) || id };
         // Le site-bus ne reçoit QUE des identifiants de site (jamais un id_user).
@@ -707,7 +713,8 @@ OD.define('dashboard', {
     '#dash-root .d-q-i span{font-size:11px;font-weight:700;color:#54678a}#dash-root .d-q-i i{display:block;font-size:10.5px;color:#9bb3d1;font-weight:800;font-style:normal;margin-top:2px}' +
     '#dash-root .d-lst{display:flex;flex-direction:column;gap:8px}' +
     '#dash-root .d-lst-r{display:flex;align-items:center;gap:11px;padding:10px 12px;border-radius:11px;background:#f7f9fc;border:1px solid #e8eef7;border-left:3px solid #acc5e4}' +
-    '#dash-root .d-lst-r[data-site]{cursor:pointer}#dash-root .d-lst-r[data-site]:hover{background:#fff;box-shadow:0 4px 12px -6px rgba(42,94,169,.35)}' +
+    '#dash-root .d-lst-r[data-pick]{cursor:pointer}#dash-root .d-lst-r[data-pick]:hover{background:#fff;box-shadow:0 4px 12px -6px rgba(42,94,169,.35)}' +
+    '#dash-root .d-lst-r[data-pick]::after{content:"›";color:#9bb3d1;font-weight:900;font-size:16px;margin-left:2px}' +
     '#dash-root .d-lst-r.warn{border-left-color:#fac055;background:#fffaf0}' +
     '#dash-root .d-lst-r.alert{border-left-color:#e24b4a;background:#fff5f4}' +
     '#dash-root .d-lst-n{flex:1;font-size:13px;font-weight:800;color:#1F4A85;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}' +
