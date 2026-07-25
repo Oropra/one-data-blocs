@@ -434,7 +434,7 @@ OD.define('dashboard', {
       const t = sum(dRows(), SUM_D);
       const v = parVendeur(dRows(), SUM_D).filter(x => x.leads_a_traiter > 0).sort((a, b) => b.leads_a_traiter - a.leads_a_traiter);
       return carte('Leads à traiter', t.leads_a_traiter + ' cycles concernés',
-        v.length ? '<div class="d-lst">' + v.slice(0, 6).map(x => '<div class="d-lst-r' + (x.leads_a_traiter > 5 ? ' alert' : ' warn') + '" data-detail="vendeur:' + esc(x.id_user) + '">' +
+        v.length ? '<div class="d-lst">' + v.slice(0, 6).map(x => '<div class="d-lst-r' + (x.leads_a_traiter > 5 ? ' alert' : ' warn') + '" data-goleads="' + esc(x.id_user) + '\u2502' + esc(x.id_site == null ? '' : x.id_site) + '\u2502' + esc(x.nom_complet) + '">' +
           '<span class="d-lst-n">' + esc(x.nom_complet) + '</span><span class="d-lst-v">' + fr(x.leads_a_traiter) + '<small>' + esc(x.nom_site || '') + '</small></span></div>').join('') + '</div>'
           : '<div class="d-ok">✓ Aucun lead en attente</div>');
     }
@@ -672,6 +672,10 @@ OD.define('dashboard', {
       }));
       root.querySelectorAll('[data-detail-close]').forEach(el => el.addEventListener('click', () => { state.detail = null; render(); }));
       root.querySelectorAll('[data-agenda]').forEach(el => el.addEventListener('click', () => scrollAgenda()));
+      root.querySelectorAll('[data-goleads]').forEach(el => el.addEventListener('click', () => {
+        const raw = el.getAttribute('data-goleads') || '', parts = raw.split('\u2502');
+        if (parts[0]) goLeadsPrefiltre(parts[0], parts[1], parts[2]);
+      }));
     }
 
     // ── Sélecteur de période ─────────────────────────────────────────────
@@ -716,6 +720,25 @@ OD.define('dashboard', {
       const s = doc.createElement('style'); s.id = 'd-dp-css';
       s.textContent = '#d-dp .dp{background:#fff;border:1.5px solid #e8eef7;border-radius:12px;box-shadow:0 8px 30px rgba(42,94,169,.18);padding:13px;width:262px;font-family:"Nunito Sans",system-ui,sans-serif}#d-dp .dp-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}#d-dp .dp-h span{font-size:12px;font-weight:700;color:#2a5ea9;text-transform:capitalize}#d-dp .dp-h button{width:26px;height:26px;border:1.5px solid #e8eef7;background:#fff;border-radius:8px;cursor:pointer;color:#2a5ea9}#d-dp .dp-g{display:grid;grid-template-columns:repeat(7,33px);gap:2px}#d-dp .dp-w{font-size:9px;color:#acc5e4;text-align:center;font-weight:800;padding-bottom:3px}#d-dp .dp-d{height:29px;line-height:29px;text-align:center;font-size:11px;border-radius:7px;cursor:pointer}#d-dp .dp-d:hover{background:#eef4fc}#d-dp .dp-d.t{box-shadow:inset 0 0 0 1.5px #acc5e4}#d-dp .dp-d.s{background:#2a5ea9;color:#fff;font-weight:800}#d-dp .dp-d.r{background:#eef4fc}#d-dp .dp-f{margin-top:8px;text-align:center;font-size:10px;color:#9bb3d1;font-style:italic}';
       doc.head.appendChild(s);
+    }
+
+    // ══ NAVIGATION lead-mgmt pré-filtré ══════════════════════════════════
+    const LM_VAR_VENDEUR_CIBLE = '7759f3ba-c260-4297-9e28-3713c305684c';
+    const LM_MARKETING = { path: '/marketing', uid: '99519997-f935-471a-9147-b0118191b991' };
+    function inEditor() { try { return window.self !== window.top; } catch (e) { return true; } }
+    function goLeadsPrefiltre(idUser, idSite, nom) {
+      const w = (wwLib.getFrontWindow && wwLib.getFrontWindow()) || window;
+      try {
+        const lm = w.__leadMgmt || {};
+        lm.selectedVendeur = { id_user: Number(idUser), id_site: idSite === '' || idSite == null ? null : Number(idSite), vendeur_nom: nom || ('Vendeur ' + idUser) };
+        lm.section = 'suivi_leads';
+        lm.view = 'a_traiter';
+        w.__leadMgmt = lm; try { window.__leadMgmt = lm; } catch (e) {}
+      } catch (e) {}
+      try { wwLib.wwVariable.updateValue(LM_VAR_VENDEUR_CIBLE, Number(idUser)); } catch (e) {}
+      if (inEditor()) { try { wwLib.wwApp.goTo(LM_MARKETING.uid); return; } catch (e) {} try { wwLib.goTo(LM_MARKETING.uid); return; } catch (e) {} return; }
+      try { wwLib.goTo('/fr' + LM_MARKETING.path); return; } catch (e) {}
+      try { w.location.href = '/fr' + LM_MARKETING.path; } catch (e) {}
     }
 
     // ══ SITE BUS ═════════════════════════════════════════════════════════
@@ -790,6 +813,8 @@ OD.define('dashboard', {
     '#dash-root .d-lst-r[data-pick]{cursor:pointer}#dash-root .d-lst-r[data-pick]:hover{background:#fff;box-shadow:0 4px 12px -6px rgba(42,94,169,.35)}' +
     '#dash-root .d-lst-r[data-pick]::after{content:"›";color:#9bb3d1;font-weight:900;font-size:16px;margin-left:2px}' +
     '#dash-root .d-lst-r[data-detail]{cursor:pointer}#dash-root .d-lst-r[data-detail]:hover{background:#fff;box-shadow:0 4px 12px -6px rgba(42,94,169,.35)}' +
+    '#dash-root .d-lst-r[data-goleads]{cursor:pointer}#dash-root .d-lst-r[data-goleads]:hover{background:#fff;box-shadow:0 4px 12px -6px rgba(42,94,169,.35)}' +
+    '#dash-root .d-lst-r[data-goleads]::after{content:"\u2197";color:#9bb3d1;font-weight:900;font-size:15px;margin-left:2px}' +
     '#dash-root .d-lst-r[data-detail]::after{content:"\u203a";color:#9bb3d1;font-weight:900;font-size:16px;margin-left:2px}' +
     '#dash-root .d-rk-r[data-detail]{cursor:pointer;border-radius:8px;margin:0 -6px;padding:3px 6px}#dash-root .d-rk-r[data-detail]:hover{background:#f2f7fd}' +
     '#dash-root .d-kpi-i[data-detail]{cursor:pointer;transition:.12s}#dash-root .d-kpi-i[data-detail]:hover{border-color:#acc5e4;background:#fff;box-shadow:0 4px 12px -7px rgba(42,94,169,.4)}' +
