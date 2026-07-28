@@ -28,7 +28,7 @@ OD.define('admin', {
   /* ------------------------------------------------------------------ config */
   var MOUNT_ID   = 'od-admin-root';
   var FLAG       = '__od_admin_v1_ver__';
-  var VER        = '1.3';
+  var VER        = '2.0';
   var SUPA_URL   = ctx.tenant.supabase_url;
   var FN_RESET   = SUPA_URL + '/functions/v1/admin-reset-password';
   var FN_INVITE  = SUPA_URL + '/functions/v1/email-invite-create';
@@ -37,7 +37,23 @@ OD.define('admin', {
   var FN_US_DEL  = SUPA_URL + '/functions/v1/admin-user-site-delete';
   var FN_PERI    = SUPA_URL + '/functions/v1/admin-user-perimeter-set';
   var FN_SUB     = SUPA_URL + '/functions/v1/admin-user-subordinates-attach';
+  var FN_DEACT   = SUPA_URL + '/functions/v1/admin-deactivate-user';   // si absente -> repli JS
+  var FN_DELETE  = SUPA_URL + '/functions/v1/admin-delete-user';
   var TABLE_VIEW = 'v_admin_users';
+  var TABLE_MAIL = 'email_accounts';
+
+  /* Colonnes detectees a l'execution (aucun nom n'est code en dur cote metier).
+     Si une detection echoue, la modale le dit et pointe la liste a completer. */
+  var ACTIVE_FIELDS    = ['actif', 'Actif', 'ACTIF', 'is_active', 'active', 'en_activite', 'enabled'];
+  var PRINCIPAL_FIELDS = ['ID_Site', 'id_site', 'ID_SITE', 'id_site_principal', 'site_principal', 'ID_Site_Principal'];
+  var OWNER_FIELDS     = ['ID_User', 'id_user', 'ID_USER', 'ID_Vendeur', 'id_vendeur', 'vendeur_id', 'user_id'];
+  var DATE_FIELDS      = ['DateRDV', 'date_rdv', 'DATE_RDV', 'Date_RDV', 'date_debut', 'DateDebut', 'date'];
+  /* Portefeuille redistribue a la desactivation. CYCLE_COM en est exclu :
+     c'est un rattachement client/site, pas un portefeuille commercial. */
+  var PORTFOLIO = [
+    { table: 'RDV',         label: 'RDV a venir',      futureOnly: true },
+    { table: 'PROPALE_BDC', label: 'Propales et BDC',  futureOnly: false }
+  ];
   var TABLE_USER = 'USER';
   var TABLE_ROLE = 'ROLE';
 
@@ -148,6 +164,15 @@ OD.define('admin', {
   + '.oda-user .ind1{padding-left:26px;} .oda-user .ind2{padding-left:44px;}'
   + '.oda-badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600;background:var(--grey-bg);color:var(--grey-text);text-transform:capitalize;}'
   + '.oda-badge.ok{background:var(--green-bg);color:#1b7a44;} .oda-badge.pending{background:var(--orange-bg);color:#8a6014;} .oda-badge.none{background:var(--grey-bg);color:var(--grey-text);}'
+  + '.oda-badge.alert{background:var(--red-bg);color:var(--red-soft);}'
+  + '.oda-menu button.alert{color:var(--red-soft);} .oda-menu button.alert:hover{background:var(--red-bg);}'
+  + '.oda-mbox{border:1px solid var(--border);border-radius:10px;background:var(--bg);padding:12px 14px;margin-bottom:14px;}'
+  + '.oda-mbox dl{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;margin:0;font-size:12px;}'
+  + '.oda-mbox dt{color:var(--text-mut);font-weight:700;text-transform:uppercase;font-size:10px;letter-spacing:.3px;align-self:center;}'
+  + '.oda-mbox dd{margin:0;color:var(--text-soft);word-break:break-word;}'
+  + '.oda-mbox .err{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11px;color:var(--red-soft);}'
+  + '.oda-linkbtn{border:none;background:none;padding:0;font:inherit;font-size:12px;color:var(--text-mut);text-decoration:underline;cursor:pointer;}'
+  + '.oda-linkbtn:hover{color:var(--blue-dk);}'
   + '.oda-iconbtn{border:none;background:transparent;cursor:pointer;padding:6px;border-radius:8px;color:var(--text-mut);line-height:0;}'
   + '.oda-iconbtn:hover{background:var(--blue-bg);color:var(--blue-dk);}'
   + '.oda-menu{position:fixed;z-index:2147483000;min-width:220px;background:var(--card);border:1px solid var(--border);border-radius:10px;box-shadow:0 12px 34px rgba(42,94,169,.18);padding:6px;}'
@@ -193,6 +218,19 @@ OD.define('admin', {
   + '.oda-btn.primary{background:var(--blue-dk);color:#fff;} .oda-btn.primary:hover{background:#1f4a87;}'
   + '.oda-btn.ghost{background:var(--card);border:1px solid var(--border);color:var(--text-soft);} .oda-btn.ghost:hover{border-color:var(--blue-dk);color:var(--blue-dk);}'
   + '.oda-btn[disabled]{opacity:.55;cursor:default;}'
+  + '.oda-btn.danger{background:var(--red-soft);color:#fff;} .oda-btn.danger:hover{background:#a94a41;}'
+  + '.oda-modal.wide{max-width:min(760px,94vw);}'
+  + '.oda-acts{display:grid;grid-template-columns:1fr 1fr;gap:22px;}'
+  + '.oda-actcol h3{margin:0 0 12px;background:var(--blue-dk);color:#fff;border-radius:999px;padding:8px 14px;font-size:12px;font-weight:700;text-align:center;letter-spacing:.3px;}'
+  + '.oda-act{display:flex;align-items:center;gap:11px;width:100%;border:1px solid transparent;background:transparent;padding:10px;border-radius:9px;font-size:13px;color:var(--text-soft);cursor:pointer;text-align:left;font-family:inherit;}'
+  + '.oda-act:hover{background:var(--blue-bg);border-color:var(--border);color:var(--blue-dk);}'
+  + '.oda-act .ic{line-height:0;flex:0 0 auto;}'
+  + '.oda-act .ic.blue{color:var(--blue-dk);} .oda-act .ic.orange{color:var(--orange);} .oda-act .ic.green{color:var(--green);} .oda-act .ic.red{color:var(--red-soft);} .oda-act .ic.danger{color:var(--red-soft);}'
+  + '.oda-act small{margin-left:auto;}'
+  + '.oda-act.danger{color:var(--red-soft);font-weight:600;} .oda-act.danger:hover{background:var(--red-bg);border-color:var(--red-bg);color:var(--red-soft);}'
+  + '.oda-warn{background:var(--orange-bg);color:#8a6014;border-radius:8px;padding:10px 12px;font-size:12.5px;line-height:1.45;margin-top:10px;}'
+  + '.oda-act-body select{width:100%;}'
+  + '@media(max-width:640px){.oda-acts{grid-template-columns:1fr;gap:14px;}}'
   + '.oda-provider{display:flex;gap:12px;}'
   + '.oda-provider button{flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;padding:18px;border:1px solid var(--border);border-radius:12px;background:var(--card);cursor:pointer;font-size:14px;font-weight:600;color:var(--text-soft);font-family:inherit;}'
   + '.oda-provider button:hover{border-color:var(--blue-dk);background:var(--blue-bg);color:var(--blue-dk);}'
@@ -222,6 +260,12 @@ OD.define('admin', {
     copy: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>',
     open: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>',
     trash: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m2 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>',
+    refresh: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.6-6.4"/><path d="M21 3v6h-6"/></svg>',
+    at: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-3.9 7.9"/></svg>',
+    power: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v6"/></svg>',
+    star: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6 .9-4.3 4.2 1 6-5.4-2.8L6.6 19.6l1-6L3.3 9.4l6-.9Z"/></svg>',
+    swap: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4 3 8l4 4"/><path d="M3 8h13a4 4 0 0 1 0 8h-1"/><path d="m17 20 4-4-4-4"/></svg>',
+    xcircle: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m15 9-6 6M9 9l6 6"/></svg>',
     x: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>'
   };
 
@@ -271,6 +315,16 @@ OD.define('admin', {
   }
   async function resetPassword(idUser) { return callFn(FN_RESET, { target_user_id: idUser }); }
   async function createInvite(idUser, provider) { return callFn(FN_INVITE, { target_user_id: idUser, provider: provider }); }
+  // Lecture de l'état de la boîte mail. Colonnes explicites : aucun token ne remonte au client.
+  async function fetchMailAccount(idUser) {
+    try {
+      var r = await sb().from(TABLE_MAIL)
+        .select('id, provider, email_address, display_name, status, last_error, last_sync_at, gmail_watch_expires_at, outlook_subscription_expires_at, updated_at')
+        .eq('id_user', idUser).order('updated_at', { ascending: false }).limit(1);
+      if (r.error) return { error: r.error.message };
+      return { account: (r.data && r.data[0]) || null };
+    } catch (e) { return { error: String(e && e.message || e) }; }
+  }
   async function createUser(payload) { return callFn(FN_CREATE, payload); }
   async function upsertUserSite(target, id_site, id_role, manager) { return callFn(FN_US_UP, { target_user_id: target, id_site: id_site, id_role: id_role, manager_user_id: manager }); }
   async function deleteUserSite(target, id_site) { return callFn(FN_US_DEL, { target_user_id: target, id_site: id_site }); }
@@ -325,13 +379,23 @@ OD.define('admin', {
   }
 
   /* ------------------------------------------------------------------ rendu */
+  var MAIL_LABEL = {
+    connected: 'Connectée', active: 'Connectée', ok: 'Connectée',
+    pending: 'Invitation envoyée', invited: 'Invitation envoyée',
+    reauth_required: 'Reconnexion requise', revoked: 'Accès révoqué',
+    expired: 'Accès expiré', error: 'Erreur', disconnected: 'Déconnectée'
+  };
+  function mailState(v) {
+    var low = String(v == null ? '' : v).toLowerCase();
+    if (!low) return { cls: 'none', label: '—', broken: false, known: false };
+    if (/(reauth|revok|expir|invalid|error|erreur|fail)/.test(low)) return { cls: 'alert', label: MAIL_LABEL[low] || v, broken: true, known: true };
+    if (/(connect|active|ok|ready|valid)/.test(low)) return { cls: 'ok', label: MAIL_LABEL[low] || v, broken: false, known: true };
+    if (/(pending|attente|invit|progress)/.test(low)) return { cls: 'pending', label: MAIL_LABEL[low] || v, broken: false, known: true };
+    return { cls: 'none', label: MAIL_LABEL[low] || v, broken: false, known: true };
+  }
   function statusBadge(v) {
-    var s = (v == null || v === '') ? '—' : String(v);
-    if (s === '—') return '<span class="oda-badge none">—</span>';
-    var low = s.toLowerCase(), cls = 'none';
-    if (/(connect|active|ok|ready|valid)/.test(low)) cls = 'ok';
-    else if (/(pending|attente|invit|progress)/.test(low)) cls = 'pending';
-    return '<span class="oda-badge ' + cls + '">' + esc(s) + '</span>';
+    var st = mailState(v);
+    return '<span class="oda-badge ' + st.cls + '">' + esc(st.label) + '</span>';
   }
   function selectHtml(id, label, value, options, placeholder) {
     var opts = '<option value="">' + esc(placeholder) + '</option>';
@@ -407,32 +471,12 @@ OD.define('admin', {
   var openMenuEl = null;
   function closeMenu() { if (openMenuEl) { openMenuEl.remove(); openMenuEl = null; } }
   function rowByKey(key) { return state.rows.filter(function (r) { return String(rowKey(r)) === String(key); })[0]; }
-  function openMenu(btn, row) {
-    closeMenu();
-    var d = frontDoc(), m = d.createElement('div'); m.className = 'oda-menu';
-    m.innerHTML = '<button data-act="edit">' + ICON.edit + 'Éditer le profil</button>'
-      + '<button data-act="perimetre">' + ICON.org + 'Périmètre et Hiérarchie</button>'
-      + '<button data-act="reset">' + ICON.key + 'Réinitialiser le mot de passe</button>'
-      + '<button data-act="invite">' + ICON.mail + 'Inviter (email)</button>';
-    d.body.appendChild(m);
-    var rect = btn.getBoundingClientRect(), top = rect.bottom + 6, left = rect.right - 220;
-    if (left < 8) left = 8;
-    if (top + m.offsetHeight > (frontWin().innerHeight || 800) - 8) top = rect.top - m.offsetHeight - 6;
-    m.style.top = Math.max(8, top) + 'px'; m.style.left = left + 'px';
-    openMenuEl = m;
-    m.addEventListener('click', function (e) {
-      var b = e.target.closest('button'); if (!b) return; var act = b.getAttribute('data-act'); closeMenu();
-      if (act === 'edit') modalEdit(row);
-      else if (act === 'perimetre') modalPerimetre(row);
-      else if (act === 'reset') modalReset(row);
-      else if (act === 'invite') modalInvite(row);
-    });
-  }
+  function openMenu(btn, row) { closeMenu(); modalActions(row); }
 
   /* ------------------------------------------------------------- modales */
-  function overlay(inner) {
+  function overlay(inner, cls) {
     var d = frontDoc(), ov = d.createElement('div'); ov.className = 'oda-overlay';
-    ov.innerHTML = '<div class="oda-modal">' + inner + '</div>';
+    ov.innerHTML = '<div class="oda-modal' + (cls ? ' ' + cls : '') + '">' + inner + '</div>';
     ov.addEventListener('click', function (e) { if (e.target === ov) ov.remove(); });
     d.body.appendChild(ov); return ov;
   }
@@ -519,21 +563,370 @@ OD.define('admin', {
     };
   }
 
+  /* ---- boîte mail : état + (re)connexion OAuth --------------------------- */
+  function fmtDate(v) {
+    if (!v) return '—';
+    try { return new Date(v).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }); }
+    catch (e) { return String(v); }
+  }
+  function shortError(v) {
+    if (!v) return '';
+    var t = String(v).replace(/\s+/g, ' ').trim();
+    var m = t.match(/"error"\s*:\s*"([^"]+)"/), d = t.match(/"error_description"\s*:\s*"([^"]+)"/);
+    if (m) return m[1] + (d ? ' — ' + d[1] : '');
+    return t.length > 180 ? t.slice(0, 180) + '…' : t;
+  }
+
   function modalInvite(row) {
-    var ov = overlay('<div class="oda-modal-head"><div><h2>Inviter par email</h2><p>' + esc(fullName(row)) + '</p></div><button class="oda-iconbtn" data-x>' + ICON.x + '</button></div>'
-      + '<div class="oda-modal-body oda-inv-body"><p class="oda-note">Choisissez le fournisseur de messagerie à connecter pour cet utilisateur.</p>'
-      + '<div class="oda-provider"><button data-prov="gmail">' + ICON.mail + 'Gmail</button><button data-prov="outlook">' + ICON.mail + 'Outlook</button></div></div>'
+    var ov = overlay('<div class="oda-modal-head"><div><h2>Boîte mail</h2><p>' + esc(fullName(row)) + '</p></div><button class="oda-iconbtn" data-x>' + ICON.x + '</button></div>'
+      + '<div class="oda-modal-body oda-inv-body"><div class="oda-loading"><span class="oda-spin"></span>Lecture de l\'état du compte…</div></div>'
       + '<div class="oda-modal-foot"><button class="oda-btn ghost" data-x>Fermer</button></div>');
     ov.querySelectorAll('[data-x]').forEach(function (b) { b.onclick = function () { ov.remove(); }; });
-    ov.querySelectorAll('[data-prov]').forEach(function (b) {
-      b.onclick = async function () {
-        var body = ov.querySelector('.oda-inv-body'); body.innerHTML = '<div class="oda-loading"><span class="oda-spin"></span>Création du lien…</div>';
-        var res = await createInvite(row.id_user, b.getAttribute('data-prov'));
-        if (res.error) { body.innerHTML = '<div class="oda-error">' + esc(res.error) + '</div>'; return; }
-        body.innerHTML = '<p class="oda-note">Lien de connexion généré. Transmettez-le à l\'utilisateur :</p><div class="oda-secret"><code>' + esc(res.auth_url) + '</code><button class="oda-iconbtn" data-copy title="Copier">' + ICON.copy + '</button><button class="oda-iconbtn" data-open title="Ouvrir">' + ICON.open + '</button></div>';
-        body.querySelector('[data-copy]').onclick = function () { copyText(res.auth_url); };
-        body.querySelector('[data-open]').onclick = function () { frontWin().open(res.auth_url, '_blank', 'noopener'); };
+    var body = ov.querySelector('.oda-inv-body');
+
+    function providerButtons(preferred) {
+      var order = preferred === 'outlook' ? ['outlook', 'gmail'] : ['gmail', 'outlook'];
+      return '<div class="oda-provider">' + order.map(function (p) {
+        return '<button data-prov="' + p + '">' + ICON.mail + (p === 'gmail' ? 'Gmail' : 'Outlook') + '</button>';
+      }).join('') + '</div>';
+    }
+
+    function bindProviders() {
+      body.querySelectorAll('[data-prov]').forEach(function (b) {
+        b.onclick = async function () {
+          var prov = b.getAttribute('data-prov');
+          body.innerHTML = '<div class="oda-loading"><span class="oda-spin"></span>Création du lien…</div>';
+          var res = await createInvite(row.id_user, prov);
+          if (res.error) {
+            body.innerHTML = '<div class="oda-error">' + esc(res.error) + '</div>'
+              + '<p class="oda-note" style="margin-top:10px">Réessayez, ou vérifiez que la fonction <b>email-invite-create</b> accepte un compte déjà existant (upsert) et non uniquement une première connexion.</p>'
+              + providerButtons(prov);
+            bindProviders(); return;
+          }
+          body.innerHTML = '<p class="oda-note">Lien de connexion généré. Transmettez-le à l\'utilisateur — il doit l\'ouvrir <b>connecté à la bonne adresse</b> :</p>'
+            + '<div class="oda-secret"><code>' + esc(res.auth_url) + '</code><button class="oda-iconbtn" data-copy title="Copier">' + ICON.copy + '</button><button class="oda-iconbtn" data-open title="Ouvrir">' + ICON.open + '</button></div>'
+            + '<p class="oda-note" style="margin-top:12px">Si l\'écran Google ne redemande pas l\'autorisation, aucun nouveau jeton de rafraîchissement ne sera émis : faire d\'abord révoquer l\'accès « One Data » sur <b>myaccount.google.com/permissions</b>.</p>';
+          body.querySelector('[data-copy]').onclick = function () { copyText(res.auth_url); };
+          body.querySelector('[data-open]').onclick = function () { frontWin().open(res.auth_url, '_blank', 'noopener'); };
+        };
+      });
+    }
+
+    (async function () {
+      var r = await fetchMailAccount(row.id_user);
+      var acc = r.account || null;
+      var st = mailState(acc ? acc.status : row.email_account_status);
+      var h = '';
+
+      if (acc) {
+        h += '<div class="oda-mbox"><dl>'
+          + '<dt>Adresse</dt><dd>' + esc(acc.email_address || '—') + '</dd>'
+          + '<dt>Fournisseur</dt><dd>' + esc(acc.provider || '—') + '</dd>'
+          + '<dt>Statut</dt><dd>' + statusBadge(acc.status) + '</dd>'
+          + '<dt>Dernier sync</dt><dd>' + esc(fmtDate(acc.last_sync_at)) + '</dd>';
+        var watch = acc.provider === 'outlook' ? acc.outlook_subscription_expires_at : acc.gmail_watch_expires_at;
+        if (watch) {
+          var expired = new Date(watch).getTime() < Date.now();
+          h += '<dt>Abonnement</dt><dd>' + esc(fmtDate(watch)) + (expired ? ' <span class="oda-badge alert">expiré</span>' : '') + '</dd>';
+        }
+        if (acc.last_error) h += '<dt>Erreur</dt><dd class="err">' + esc(shortError(acc.last_error)) + '</dd>';
+        h += '</dl></div>';
+      } else if (r.error) {
+        h += '<div class="oda-mbox"><dl><dt>Statut</dt><dd>' + statusBadge(row.email_account_status) + '</dd></dl>'
+          + '<p class="oda-note" style="margin:8px 0 0">Détail indisponible (' + esc(r.error) + ').</p></div>';
+      } else {
+        h += '<div class="oda-mbox"><p class="oda-note" style="margin:0">Aucune boîte mail connectée pour cet utilisateur.</p></div>';
+      }
+
+      if (st.broken) {
+        h += '<p class="oda-note">Le jeton de rafraîchissement n\'est plus valide : il ne peut pas être réparé côté serveur. Générez un lien de <b>reconnexion</b> et faites-le ouvrir par l\'utilisateur.</p>';
+      } else if (acc) {
+        h += '<p class="oda-note">Générer un nouveau lien remplacera les jetons actuels.</p>';
+      } else {
+        h += '<p class="oda-note">Choisissez le fournisseur de messagerie à connecter pour cet utilisateur.</p>';
+      }
+      h += providerButtons(acc ? acc.provider : null);
+
+      body.innerHTML = h;
+      bindProviders();
+    })();
+  }
+
+  /* ======================================================================
+   *  COUCHE ACTIONS — reconstruite intégralement en JS.
+   *  Plus aucun workflow WeWeb : 8 actions, 2 colonnes (Profil / Affectation).
+   *  Aucun nom de colonne n'est supposé connu : les colonnes sensibles
+   *  (actif, site principal, propriétaire du portefeuille) sont détectées à
+   *  l'exécution sur un échantillon de la table, comme detectGroupFields().
+   * ==================================================================== */
+
+  var schemaCache = {};
+  async function tableCols(table) {
+    if (Object.prototype.hasOwnProperty.call(schemaCache, table)) return schemaCache[table];
+    var cols = null;
+    try {
+      var r = await sb().from(table).select('*').limit(1);
+      if (!r.error) cols = (r.data && r.data[0]) ? Object.keys(r.data[0]) : [];
+    } catch (e) {}
+    schemaCache[table] = cols;
+    return cols;
+  }
+  function pickCol(cols, cands) {
+    if (!cols || !cols.length) return null;
+    for (var i = 0; i < cands.length; i++) if (cols.indexOf(cands[i]) > -1) return cands[i];
+    var low = cols.map(function (c) { return String(c).toLowerCase(); });
+    for (var j = 0; j < cands.length; j++) { var k = low.indexOf(cands[j].toLowerCase()); if (k > -1) return cols[k]; }
+    return null;
+  }
+  async function callFnRaw(url, payload) {
+    var token = await accessToken(); if (!token) return { status: 0, error: 'Session expirée, reconnectez-vous.' };
+    try {
+      var r = await fetch(url, { method: 'POST', headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      var d = await r.json().catch(function () { return {}; });
+      return { status: r.status, ok: r.ok, data: d, error: r.ok ? null : (d.error || ('Erreur HTTP ' + r.status)) + (d.detail ? ' — ' + d.detail : '') };
+    } catch (e) { return { status: 0, error: String((e && e.message) || e) }; }
+  }
+  function todayISO() { return new Date().toISOString().slice(0, 10); }
+
+  /* ---- portefeuille : inventaire et transfert -------------------------- */
+  async function scanPortfolio(idUser) {
+    var out = [];
+    for (var i = 0; i < PORTFOLIO.length; i++) {
+      var p = PORTFOLIO[i], cols = await tableCols(p.table);
+      if (cols === null) { out.push({ def: p, available: false, count: 0, reason: 'table absente ou lecture refusée' }); continue; }
+      var owner = pickCol(cols, OWNER_FIELDS);
+      if (!owner) { out.push({ def: p, available: false, count: 0, reason: 'colonne propriétaire non identifiée' }); continue; }
+      var dateCol = p.futureOnly ? pickCol(cols, DATE_FIELDS) : null;
+      var q = sb().from(p.table).select('*', { count: 'exact', head: true }).eq(owner, idUser);
+      if (dateCol) q = q.gte(dateCol, todayISO());
+      var r = await q;
+      if (r.error) { out.push({ def: p, available: false, count: 0, reason: r.error.message }); continue; }
+      out.push({ def: p, available: true, owner: owner, dateCol: dateCol, count: r.count || 0, reason: null });
+    }
+    return out;
+  }
+  async function transferPortfolio(scan, fromId, toId) {
+    var moved = 0, failed = [];
+    for (var i = 0; i < scan.length; i++) {
+      var s = scan[i];
+      if (!s.available || !s.count) continue;
+      var upd = {}; upd[s.owner] = toId;
+      var q = sb().from(s.def.table).update(upd).eq(s.owner, fromId);
+      if (s.dateCol) q = q.gte(s.dateCol, todayISO());
+      var r = await q;
+      if (r.error) failed.push(s.def.label + ' (' + r.error.message + ')'); else moved += s.count;
+    }
+    return { moved: moved, failed: failed };
+  }
+
+  /* ---- petite modale de confirmation réutilisable ---------------------- */
+  // run(setErr) -> Promise<string|null> : message de succès, ou null si géré ailleurs.
+  function actionModal(opts) {
+    var ov = overlay('<div class="oda-modal-head"><div><h2>' + esc(opts.title) + '</h2><p>' + esc(opts.sub || '') + '</p></div><button class="oda-iconbtn" data-x>' + ICON.x + '</button></div>'
+      + '<div class="oda-modal-body oda-act-body">' + (opts.body || '') + '<div class="oda-err-slot"></div></div>'
+      + '<div class="oda-modal-foot"><button class="oda-btn ghost" data-x>Annuler</button>'
+      + '<button class="oda-btn ' + (opts.danger ? 'danger' : 'primary') + '" data-go' + (opts.disabled ? ' disabled' : '') + '>' + esc(opts.cta || 'Confirmer') + '</button></div>');
+    ov.querySelectorAll('[data-x]').forEach(function (b) { b.onclick = function () { ov.remove(); }; });
+    var slot = ov.querySelector('.oda-err-slot');
+    var setErr = function (m) { slot.innerHTML = m ? '<div class="oda-error">' + esc(m) + '</div>' : ''; };
+    var go = ov.querySelector('[data-go]');
+    if (opts.onReady) opts.onReady(ov, go, setErr);
+    go.onclick = async function () {
+      var label = go.textContent;
+      go.disabled = true; go.textContent = 'En cours…'; setErr('');
+      var msg;
+      try { msg = await opts.run(setErr, ov); }
+      catch (e) { setErr(String((e && e.message) || e)); go.disabled = false; go.textContent = label; return; }
+      if (msg === false) { go.disabled = false; go.textContent = label; return; }
+      ov.remove(); if (msg) toast(msg); await loadUsers();
+    };
+    return ov;
+  }
+
+  /* ---- 1. panneau d'actions (remplace l'ancien menu contextuel) --------- */
+  function modalActions(row) {
+    var mst = mailState(row.email_account_status);
+    var mailLabel = mst.broken ? 'Reconnecter la boîte mail' : (mst.cls === 'ok' ? 'Boîte mail connectée' : 'Connecter une boîte mail');
+    var site = row.site_name || '';
+    function act(a, tone, icon, label, extra) {
+      return '<button class="oda-act' + (tone === 'danger' ? ' danger' : '') + '" data-act="' + a + '">'
+        + '<span class="ic ' + tone + '">' + icon + '</span>' + esc(label)
+        + (extra ? '<small>' + extra + '</small>' : '') + '</button>';
+    }
+    var ov = overlay('<div class="oda-modal-head"><div><h2>Actions sur ' + esc(fullName(row)) + '</h2><p>' + esc([site, row.site_role_name || row.user_role_name || ''].filter(Boolean).join(' · ')) + '</p></div><button class="oda-iconbtn" data-x>' + ICON.x + '</button></div>'
+      + '<div class="oda-modal-body"><div class="oda-acts">'
+      + '<section class="oda-actcol"><h3>Profil</h3>'
+      + act('edit', 'blue', ICON.edit, 'Éditer le profil')
+      + act('reset', 'orange', ICON.key, 'Réinitialiser le mot de passe')
+      + act('invite', mst.broken ? 'red' : 'green', ICON.at, mailLabel, mst.label !== '—' ? '<span class="oda-badge ' + mst.cls + '">' + esc(mst.label) + '</span>' : '')
+      + act('deact', 'red', ICON.power, 'Désactiver l\'utilisateur')
+      + '</section>'
+      + '<section class="oda-actcol"><h3>Affectation</h3>'
+      + act('rolemgr', 'blue', ICON.swap, 'Rôle et manager')
+      + act('principal', 'orange', ICON.star, 'Définir comme site principal')
+      + act('unsite', 'red', ICON.xcircle, 'Retirer de ce site')
+      + act('perimetre', 'blue', ICON.org, 'Périmètre et hiérarchie')
+      + act('delete', 'danger', ICON.trash, 'Suppression de l\'utilisateur')
+      + '</section></div></div>', 'wide');
+    ov.querySelectorAll('[data-x]').forEach(function (b) { b.onclick = function () { ov.remove(); }; });
+    ov.querySelectorAll('[data-act]').forEach(function (b) {
+      b.onclick = function () {
+        var a = b.getAttribute('data-act'); ov.remove();
+        if (a === 'edit') modalEdit(row);
+        else if (a === 'reset') modalReset(row);
+        else if (a === 'invite') modalInvite(row);
+        else if (a === 'deact') modalDeactivate(row);
+        else if (a === 'rolemgr') modalRoleManager(row);
+        else if (a === 'principal') modalPrincipal(row);
+        else if (a === 'unsite') modalRemoveSite(row);
+        else if (a === 'perimetre') modalPerimetre(row);
+        else if (a === 'delete') modalDelete(row);
       };
+    });
+  }
+
+  /* ---- 2. rôle et manager sur le site courant -------------------------- */
+  function modalRoleManager(row) {
+    if (row.id_site == null) { toast('Aucun site sur cette ligne'); return; }
+    var curRole = row.site_role_id != null ? row.site_role_id : (row.user_role_id != null ? row.user_role_id : row.id_role);
+    var curMgr = row.manager_user_id != null ? row.manager_user_id : (row.id_superieur != null ? row.id_superieur : null);
+    var sel = { role: curRole != null ? String(curRole) : '', mgr: curMgr != null ? String(curMgr) : '__self__' };
+    var mgrs = managersOnSite(row.id_site).filter(function (m) { return String(m.id_user) !== String(row.id_user); });
+    var opts = '<option value="">Choisir un rôle…</option>' + state.roles.map(function (r) {
+      return '<option value="' + esc(r.id) + '"' + (String(r.id) === sel.role ? ' selected' : '') + '>' + esc(r.label) + '</option>';
+    }).join('');
+    var list = '<div class="oda-mrow' + (sel.mgr === '__self__' ? ' active' : '') + '" data-mgr="__self__"><span class="dot"></span><span class="nm">Responsable du site</span><span class="rl">aucun manager au-dessus</span></div>'
+      + mgrs.map(function (m) {
+        return '<div class="oda-mrow' + (String(m.id_user) === sel.mgr ? ' active' : '') + '" data-mgr="' + esc(m.id_user) + '"><span class="dot"></span><span class="nm">' + esc(m.name) + '</span><span class="rl">' + esc(m.role || '') + '</span></div>';
+      }).join('');
+    var ov = actionModal({
+      title: 'Rôle et manager', sub: fullName(row) + ' · ' + (row.site_name || ''), cta: 'Enregistrer',
+      body: '<div class="oda-place-role"><label>Rôle sur ce site</label><select data-f="role">' + opts + '</select></div>'
+        + '<p class="oda-note">Rattaché à (manager sur ce site) :</p><div class="oda-mgr-list">' + list + '</div>',
+      onReady: function (ov2) {
+        ov2.querySelector('[data-f="role"]').onchange = function () { sel.role = this.value; };
+        ov2.querySelectorAll('.oda-mrow').forEach(function (el) {
+          el.onclick = function () {
+            sel.mgr = el.getAttribute('data-mgr');
+            ov2.querySelectorAll('.oda-mrow').forEach(function (x) { x.classList.toggle('active', x === el); });
+          };
+        });
+      },
+      run: async function (setErr) {
+        if (!sel.role) { setErr('Choisissez un rôle.'); return false; }
+        var res = await upsertUserSite(row.id_user, Number(row.id_site), Number(sel.role), sel.mgr === '__self__' ? null : Number(sel.mgr));
+        if (res.error) { setErr(res.error); return false; }
+        return 'Rôle et rattachement mis à jour';
+      }
+    });
+    return ov;
+  }
+
+  /* ---- 3. site principal ----------------------------------------------- */
+  function modalPrincipal(row) {
+    actionModal({
+      title: 'Définir comme site principal', sub: fullName(row), cta: 'Définir',
+      body: '<p class="oda-note">Le site <b>' + esc(row.site_name || '—') + '</b> deviendra le site principal de cet utilisateur : c\'est celui qui pilote son rattachement par défaut (agenda, portefeuille, statistiques).</p>'
+        + '<p class="oda-note">Ses autres affectations ne sont pas modifiées.</p>',
+      run: async function (setErr) {
+        if (row.id_site == null) { setErr('Aucun site sur cette ligne.'); return false; }
+        var cols = await tableCols(TABLE_USER), field = pickCol(cols, PRINCIPAL_FIELDS);
+        if (!field) { setErr('Colonne du site principal introuvable sur la table ' + TABLE_USER + '. Ajoutez son nom dans PRINCIPAL_FIELDS en tête de fichier.'); return false; }
+        var upd = {}; upd[field] = Number(row.id_site);
+        var r = await sb().from(TABLE_USER).update(upd).eq('ID_User', row.id_user);
+        if (r.error) { setErr(r.error.message); return false; }
+        return 'Site principal mis à jour';
+      }
+    });
+  }
+
+  /* ---- 4. retirer de ce site ------------------------------------------- */
+  function modalRemoveSite(row) {
+    var others = state.rows.filter(function (r) { return String(r.id_user) === String(row.id_user) && String(r.id_site) !== String(row.id_site); });
+    actionModal({
+      title: 'Retirer de ce site', sub: fullName(row), cta: 'Retirer', danger: true,
+      body: '<p class="oda-note">L\'affectation de <b>' + esc(fullName(row)) + '</b> sur <b>' + esc(row.site_name || '—') + '</b> sera supprimée : il perdra l\'accès aux données de ce site.</p>'
+        + (others.length
+          ? '<p class="oda-note">Il conserve ' + others.length + ' autre' + (others.length > 1 ? 's' : '') + ' affectation' + (others.length > 1 ? 's' : '') + '.</p>'
+          : '<div class="oda-warn">C\'est sa <b>seule</b> affectation visible ici. Sans site, il n\'aura plus accès à aucune donnée — préférez « Désactiver l\'utilisateur ».</div>')
+        + '<p class="oda-note">Son compte, son profil et son portefeuille ne sont pas touchés.</p>',
+      run: async function (setErr) {
+        var res = await deleteUserSite(row.id_user, Number(row.id_site));
+        if (res.error) { setErr(res.error); return false; }
+        return 'Affectation retirée';
+      }
+    });
+  }
+
+  /* ---- 5. désactivation + redistribution du portefeuille ---------------- */
+  function modalDeactivate(row) {
+    var candidates = managersOnSite(row.id_site).filter(function (m) { return String(m.id_user) !== String(row.id_user); });
+    var chosen = '';
+    var ov = actionModal({
+      title: 'Désactiver l\'utilisateur', sub: fullName(row), cta: 'Désactiver', danger: true,
+      body: '<p class="oda-note">L\'accès de <b>' + esc(fullName(row)) + '</b> sera coupé. Son historique est conservé.</p>'
+        + '<div class="oda-scan"><div class="oda-loading"><span class="oda-spin"></span>Inventaire du portefeuille…</div></div>'
+        + '<div class="oda-succ" style="display:none"><label style="font-size:11px;font-weight:600;color:var(--text-mut);text-transform:uppercase;letter-spacing:.3px;display:block;margin:14px 0 6px">Repreneur du portefeuille</label>'
+        + '<select data-f="succ"><option value="">Ne rien transférer</option>'
+        + candidates.map(function (m) { return '<option value="' + esc(m.id_user) + '">' + esc(m.name) + (m.role ? ' — ' + esc(m.role) : '') + '</option>'; }).join('')
+        + '</select></div>',
+      run: async function (setErr) {
+        if (!scan) { setErr('Inventaire en cours, réessayez dans un instant.'); return false; }
+        var total = scan.reduce(function (a, s) { return a + (s.available ? s.count : 0); }, 0);
+        if (total > 0 && !chosen) { setErr('Choisissez un repreneur, ou sélectionnez « Ne rien transférer ».'); return false; }
+
+        // 1) chemin serveur si l'edge function existe
+        var srv = await callFnRaw(FN_DEACT, { target_user_id: row.id_user, successor_user_id: chosen ? Number(chosen) : null });
+        if (srv.ok) return 'Utilisateur désactivé';
+        if (srv.status !== 404 && srv.status !== 0) { setErr(srv.error); return false; }
+
+        // 2) repli 100% client : transfert puis bascule du drapeau
+        var report = { moved: 0, failed: [] };
+        if (chosen) report = await transferPortfolio(scan, row.id_user, Number(chosen));
+        var cols = await tableCols(TABLE_USER), field = pickCol(cols, ACTIVE_FIELDS);
+        if (!field) { setErr('Colonne d\'activité introuvable sur ' + TABLE_USER + ' (et edge function admin-deactivate-user absente). Ajoutez son nom dans ACTIVE_FIELDS.'); return false; }
+        var upd = {}; upd[field] = false;
+        var r = await sb().from(TABLE_USER).update(upd).eq('ID_User', row.id_user);
+        if (r.error) { setErr(r.error.message); return false; }
+        if (report.failed.length) { setErr('Désactivé, mais transfert partiel : ' + report.failed.join(' ; ')); return false; }
+        return 'Utilisateur désactivé' + (report.moved ? ' — ' + report.moved + ' élément(s) transféré(s)' : '');
+      }
+    });
+    var scan = null;
+    (async function () {
+      scan = await scanPortfolio(row.id_user);
+      var box = ov.querySelector('.oda-scan'); if (!box) return;
+      var total = scan.reduce(function (a, s) { return a + (s.available ? s.count : 0); }, 0);
+      box.innerHTML = '<div class="oda-mbox"><dl>' + scan.map(function (s) {
+        return '<dt>' + esc(s.def.label) + '</dt><dd>' + (s.available ? String(s.count) : '<span class="oda-badge alert">indisponible</span> <span style="font-size:11px">' + esc(s.reason || '') + '</span>') + '</dd>';
+      }).join('') + '</dl></div>';
+      var sc = ov.querySelector('.oda-succ');
+      if (total > 0) {
+        sc.style.display = '';
+        sc.querySelector('[data-f="succ"]').onchange = function () { chosen = this.value; };
+      } else {
+        sc.style.display = 'none';
+      }
+    })();
+  }
+
+  /* ---- 6. suppression définitive ---------------------------------------- */
+  function modalDelete(row) {
+    var target = String(row.nom || fullName(row)).trim();
+    actionModal({
+      title: 'Suppression de l\'utilisateur', sub: fullName(row), cta: 'Supprimer définitivement', danger: true, disabled: true,
+      body: '<div class="oda-warn">Action <b>irréversible</b> : le compte d\'authentification, les affectations et le rattachement hiérarchique seront supprimés. Les données déjà produites (propales, RDV, appels) resteront orphelines. Dans presque tous les cas, « Désactiver » est le bon geste.</div>'
+        + '<p class="oda-note" style="margin-top:12px">Pour confirmer, saisissez le nom : <b>' + esc(target) + '</b></p>'
+        + '<div class="oda-form"><input data-f="confirm" placeholder="' + esc(target) + '" autocomplete="off"></div>',
+      onReady: function (ov2, go) {
+        var inp = ov2.querySelector('[data-f="confirm"]');
+        inp.oninput = function () { go.disabled = inp.value.trim().toLowerCase() !== target.toLowerCase(); };
+      },
+      run: async function (setErr) {
+        var res = await callFnRaw(FN_DELETE, { target_user_id: row.id_user });
+        if (!res.ok) { setErr(res.status === 404 ? 'Edge function admin-delete-user introuvable sur ce tenant.' : res.error); return false; }
+        return 'Utilisateur supprimé';
+      }
     });
   }
 
