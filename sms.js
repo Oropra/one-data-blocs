@@ -91,7 +91,7 @@ OD.define('sms', {
     const c = state.client || {};
     const toNumber = toE164(c.TEl_MOB);
     if (!toNumber) { state.error = 'Pas de numéro mobile pour ce client.'; render(); return; }
-    const agentAuthUid = (function () { try { return wwLib.wwAuth.getUser() && wwLib.wwAuth.getUser().id; } catch (e) { return null; } })() || null;
+    const agentAuthUid = (window.oropraUser && (window.oropraUser.auth_uid || window.oropraUser.id)) || null;
     const idClient = c.IDVu != null ? c.IDVu : null;
     const idSite = readVar(SELECTED_SITE_VAR_ID) != null ? readVar(SELECTED_SITE_VAR_ID) : null;
     let idCycleCom = null;
@@ -261,7 +261,7 @@ OD.define('sms', {
     return h;
   }
   function render(scrollBottom) {
-    const root = getRoot(); if (!root) return;
+    const root = ensureRoot();
     if (!state.open) { root.innerHTML = ''; return; }
     if (state.minimized) { root.innerHTML = renderBar(); bindEvents(); return; }
     const c = state.client || {};
