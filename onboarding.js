@@ -30,7 +30,7 @@ OD.define('onboarding', {
     const doc = __anchor.ownerDocument || document;
     const sb  = ctx.supabase;
 
-    const S = { rows: [], fleet: [], open: null, loading: true, err: null };
+    const S = { rows: [], fleet: [], fleetTenants: [], open: null, loading: true, err: null };
 
     const STATUTS = ['a_faire', 'en_cours', 'fait', 'sans_objet'];
     const LIB = { a_faire:'à faire', en_cours:'en cours', fait:'fait', sans_objet:'sans objet' };
@@ -50,6 +50,10 @@ OD.define('onboarding', {
           const f = await sb.from('fleet_snapshot').select('*').order('module_key');
           S.fleet = f.data || [];
         } catch (e) { S.fleet = []; }
+        try {
+          const t = await sb.from('fleet_snapshot_tenant').select('*').order('slug');
+          S.fleetTenants = t.data || [];
+        } catch (e) { S.fleetTenants = []; }
         S.err = null;
       } catch (e) { S.err = e.message || String(e); }
       S.loading = false; render();
@@ -240,11 +244,34 @@ OD.define('onboarding', {
 
       const dot = (bg, txt) => `<span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${bg};margin-right:4px"></span>${txt}</span>`;
 
-      const hFleet = S.fleet.length
+      // ── Synthèse par tenant : les 3 couches (JS via modules, SQL, functions)
+      const hTenants = S.fleetTenants.length
+        ? S.fleetTenants.map(t => {
+            const aligne = (t.ecarts || 0) === 0;
+            const chip = !t.joignable
+              ? '<span class="onb-chip onb-w">injoignable</span>'
+              : aligne
+                ? '<span class="onb-chip onb-g">à jour</span>'
+                : `<span class="onb-chip onb-w">${esc(t.ecarts)} écart${t.ecarts>1?'s':''}</span>`;
+            return `<div class="onb-row"><div style="flex:1">
+              <div class="onb-t">${esc(t.nom || t.slug)}</div>
+              <div class="onb-s">migrations ${esc(t.migrations_ok)}/${esc(t.migrations_attendues)}
+                 · functions ${esc(t.functions_ok)}/${esc(t.functions_attendues)}</div></div>
+              ${chip}</div>`;
+          }).join('')
+        : '';
+
+      const hModules = S.fleet.length
         ? S.fleet.map(f => `<div class="onb-row"><div style="flex:1"><div class="onb-t">${esc(f.module_key)}</div>
             <div class="onb-s">défaut ${esc(f.version_defaut || '?')}</div></div>
-            ${f.epingles ? `<span class="onb-chip onb-w">${esc(f.epingles)}</span>`
+            ${f.epingles ? `<span class="onb-chip onb-w">${esc(f.epingles)} épinglé${f.epingles>1?'s':''}</span>`
                          : '<span class="onb-chip onb-g">tous à jour</span>'}</div>`).join('')
+        : '';
+
+      const hFleet = (S.fleetTenants.length || S.fleet.length)
+        ? (hTenants
+            + (hTenants && hModules ? '<div class="onb-s" style="padding:8px 2px 2px">Modules JS</div>' : '')
+            + hModules)
         : `<div class="onb-row"><div class="onb-s">Instantané absent — lancer la synchro de flotte
              (edge function <code>fleet-sync</code>).</div></div>`;
 
@@ -258,8 +285,11 @@ OD.define('onboarding', {
         <div class="onb-leg">${dot('#5DCAA5','fait')}${dot('#EF9F27','en cours')}${dot('#E24B4A','bloquant')}${dot('#D3D1C7','à faire')}
           <span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;border:1px dashed #9aa7b8;margin-right:4px"></span>chez le client</span></div>
         <div class="onb-h">Dérive de la flotte
-          <span>${S.fleet.length && S.fleet[0].synced_at
-            ? 'instantané du ' + new Date(S.fleet[0].synced_at).toLocaleString('fr-FR') : ''}</span>
+          <span>${(() => {
+            const ts = (S.fleetTenants[0] && S.fleetTenants[0].synced_at)
+                    || (S.fleet[0] && S.fleet[0].synced_at);
+            return ts ? 'instantané du ' + new Date(ts).toLocaleString('fr-FR') : '';
+          })()}</span>
           <button id="onb-sync" style="margin-left:auto;font-size:12px;padding:4px 11px;border:1px solid #e3eaf3;
             border-radius:6px;background:#fff;cursor:pointer;font-family:inherit">Rafraîchir</button></div>
         <div class="onb-card">${hFleet}</div>`;
