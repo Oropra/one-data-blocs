@@ -29,6 +29,8 @@ if (existingDevice?.state && existingDevice.state !== 'destroyed') {
 const { data: { user } } = await ctx.supabase.auth.getUser()
 const email = user?.email
 const authUid = user?.id
+const { data: { session } } = await ctx.supabase.auth.getSession()
+const jwt = session?.access_token || null
 console.log('👤 Email utilisateur:', email, '| Auth UID:', authUid)
 if (!email) { console.error('❌ Pas d\'utilisateur connecté'); return { success: false } }
 
@@ -36,7 +38,14 @@ if (!email) { console.error('❌ Pas d\'utilisateur connecté'); return { succes
 const supabaseUrl = ctx.tenant.supabase_url
 const supabaseAnonKey = ctx.tenant.supabase_anon_key
 const response = await fetch(`${supabaseUrl}/functions/v1/voip-generate-token`, {
-  method: 'POST', headers: { 'Content-Type': 'application/json', 'apikey': supabaseAnonKey },
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'apikey': supabaseAnonKey,
+    // L'edge function exige un en-tete Authorization : sans lui elle repond
+    // 401 UNAUTHORIZED_NO_AUTH_HEADER et le poste ne s'initialise jamais.
+    'Authorization': `Bearer ${jwt || supabaseAnonKey}`
+  },
   body: JSON.stringify({ email })
 })
 const data = await response.json()
@@ -97,7 +106,12 @@ window.parent._twilioRefreshInterval = setInterval(async () => {
   console.log('🔄 Refresh token Twilio...')
   try {
     const r2 = await fetch(`${supabaseUrl}/functions/v1/voip-generate-token`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json', 'apikey': supabaseAnonKey },
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': supabaseAnonKey,
+        'Authorization': `Bearer ${(await ctx.supabase.auth.getSession()).data?.session?.access_token || supabaseAnonKey}`
+      },
       body: JSON.stringify({ email })
     })
     const d2 = await r2.json()
@@ -141,8 +155,10 @@ device.on('incoming', (call) => {
   // Ligne CLIENT complète en arrière-plan
   const anonKey = wwLib.wwPlugins.supabase?.instance?.supabaseKey
   if (idClient) {
+    // Jeton de session : la lecture CLIENT doit passer par la RLS de l'utilisateur,
+    // pas par la cle anon publique.
     fetch(`${supabaseUrl}/rest/v1/CLIENT?IDVu=eq.${encodeURIComponent(idClient)}&limit=1&select=*`,
-      { headers: { apikey: anonKey, Authorization: `Bearer ${anonKey}` } })
+      { headers: { apikey: anonKey, Authorization: `Bearer ${jwt || anonKey}` } })
       .then(r => r.json()).then(rows => {
         const client = rows?.[0] || null
         if (!client) return
@@ -171,19 +187,17 @@ device.on('incoming', (call) => {
     console.log('📴 Call disconnected')
     const duration = window.parent._twilioCallDuration || 0
     const hungUp = window.parent._twilioHungUp || false
-    if (!hungUp) {
-      const k = wwLib.wwPlugins.supabase?.instance?.supabaseKey
-      fetch(`${supabaseUrl}/rest/v1/voip_calls?ended_at=is.null&status=eq.in-progress&order=created_at.desc&limit=1&select=id`,
-        { headers: { apikey: k, Authorization: `Bearer ${k}` } })
-        .then(r => r.json()).then(rows => {
-          const id = rows?.[0]?.id; if (!id) return
-          fetch(`${supabaseUrl}/rest/v1/voip_calls?id=eq.${id}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json', apikey: k, Authorization: `Bearer ${k}` },
-            body: JSON.stringify({ ended_at: new Date().toISOString(), duration_seconds: duration, status: 'completed' })
-          })
-        }).catch(() => { })
-    }
+    // CODE MORT RETIRE (12/08/2026) — un PATCH de voip_calls etait tente ici
+    // avec la cle anon en guise de jeton : il tournait sous le role anon, ne
+    // matchait aucune policy et n'ecrivait donc jamais rien, en silence.
+    // Le cycle de vie des appels (answered_at, ended_at, status) est assure
+    // par les webhooks Twilio en service_role : mesure sur l'agent 155,
+    // 788 appels sur 807 portent un ended_at.
+    // Le reparer aurait cree deux ecrivains concurrents sur les memes
+    // colonnes, avec une selection de ligne fragile (« le dernier appel non
+    // termine »), capable de patcher le mauvais appel quand deux se
+    // chevauchent. La variable `duration` reste utilisee par l'UI.
+    void duration; void hungUp;
     try { window.parent._twilioHungUp = false } catch (e) { }
     const u = UI(); if (u) u.close()
     try { window._twilioCall = null; window.parent._twilioCall = null; window.top._twilioCall = null } catch (e) { }
