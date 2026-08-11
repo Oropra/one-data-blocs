@@ -264,7 +264,7 @@ OD.define('vo-liste', {
       + '<div class="vf-head-right">'
       + '<div class="vf-price">' + esc(prix) + '</div>'
       + '<span class="vf-status ' + (isDisp ? 'dispo' : 'cm') + '">' + (isDisp ? 'Disponible à la vente' : 'Contremarqué') + '</span>'
-      + (isDisp ? '<button type="button" class="vf-like" id="vf-like">Like / P.Com</button>' : '')
+      + '<button type="button" class="vf-like" id="vf-like">Like / P.Com</button>'
       + '</div>'
       + '</div>';
 
