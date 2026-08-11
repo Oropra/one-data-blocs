@@ -732,18 +732,18 @@ OD.define('propale-vo', {
       console.log('[propaleVO] doSave start', { mode: ST.mode, intent, userId, vin: ST.P.VIN, idClient: ST.P.id_client_vu });
 
       if (ST.mode === 'create') {
-        // Récupère le prochain id
-        const { data: mx, error: mxErr } = await sb.from('PROPALE_BDC').select('id_propale_bdc').order('id_propale_bdc',{ascending:false}).limit(1);
-        if (mxErr) throw mxErr;
-        const newId = ((mx && mx[0]) ? num(mx[0].id_propale_bdc) : 0) + 1;
-        console.log('[propaleVO] newId =', newId);
+        // L'identifiant est attribué par la base (séquence propale_bdc_id_seq).
+        // Ne JAMAIS le calculer ici : max(id)+1 est faussé par la RLS
+        // (le vendeur ne voit pas les dossiers hors de son périmètre) -> 23505.
         const ins = Object.assign({}, payload, {
-          id_propale_bdc: newId, status: 'draft', Archived: false,
+          status: 'draft', Archived: false,
           id_user_creation: userId, created_at: now, updated_at: now
         });
+        delete ins.id_propale_bdc;
         console.log('[propaleVO] INSERT payload keys:', Object.keys(ins).join(', '));
-        const { error } = await sb.from('PROPALE_BDC').insert(ins);
+        const { data: created, error } = await sb.from('PROPALE_BDC').insert(ins).select('id_propale_bdc').single();
         if (error) { console.error('[propaleVO] INSERT error', error); throw error; }
+        const newId = num(created && created.id_propale_bdc);
         console.log('[propaleVO] INSERT OK, id =', newId);
         ST.P.id_propale_bdc = newId; ST.mode = 'update'; ST.P.status = 'draft';
         setVar(VAR_ID_PROPALE, newId);
@@ -755,10 +755,8 @@ OD.define('propale-vo', {
         const upd = Object.assign({}, payload, { updated_at: now });
 
         if (intent === 'promote' && ST.P.status === 'propale') {
-          const { data: mx, error: mxErr } = await sb.from('PROPALE_BDC').select('id_propale_bdc').order('id_propale_bdc',{ascending:false}).limit(1);
-          if (mxErr) throw mxErr;
-          const newId = ((mx && mx[0]) ? num(mx[0].id_propale_bdc) : 0) + 1;
-          const dup = Object.assign({}, upd, { id_propale_bdc: newId, status: 'draft', Archived: false, id_user_creation: userId, created_at: now });
+          const dup = Object.assign({}, upd, { status: 'draft', Archived: false, id_user_creation: userId, created_at: now });
+          delete dup.id_propale_bdc;
           const { error } = await sb.from('PROPALE_BDC').insert(dup);
           if (error) throw error;
           toast(root, 'Nouveau brouillon créé ✓');
