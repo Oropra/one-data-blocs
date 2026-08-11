@@ -175,6 +175,22 @@ OD.define('propale-vo', {
       const { data } = await sb.from('CLIENT').select('*').eq('IDVu', P.id_client_vu).limit(1);
       ST.client = (data && data[0]) || null;
     }
+    // Repli du site : la variable de contexte est souvent vide (« Site #— »),
+    // et un dossier sans id_site fait échouer move_propale
+    // (« Affaire hors périmètre de l'utilisateur (site <NULL>) »).
+    // Priorité : site du véhicule (STOCKVO.IDSITE), puis site-bus.
+    if (!P.id_site) {
+      let fallback = ST.vehicule ? num(ST.vehicule.IDSITE) : null;
+      if (!fallback) {
+        try {
+          const w = (wwLib.getFrontWindow && wwLib.getFrontWindow()) || window;
+          const sBus = w.oropraSite;
+          fallback = num(sBus && (sBus.ID_SITE ?? sBus.id_site ?? sBus));
+        } catch (e) { /* pas de site-bus */ }
+      }
+      if (fallback) { P.id_site = fallback; console.log('[propaleVO] id_site déduit =', fallback); }
+      else console.warn('[propaleVO] id_site introuvable : le dossier sera hors périmètre');
+    }
     if (P.id_site) {
       const { data } = await sb.from('SITE').select('*').eq('ID_SITE', P.id_site).limit(1);
       ST.site = (data && data[0]) || null;
@@ -574,6 +590,13 @@ OD.define('propale-vo', {
 
   /* ========================== EVENTS ========================== */
   function bindEvents(root) {
+    // Le module peut être monté deux fois par le socle : sans cette garde,
+    // chaque clic déclenche deux fois le handler et les toggles (cartes
+    // repliables, HT, reprise...) s'annulent entre eux.
+    // NB : garde sur la LIAISON des événements, pas sur le rendu — elle
+    // n'empêche donc pas le re-rendu au retour sur la page.
+    if (root.__pvBound) return;
+    root.__pvBound = true;
     root.addEventListener('input', e => {
       const k = e.target.getAttribute && e.target.getAttribute('data-key');
       if (!k) return;
