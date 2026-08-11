@@ -536,7 +536,7 @@ OD.define('kanban', {
       state.versionsData = {}; state.openVersions = null;
       toast('Version définie comme propale');
       await loadData();
-    } catch (e) { console.error('[kanban] setAsPropale', e); toast(humanError(e), true); }
+    } catch (e) { console.error('[kanban] setAsPropale', e); const pc = findCard(state.openVersions); toast(await humanErrorAsync(e, pc && pc.vin), true); }
   }
 
   async function doMove(id, to) {
@@ -554,7 +554,7 @@ OD.define('kanban', {
       if (r.error) throw r.error;
       if (to === 'archived') { state.cards = (state.cards || []).filter(x => x.id_propale_bdc !== Number(id)); render(); toast('Affaire archivée'); }
       else { c._moving = false; await loadData(); }
-    } catch (e) { console.error('[kanban] move_propale', e); c._moving = false; c.status = prevStatus; render(); toast(humanError(e), true); }
+    } catch (e) { console.error('[kanban] move_propale', e); c._moving = false; c.status = prevStatus; render(); toast(await humanErrorAsync(e, c.vin), true); }
   }
 
   function humanError(e) {
@@ -564,17 +564,84 @@ OD.define('kanban', {
     if (/propres affaires/i.test(m)) return 'Vous ne pouvez déplacer que vos propres affaires.';
     if (/Réouverture impossible/i.test(m)) return 'Un cycle est déjà ouvert pour ce client.';
     if (/interdite/i.test(m)) return "Ce déplacement n'est pas autorisé.";
+    if (/row-level security/i.test(m)) return "Vous n'avez pas les droits sur ce véhicule.";
     return 'Échec : ' + m;
   }
 
+  // ── Contremarque : même libellé que le survol dans la liste VO ─────────
+  function cmPick(o, keys) { for (let i = 0; i < keys.length; i++) { const v = o ? o[keys[i]] : null; if (v != null && v !== '') return v; } return null; }
+  function cmDateFR(iso) { if (iso == null || iso === '') return ''; const p = String(iso).slice(0, 10).split('-'); return p.length === 3 ? (p[2] + '-' + p[1] + '-' + p[0]) : String(iso); }
+
+  async function cmLabel(vin) {
+    if (!vin) return 'Contremarqué';
+    try {
+      const supabase = ctx.supabase;
+      const r = await supabase.from('CONTRE_MARQUE').select('*')
+        .eq('VIN', vin).eq('ETAT', true)
+        .order('UPDATE_CM', { ascending: false }).limit(1);
+      if (r.error) { console.warn('[kanban] cmLabel CM', r.error); return 'Contremarqué'; }
+      const cm = r.data && r.data[0];
+      if (!cm) return 'Contremarqué';
+      const date = cmPick(cm, ['DATE_CM', 'date_cm', 'Date_CM']);
+      const uid_ = cmPick(cm, ['ID_USER_CM', 'id_user_cm']);
+      const cid_ = cmPick(cm, ['ID_CLIENT_CM', 'id_client_cm']);
+      let who = '', forWho = '';
+      if (uid_ != null) {
+        const u = await supabase.from('USER').select('*').eq('ID_User', uid_).limit(1);
+        const ur = u.data && u.data[0];
+        if (ur) who = cmPick(ur, ['nomComplet', 'NomComplet']) || [cmPick(ur, ['prenom', 'PRENOM']), cmPick(ur, ['nom', 'NOM'])].filter(Boolean).join(' ');
+      }
+      if (cid_ != null) {
+        const cl = await supabase.from('CLIENT').select('*').eq('IDVu', cid_).limit(1);
+        const cr = cl.data && cl.data[0];
+        if (cr) forWho = cmPick(cr, ['nom_complet', 'nomComplet']) || [cmPick(cr, ['CIVILITE', 'Civilite']), cmPick(cr, ['PRENOM', 'Prenom']), cmPick(cr, ['NOM', 'Nom'])].filter(Boolean).join(' ') || cmPick(cr, ['nom']);
+      }
+      return 'Contremarqué' + (date ? ' le ' + cmDateFR(date) : '') + (who ? ' par ' + who : '') + (forWho ? ' pour ' + forWho : '');
+    } catch (e) { console.warn('[kanban] cmLabel', e); return 'Contremarqué'; }
+  }
+
+  function isCmError(e) {
+    const m = (e && e.message) ? e.message : String(e);
+    return /contremarqu/i.test(m) || /ux_contre_marque_vin_active/i.test(m);
+  }
+
+  async function humanErrorAsync(e, vin) {
+    if (isCmError(e)) return await cmLabel(vin);
+    return humanError(e);
+  }
+
   let __toastTimer = null;
+  function hideToast() {
+    const t = doc.getElementById('kan-toast'); if (!t) return;
+    if (__toastTimer) { clearTimeout(__toastTimer); __toastTimer = null; }
+    t.style.opacity = '0'; t.classList.remove('sticky');
+  }
+  // Succès : disparition auto. Erreur : reste affichée jusqu'à fermeture manuelle.
   function toast(msg, isErr) {
     const root = getRoot(); if (!root) return;
     let t = doc.getElementById('kan-toast');
     if (!t) { t = doc.createElement('div'); t.id = 'kan-toast'; root.appendChild(t); }
-    t.className = isErr ? 'err' : 'ok'; t.textContent = msg; t.style.opacity = '1';
-    if (__toastTimer) clearTimeout(__toastTimer);
-    __toastTimer = setTimeout(() => { if (t) t.style.opacity = '0'; }, isErr ? 4000 : 2200);
+    if (__toastTimer) { clearTimeout(__toastTimer); __toastTimer = null; }
+    t.className = isErr ? 'err' : 'ok';
+    t.innerHTML = '';
+    const span = doc.createElement('span');
+    span.className = 'kan-toast-msg';
+    span.textContent = msg;
+    t.appendChild(span);
+    if (isErr) {
+      const btn = doc.createElement('button');
+      btn.type = 'button';
+      btn.className = 'kan-toast-x';
+      btn.setAttribute('aria-label', 'Fermer');
+      btn.textContent = '\u2715';
+      btn.addEventListener('click', hideToast);
+      t.appendChild(btn);
+      t.classList.add('sticky');
+    } else {
+      t.classList.remove('sticky');
+      __toastTimer = setTimeout(hideToast, 2200);
+    }
+    t.style.opacity = '1';
   }
 
   async function pdfDoc(idPropale, kind, majIso) {
@@ -2345,6 +2412,9 @@ OD.define('kanban', {
     '#kanban-root #kan-toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);z-index:80;font-size:13px;font-weight:700;color:#fff;padding:10px 18px;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.18);opacity:0;transition:opacity .25s;pointer-events:none}' +
     '#kanban-root #kan-toast.ok{background:#2c7a68}' +
     '#kanban-root #kan-toast.err{background:#b23433}' +
+    '#kanban-root #kan-toast.sticky{pointer-events:auto;display:flex;align-items:center;gap:14px;max-width:min(560px,92vw);text-align:left;line-height:1.35}' +
+    '#kanban-root #kan-toast .kan-toast-x{background:rgba(255,255,255,.18);border:none;color:#fff;font-size:12px;font-weight:800;line-height:1;padding:6px 8px;border-radius:6px;cursor:pointer;flex:0 0 auto}' +
+    '#kanban-root #kan-toast .kan-toast-x:hover{background:rgba(255,255,255,.34)}' +
     '@media(max-width:767px){#kanban-root .kan-toolbar{flex-direction:column!important;align-items:stretch!important;gap:10px!important}#kanban-root .k-dates{width:100%!important}#kanban-root .k-date{flex:1!important}#kanban-root .k-filters{margin-left:0!important;width:100%!important}#kanban-root .kan-board{flex-direction:column!important;overflow-x:visible!important;gap:14px!important;align-items:stretch!important}#kanban-root .kan-col{width:100%!important;min-width:0!important;background:#fff!important;border:1px solid #e8edf5;border-radius:12px;padding:0!important}#kanban-root .kc-head{position:sticky;top:0;z-index:4;border-radius:12px 12px 0 0;padding:11px 14px 10px;border-bottom:1px solid #eef0f4}#kanban-root .kc-body{padding:10px 12px;gap:10px}}' +
     '#kanban-root.kan-narrow .kan-toolbar{flex-direction:column!important;align-items:stretch!important;gap:10px!important}#kanban-root.kan-narrow .k-dates{width:100%!important}#kanban-root.kan-narrow .k-date{flex:1!important}#kanban-root.kan-narrow .k-filters{margin-left:0!important;width:100%!important}#kanban-root.kan-narrow .kan-board{flex-direction:column!important;overflow-x:visible!important;gap:14px!important;align-items:stretch!important}#kanban-root.kan-narrow .kan-col{width:100%!important;min-width:0!important;background:#fff!important;border:1px solid #e8edf5;border-radius:12px;padding:0!important}#kanban-root.kan-narrow .kc-head{position:sticky;top:0;z-index:4;border-radius:12px 12px 0 0;padding:11px 14px 10px;border-bottom:1px solid #eef0f4}#kanban-root.kan-narrow .kc-body{padding:10px 12px;gap:10px}' +
     '</style>';
