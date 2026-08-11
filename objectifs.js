@@ -103,7 +103,8 @@ async function fetchObjectifs() {
   const sites = getSitesIds()
   let url = SUPABASE_URL + '/rest/v1/v_objectifs?annee=eq.' + state.annee + '&mois=eq.' + state.mois
   if (sites.length) url += '&id_site=in.(' + sites.join(',') + ')'
-  const res = await fetch(url, { headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY } })
+  const jwt = getUserJwt()
+  const res = await fetch(url, { headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + (jwt || SUPABASE_KEY) } })
   let rows = await res.json(); if (!Array.isArray(rows)) rows = []
   if (isVendeur && myId != null) rows = rows.filter(function (r) { return r.id_user == myId })
   return rows
@@ -161,12 +162,32 @@ async function saveDraft(btn) {
   const rows = dirtyRows(); if (!rows.length) return
   const old = btn.textContent; btn.disabled = true; btn.textContent = 'Enregistrement…'
   const withId = rows.filter(function (r) { return r.id_objectif != null }), without = rows.filter(function (r) { return r.id_objectif == null })
-  let okN = 0, errN = 0
+  let okN = 0, errN = 0, refusN = 0
   await Promise.all(withId.map(async function (r) {
     const body = {}; FIELDS.forEach(function (f) { body[f] = parseInt(r[f]) || 0 })
-    try { const res = await fetch(SUPABASE_URL + '/rest/v1/OBJECTIF?id_objectif=eq.' + r.id_objectif, { method: 'PATCH', headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' }, body: JSON.stringify(body) }); if (res.ok) { okN++; const o = {}; FIELDS.forEach(function (f) { o[f] = num(r[f]) }); originalSnap[rowKey(r)] = o } else { errN++; console.error('PATCH OBJECTIF', r.id_objectif, res.status) } } catch (e) { errN++; console.error(e) }
+    try {
+      const jwt = getUserJwt()
+      const res = await fetch(SUPABASE_URL + '/rest/v1/OBJECTIF?id_objectif=eq.' + r.id_objectif, { method: 'PATCH', headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + (jwt || SUPABASE_KEY), 'Content-Type': 'application/json', 'Prefer': 'return=representation' }, body: JSON.stringify(body) })
+      // return=representation renvoie les lignes RÉELLEMENT modifiées.
+      // Une policy RLS qui ne matche pas filtre sans lever d'erreur : res.ok
+      // serait vrai avec zéro ligne touchée. C'est ce qui a masqué le bug du
+      // jeton pendant quatre mois — on compte donc les lignes, pas le statut.
+      let modif = []
+      if (res.ok) { try { modif = await res.json() } catch (e) { modif = [] } }
+      if (res.ok && Array.isArray(modif) && modif.length) {
+        okN++; const o = {}; FIELDS.forEach(function (f) { o[f] = num(r[f]) }); originalSnap[rowKey(r)] = o
+      } else if (res.ok) {
+        refusN++; console.warn('PATCH OBJECTIF refusé (droits insuffisants)', r.id_objectif)
+      } else {
+        errN++; console.error('PATCH OBJECTIF', r.id_objectif, res.status)
+      }
+    } catch (e) { errN++; console.error(e) }
   }))
-  state._saveMsg = (errN ? ('Enregistré : ' + okN + ' · ' + errN + ' en erreur') : ('Objectifs enregistrés (' + okN + ')')) + (without.length ? (' · ' + without.length + ' sans id_objectif non créés') : '')
+  const pb = []
+  if (refusN) pb.push(refusN + ' refusé' + (refusN > 1 ? 's' : '') + ' (droits insuffisants)')
+  if (errN) pb.push(errN + ' en erreur')
+  if (without.length) pb.push(without.length + ' sans id_objectif non créés')
+  state._saveMsg = (okN ? ('Objectifs enregistrés (' + okN + ')') : 'Aucun objectif enregistré') + (pb.length ? (' · ' + pb.join(' · ')) : '')
   btn.textContent = old; btn.disabled = false; renderObj()
 }
 
