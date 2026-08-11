@@ -83,6 +83,46 @@ OD.define('propale-vo', {
   }
   function fmtDate(d) { if (!d) return '—'; try { return new Date(d).toLocaleDateString('fr-FR'); } catch(e) { return d; } }
 
+  /* ===================== CONTREMARQUE ===================== */
+  function cmPick(o, keys) { for (let i = 0; i < keys.length; i++) { const v = o ? o[keys[i]] : null; if (v != null && v !== '') return v; } return null; }
+  function cmDateFR(iso) { if (iso == null || iso === '') return ''; const p = String(iso).slice(0, 10).split('-'); return p.length === 3 ? (p[2] + '-' + p[1] + '-' + p[0]) : String(iso); }
+
+  // Même libellé que le survol d'un véhicule contremarqué dans la liste VO
+  async function cmLabel(vin) {
+    if (!vin) return 'Contremarqué';
+    try {
+      const sb = supa();
+      const r = await sb.from('CONTRE_MARQUE').select('*')
+        .eq('VIN', vin).eq('ETAT', true)
+        .order('UPDATE_CM', { ascending: false }).limit(1);
+      if (r.error) { console.warn('[propaleVO] cmLabel CM', r.error); return 'Contremarqué'; }
+      const cm = r.data && r.data[0];
+      if (!cm) return 'Contremarqué';
+      const date = cmPick(cm, ['DATE_CM', 'date_cm', 'Date_CM']);
+      const uid_ = cmPick(cm, ['ID_USER_CM', 'id_user_cm']);
+      const cid_ = cmPick(cm, ['ID_CLIENT_CM', 'id_client_cm']);
+      let who = '', forWho = '';
+      if (uid_ != null) {
+        const u = await sb.from('USER').select('*').eq('ID_User', uid_).limit(1);
+        const ur = u.data && u.data[0];
+        if (ur) who = cmPick(ur, ['nomComplet', 'NomComplet']) || [cmPick(ur, ['prenom', 'PRENOM']), cmPick(ur, ['nom', 'NOM'])].filter(Boolean).join(' ');
+      }
+      if (cid_ != null) {
+        const cl = await sb.from('CLIENT').select('*').eq('IDVu', cid_).limit(1);
+        const cr = cl.data && cl.data[0];
+        if (cr) forWho = cmPick(cr, ['nom_complet', 'nomComplet']) || [cmPick(cr, ['CIVILITE', 'Civilite']), cmPick(cr, ['PRENOM', 'Prenom']), cmPick(cr, ['NOM', 'Nom'])].filter(Boolean).join(' ') || cmPick(cr, ['nom']);
+      }
+      return 'Contremarqué' + (date ? ' le ' + cmDateFR(date) : '') + (who ? ' par ' + who : '') + (forWho ? ' pour ' + forWho : '');
+    } catch (e) { console.warn('[propaleVO] cmLabel', e); return 'Contremarqué'; }
+  }
+
+  async function humanError(e) {
+    const m = (e && e.message) ? e.message : String(e);
+    if (/contremarqu/i.test(m) || /ux_contre_marque_vin_active/i.test(m)) return await cmLabel(ST.P && ST.P.VIN);
+    if (/row-level security/i.test(m)) return "Vous n'avez pas les droits sur ce véhicule.";
+    return 'Erreur : ' + m;
+  }
+
   /* ========================== ÉTAT ========================== */
   const ST = {
     mode: 'create', rootId: '', P: {},
@@ -138,6 +178,18 @@ OD.define('propale-vo', {
     if (P.id_site) {
       const { data } = await sb.from('SITE').select('*').eq('ID_SITE', P.id_site).limit(1);
       ST.site = (data && data[0]) || null;
+    }
+    // Contremarque active sur le VIN : bloque la propale si elle vise un autre client
+    ST.cm = null; ST.cmBloquante = false; ST.cmTexte = '';
+    if (P.VIN) {
+      const { data: cmr, error: cmErr } = await sb.from('CONTRE_MARQUE')
+        .select('ID_CM,ID_CLIENT_CM,ID_USER_CM,DATE_CM')
+        .eq('VIN', P.VIN).eq('ETAT', true)
+        .order('UPDATE_CM', { ascending: false }).limit(1);
+      if (cmErr) console.warn('[propaleVO] CM', cmErr);
+      ST.cm = (cmr && cmr[0]) || null;
+      ST.cmBloquante = !!(ST.cm && Number(ST.cm.ID_CLIENT_CM) !== Number(P.id_client_vu));
+      if (ST.cmBloquante) ST.cmTexte = await cmLabel(P.VIN);
     }
   }
 
@@ -287,6 +339,7 @@ OD.define('propale-vo', {
   .pv-btn-primary{background:#53bda7;color:#fff} .pv-btn-primary:hover{background:#3a9e8a} .pv-btn-primary:disabled{opacity:.5;cursor:default}
   .pv-btn-blue{background:#2a5ea9;color:#fff} .pv-btn-blue:hover{background:#1f4a87}
   .pv-btn-ghost{background:#fff;color:#2a5ea9;border-color:#2a5ea9} .pv-btn-ghost:hover{background:#f2f6fc}
+  .pv-cm-lock{background:#fcebeb;color:#e24b4a;border:1px solid #f5a5a5;border-radius:8px;padding:10px 14px;font-size:13px;font-weight:700;margin-bottom:10px;line-height:1.35}
   .pv-btn-grey{background:#eef3f9;color:#5a6b88;border:1px solid #d9e3f2}
   .pv-cgline{display:flex;justify-content:space-between;align-items:center;padding:7px 0;font-size:12px;border-bottom:1px solid #f5f8fc}
   .pv-cgline span{color:#7a98c5} .pv-cgline b{font-weight:700}
@@ -609,6 +662,10 @@ OD.define('propale-vo', {
   }
 
   function buildButtons() {
+    if (ST.cmBloquante) {
+      return `<div class="pv-cm-lock">${esc(ST.cmTexte || 'Contremarqué')}</div>
+              <button class="pv-btn pv-btn-ghost" data-act="annuler">Retour</button>`;
+    }
     const isCreate = ST.mode === 'create' || ST.P.status === 'draft';
     let extra = '';
     if (ST.mode === 'update') {
@@ -732,10 +789,18 @@ OD.define('propale-vo', {
       const sumB = root.querySelector('#pv-sum');
       if (sumB) {
         const errDiv = fdoc().createElement('div');
-        errDiv.style.cssText = 'background:#fcebeb;color:#e24b4a;border:1px solid #f5a5a5;border-radius:8px;padding:10px 14px;font-size:13px;font-weight:700;margin-bottom:10px';
-        errDiv.textContent = 'Erreur : ' + (e.message || String(e));
+        errDiv.style.cssText = 'display:flex;align-items:flex-start;gap:10px;background:#fcebeb;color:#e24b4a;border:1px solid #f5a5a5;border-radius:8px;padding:10px 14px;font-size:13px;font-weight:700;margin-bottom:10px;line-height:1.35';
+        const errMsg = fdoc().createElement('span');
+        errMsg.style.cssText = 'flex:1 1 auto';
+        errMsg.textContent = await humanError(e);
+        const errX = fdoc().createElement('button');
+        errX.type = 'button';
+        errX.setAttribute('aria-label', 'Fermer');
+        errX.textContent = '\u2715';
+        errX.style.cssText = 'flex:0 0 auto;background:none;border:none;color:#e24b4a;font-size:13px;font-weight:800;line-height:1;cursor:pointer;padding:2px 3px';
+        errX.addEventListener('click', () => { if (errDiv.parentNode) errDiv.parentNode.removeChild(errDiv); });
+        errDiv.appendChild(errMsg); errDiv.appendChild(errX);
         sumB.prepend(errDiv);
-        setTimeout(() => { if (errDiv.parentNode) errDiv.parentNode.removeChild(errDiv); }, 8000);
       }
     } finally {
       ST.saving = false; refreshTotals(root);
