@@ -23,6 +23,9 @@ OD.define('voip-ui', {
   const D = __anchor.ownerDocument || (wwLib.getFrontDocument && wwLib.getFrontDocument()) || document;
 
   const SUPA_URL = ctx.tenant.supabase_url;
+  // Jeton de session, relu a chaud : la modale d'appel peut vivre plus
+  // longtemps que la validite d'un jeton capture au montage.
+  const jwt = async () => (await ctx.supabase.auth.getSession()).data?.session?.access_token || null;
   const FICHE_PAGE_ID = '259f1951-a2d4-4b90-ac83-0b3febe1d4ec';
   const VAR_FICHE = '55490583-c88b-4748-916e-4d203db07742';
   // Navigation ÉDITEUR vs PROD (patron top nav) : en prod, un UID s'inscrit tel
@@ -64,35 +67,16 @@ OD.define('voip-ui', {
     null;
 
   /* ---------- DB (non bloquant) ---------- */
-  function patchAnswered() {
-    const k = anonKey(); if (!k) return;
-    fetch(`${SUPA_URL}/rest/v1/voip_calls?answered_at=is.null&order=created_at.desc&limit=1&select=id`,
-      { headers: { apikey: k, Authorization: `Bearer ${k}` } })
-      .then(r => r.json()).then(rows => {
-        const id = rows?.[0]?.id; if (!id) return;
-        fetch(`${SUPA_URL}/rest/v1/voip_calls?id=eq.${id}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json', apikey: k, Authorization: `Bearer ${k}` },
-          body: JSON.stringify({ answered_at: new Date().toISOString(), status: 'in-progress' })
-        });
-      }).catch(() => {});
-  }
-  function patchEnded(seconds) {
-    const k = anonKey(); if (!k) return;
-    fetch(`${SUPA_URL}/rest/v1/voip_calls?ended_at=is.null&status=in.(ringing,in-progress)&order=created_at.desc&limit=1&select=id`,
-      { headers: { apikey: k, Authorization: `Bearer ${k}` } })
-      .then(r => r.json()).then(rows => {
-        const id = rows?.[0]?.id; if (!id) return;
-        fetch(`${SUPA_URL}/rest/v1/voip_calls?id=eq.${id}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json', apikey: k, Authorization: `Bearer ${k}` },
-          body: JSON.stringify({
-            answered_at: seconds > 0 ? new Date(Date.now() - seconds * 1000).toISOString() : null,
-            ended_at: new Date().toISOString(), duration_seconds: seconds, status: 'completed'
-          })
-        });   // (rafraîchissement de l'ex-collection WeWeb retiré : elle est supprimée)
-      }).catch(() => {});
-  }
+  // CODE MORT RETIRE (12/08/2026) — ces deux PATCH partaient sous la cle anon,
+  // ne matchaient aucune policy et n'ecrivaient donc jamais rien, en silence.
+  // Depuis la fermeture des acces anon ils renvoient meme un 401 visible.
+  // answered_at / ended_at / status sont ecrits par les webhooks Twilio en
+  // service_role : 788 appels sur 807 portent un ended_at chez l'agent 155.
+  // Les reparer creerait deux ecrivains concurrents, avec une selection de
+  // ligne fragile (« le dernier appel non termine ») capable de patcher le
+  // mauvais appel quand deux se chevauchent.
+  function patchAnswered() { /* volontairement vide */ }
+  function patchEnded(seconds) { void seconds; /* volontairement vide, voir ci-dessus */ }
 
   /* ---------- chrono ---------- */
   function startTimer() {
@@ -252,11 +236,16 @@ OD.define('voip-ui', {
       const callSid = call?.parameters?.CallSid
       if (callSid) {
         const k = anonKey()
-        fetch(`${SUPA_URL}/functions/v1/voip-end-call`, {
+        // L'edge function exige un en-tete Authorization : sans lui, 401.
+        jwt().then(t => fetch(`${SUPA_URL}/functions/v1/voip-end-call`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'apikey': k },
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': k,
+            'Authorization': `Bearer ${t || k}`
+          },
           body: JSON.stringify({ callSid })
-        }).catch(e => console.error('voip-end-call error:', e))
+        })).catch(e => console.error('voip-end-call error:', e))
       }
       if (call) { if (call.reject) call.reject(); else if (call.disconnect) call.disconnect(); }
       try { wwLib.wwVariable.updateValue(VAR_STATUT, 'idle'); } catch (e2) { }
@@ -269,11 +258,16 @@ OD.define('voip-ui', {
       // Terminer l'appel côté Twilio (coupe aussi l'Android)
       if (callSid) {
         const k = anonKey()
-        fetch(`${SUPA_URL}/functions/v1/voip-end-call`, {
+        // L'edge function exige un en-tete Authorization : sans lui, 401.
+        jwt().then(t => fetch(`${SUPA_URL}/functions/v1/voip-end-call`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'apikey': k },
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': k,
+            'Authorization': `Bearer ${t || k}`
+          },
           body: JSON.stringify({ callSid })
-        }).catch(e => console.error('voip-end-call error:', e))
+        })).catch(e => console.error('voip-end-call error:', e))
       }
 
       if (call && call.disconnect) call.disconnect();
