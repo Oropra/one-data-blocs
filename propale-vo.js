@@ -339,7 +339,7 @@ OD.define('propale-vo', {
   .pv-btn-primary{background:#53bda7;color:#fff} .pv-btn-primary:hover{background:#3a9e8a} .pv-btn-primary:disabled{opacity:.5;cursor:default}
   .pv-btn-blue{background:#2a5ea9;color:#fff} .pv-btn-blue:hover{background:#1f4a87}
   .pv-btn-ghost{background:#fff;color:#2a5ea9;border-color:#2a5ea9} .pv-btn-ghost:hover{background:#f2f6fc}
-  .pv-cm-lock{background:#fcebeb;color:#e24b4a;border:1px solid #f5a5a5;border-radius:8px;padding:10px 14px;font-size:13px;font-weight:700;margin-bottom:10px;line-height:1.35}
+  .pv-cm-lock{background:#fff6dc;color:#8a6100;border:1px solid #f0cf8a;border-radius:8px;padding:10px 14px;font-size:13px;font-weight:700;margin-bottom:10px;line-height:1.35}
   .pv-btn-grey{background:#eef3f9;color:#5a6b88;border:1px solid #d9e3f2}
   .pv-cgline{display:flex;justify-content:space-between;align-items:center;padding:7px 0;font-size:12px;border-bottom:1px solid #f5f8fc}
   .pv-cgline span{color:#7a98c5} .pv-cgline b{font-weight:700}
@@ -662,18 +662,17 @@ OD.define('propale-vo', {
   }
 
   function buildButtons() {
-    if (ST.cmBloquante) {
-      return `<div class="pv-cm-lock">${esc(ST.cmTexte || 'Contremarqué')}</div>
-              <button class="pv-btn pv-btn-ghost" data-act="annuler">Retour</button>`;
-    }
+    // Véhicule réservé pour un autre client : le brouillon reste autorisé,
+    // seule la montée en proposition est interdite.
+    const warn = ST.cmBloquante ? `<div class="pv-cm-lock">${esc(ST.cmTexte || 'Contremarqué')} — vous pouvez préparer un brouillon, mais pas le passer en proposition.</div>` : '';
     const isCreate = ST.mode === 'create' || ST.P.status === 'draft';
     let extra = '';
-    if (ST.mode === 'update') {
+    if (ST.mode === 'update' && !ST.cmBloquante) {
       if (ST.P.status === 'draft') extra = `<button class="pv-btn pv-btn-blue" data-act="promote">Définir comme proposition</button>`;
       else if (ST.P.status === 'propale') extra = `<button class="pv-btn pv-btn-grey" data-act="promote">Nouveau brouillon</button>`;
     }
     const lbl = ST.mode==='create' ? 'Enregistrer le brouillon' : 'Enregistrer';
-    return `<button class="pv-btn pv-btn-primary" data-act="save"${ST.saving?' disabled':''}>${lbl}</button>
+    return `${warn}<button class="pv-btn pv-btn-primary" data-act="save"${ST.saving?' disabled':''}>${lbl}</button>
             ${extra}
             <button class="pv-btn pv-btn-ghost" data-act="annuler">Annuler</button>`;
   }
