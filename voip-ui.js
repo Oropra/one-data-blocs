@@ -42,7 +42,12 @@ OD.define('voip-ui', {
   }
 
   const VAR_STATUT = 'd6e8c441-31a5-4e35-9724-3181f9767292';
-  const VAR_DUREE = 'ccf7985b-f492-4a3e-b278-a64a705cb650';
+  // VAR_DUREE retiree le 12/08/2026 : la variable WeWeb ccf7985b-f492-4a3e-b278
+  // -a64a705cb650 n'existe plus dans le projet. Le socle la servait localement
+  // en journalisant une erreur A CHAQUE TICK du chrono, soit une par seconde
+  // pendant tout l'appel. Grep du 12/08 : aucun autre module ne la lit.
+  // La duree reste publiee sur W.parent._twilioCallDuration et affichee dans
+  // #vu-timer — les deux consommateurs reels.
 
   const S = W.__VOIP_STATE__ || (W.__VOIP_STATE__ = {
     open: false, mode: 'incoming', answered: false, minimized: false, muted: false,
@@ -83,7 +88,6 @@ OD.define('voip-ui', {
     stopTimer();
     S.timer = setInterval(() => {
       S.seconds++;
-      try { wwLib.wwVariable.updateValue(VAR_DUREE, S.seconds); } catch (e) {}
       try { W.parent._twilioCallDuration = S.seconds; } catch (e) {}
       const t = D.getElementById('vu-timer'); if (t) t.textContent = fmtDur(S.seconds);
     }, 1000);
