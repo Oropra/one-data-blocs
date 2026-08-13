@@ -86,7 +86,9 @@ OD.define('kanban', {
   function ageBadge(j) { if (j == null) return ''; const cls = j <= 7 ? 'ok' : (j <= 21 ? 'warn' : 'late'); return '<span class="k-age ' + cls + '">' + j + ' j</span>'; }
 
   const state = window.__kanban || {};
-  if (state.period === undefined) { const now = new Date(), first = new Date(now.getFullYear(), now.getMonth(), 1); state.period = { from: ymd(first), to: ymd(now) }; }
+  // Periode TOUJOURS reinitialisee a l'arrivee sur la page (13/08/2026) :
+  // l'etat vit sur window.__kanban et survit aux navigations SPA.
+  { const now = new Date(), first = new Date(now.getFullYear(), now.getMonth(), 1); state.period = { from: ymd(first), to: ymd(now) }; }
   if (state.vendeurId === undefined) state.vendeurId = null;
   if (state.busSite === undefined) state.busSite = null;
   if (state.cards === undefined) state.cards = null;
