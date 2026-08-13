@@ -18,8 +18,10 @@ OD.define('bilaterales', {
 __anchor.id = 'bil-root';
 
 // --- Variables WeWeb de période (MÊMES que le dashboard) --------------------
-const VAR_DATE_FROM = 'cad34621-74a3-4efb-bf37-41cdc467dbef';
-const VAR_DATE_TO   = '34a6fc5c-abc8-440e-aa87-cbe1d7b00d83';
+// VAR_DATE_FROM / VAR_DATE_TO retirees le 13/08/2026 : constantes mortes.
+// Elles n'etaient declarees nulle part ailleurs dans ce fichier (grep verifie),
+// vestige de l'epoque ou la periode transitait par des variables WeWeb
+// partagees. Cette page pilote sa periode elle-meme via state.period.
 // Variable WeWeb remplie par le bouton "Réaliser la Bilatérale" de l'agenda :
 // si elle contient un id au chargement, on ouvre directement le popup de réalisation.
 const VAR_ID_BILATE_REAL = '851fed59-9397-41ae-b91d-26daa2ff960a';
@@ -76,11 +78,14 @@ function isDirection() { return DIRECTION_ROLES.includes(getViewerRole()); }
 
 // --- État -------------------------------------------------------------------
 const state = window.__bil || {};
-if (state.period === undefined) {
+{
   const now = new Date(), firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
   // Période AUTONOME : le sélecteur de dates de cette page pilote state.period.
   // On ignore volontairement les variables WeWeb partagées (pas de sélecteur externe
   // sur cette page). Défaut = du 1er du mois courant à aujourd'hui.
+  //
+  // TOUJOURS réinitialisée (13/08/2026), comme la navigation juste en dessous :
+  // l'état vit sur window.__bil et survivrait sinon aux navigations SPA.
   state.period = { from: ymd(firstOfMonth), to: ymd(now) };
 }
 if (state.sites === undefined)   state.sites = null;   // périmètre (arbre)
