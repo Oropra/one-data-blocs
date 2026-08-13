@@ -50,7 +50,13 @@ OD.define('dashboard', {
 
     // ── État partagé (window.__dash : lu par agenda.js) ───────────────────
     const state = window.__dash || {};
-    if (!state.period) { const n = new Date(); state.period = { from: ymd(new Date(n.getFullYear(), n.getMonth(), 1)), to: ymd(n) }; }
+    // Periode TOUJOURS reinitialisee a l'arrivee sur la page (13/08/2026).
+    // L'etat vit sur window.__dash — partage avec agenda.js — et survit donc
+    // aux navigations SPA : avec un test `if (!state.period)`, une periode
+    // choisie suivait l'utilisateur de page en page.
+    // Regle produit : par defaut, du 1er du mois courant a aujourd'hui,
+    // aucune persistance.
+    { const n = new Date(); state.period = { from: ymd(new Date(n.getFullYear(), n.getMonth(), 1)), to: ymd(n) }; }
     if (state.rawData === undefined) state.rawData = null;   // get_dashboard
     if (state.act     === undefined) state.act     = null;   // get_activite_equipe
     if (state.stock   === undefined) state.stock   = null;
