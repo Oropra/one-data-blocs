@@ -74,7 +74,23 @@ if command -v node >/dev/null 2>&1; then
 fi
 
 # Garde-fou : aucun secret / URL de tenant en dur
-if grep -qE 'eyJhbGciOiJIUzI1NiI|sb_secret_|esehlhlrqcsfszunpjrt' "$FILE"; then
+#
+# Exception ciblée pour socle.js : c'est le point d'amorçage de la flotte.
+# Il doit porter l'URL et la clé ANON du control plane pour résoudre le
+# tenant, et ne peut donc pas les recevoir d'ailleurs — il n'a personne
+# au-dessus de lui. Une clé ANON est publique par construction : elle est
+# dans le bundle servi à chaque client, lisible par n'importe quel
+# visiteur. Ce n'est pas un secret, contrairement à sb_secret_.
+#
+# Les deux autres motifs restent contrôlés sur socle.js comme ailleurs :
+# un vrai secret (sb_secret_) et la référence d'un tenant en dur, qui
+# n'ont rien à faire dans un fichier servi à toute la flotte.
+if [ "$FILE" = "socle.js" ]; then
+  MOTIFS_INTERDITS='sb_secret_|esehlhlrqcsfszunpjrt'
+else
+  MOTIFS_INTERDITS='eyJhbGciOiJIUzI1NiI|sb_secret_|esehlhlrqcsfszunpjrt'
+fi
+if grep -qE "$MOTIFS_INTERDITS" "$FILE"; then
   echo "❌ $FILE contient un secret ou une URL de tenant en dur. Publication annulée."; exit 1
 fi
 
