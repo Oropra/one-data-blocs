@@ -252,14 +252,30 @@ const HOST_MAP = {
             // l'auto-apprentissage ci-dessous reprend alors son role.
             const OD_VARS_ALL_LOCAL = true;
 
+            // PERSISTANCE RETIREE (12/08/2026).
+            //
+            // Le magasin etait restaure depuis sessionStorage a chaque
+            // chargement. Tant que le shim retombait sur WeWeb pour les
+            // variables inconnues, cette restauration restait sans effet :
+            // getValue ne lisait le magasin qu'apres avoir "appris" que la
+            // variable etait morte, donc jamais au premier acces d'une page.
+            //
+            // Depuis OD_VARS_ALL_LOCAL, getValue lit le magasin d'emblee — et
+            // la restauration est devenue visible : une periode choisie sur
+            // Performances survivait au rechargement ET a une deconnexion,
+            // si bien qu'un chef des ventes heritait de la selection du
+            // vendeur precedent.
+            //
+            // Ces variables portent de l'etat d'ECRAN, pas des preferences :
+            // elles n'ont pas a survivre a un chargement de page. Le magasin
+            // reste en memoire pour la duree de la session applicative, et
+            // repart vide a chaque chargement — le comportement d'avant.
+            //
+            // sessionStorage est purge au passage, pour que les valeurs
+            // laissees par les versions precedentes ne ressurgissent pas.
             const SKEY = 'od_vars';
-            try {
-                const raw = sessionStorage.getItem(SKEY);
-                if (raw) Object.entries(JSON.parse(raw)).forEach(([k, v]) => store.set(k, v));
-            } catch (e) {}
-            const persist = () => {
-                try { sessionStorage.setItem(SKEY, JSON.stringify(Object.fromEntries(store))); } catch (e) {}
-            };
+            try { sessionStorage.removeItem(SKEY); } catch (e) {}
+            const persist = () => {};
             const realGet = wwLib.wwVariable.getValue.bind(wwLib.wwVariable);
             const realSet = wwLib.wwVariable.updateValue.bind(wwLib.wwVariable);
 
