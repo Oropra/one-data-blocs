@@ -28,8 +28,19 @@ OD.define('performances', {
   let SUPABASE_KEY = getSupabaseKey();
 
   const VAR_DATA = 'ee5d0c01-f520-403c-b8bd-ae471c0ac279';
-  const VAR_DATE_DEB = 'cf3d0b4f-f6a4-4551-b0bf-d0ab12ab50d9';
-  const VAR_DATE_FIN = '66b387eb-ee1c-4ee9-a113-e2617ae8bccc';
+  // PERIODE — remplace les variables WeWeb cf3d0b4f-… et 66b387eb-…, qui
+  // n'existent plus dans le projet. Le socle les servait localement en
+  // journalisant une erreur A CHAQUE ECRITURE (3 lignes rouges par
+  // chargement de page). Verifie le 12/08/2026 : aucun autre module ne les
+  // lit, elles ne servaient que de stockage d'etat interne a ce module.
+  //
+  // Le stockage vit sur window et non dans une variable de module : il doit
+  // survivre au demontage/remontage de l'ancre, sinon la periode choisie
+  // serait reinitialisee a chaque aller-retour sur la page.
+  const PERIODE = (window.__OD_PERF_PERIODE__ =
+    window.__OD_PERF_PERIODE__ || { deb: '', fin: '' });
+  const getPeriode = (k) => PERIODE[k] ?? '';
+  const setPeriode = (k, v) => { PERIODE[k] = v; };
   const WF_REFETCH = '8d167d39-be55-45de-940b-78657d7f400d';
   const VAR_SITES = '95f3e5dc-e760-4506-84d8-070c65b3cb07';
   const VAR_CLIENT = '55490583-c88b-4748-916e-4d203db07742';
@@ -159,7 +170,7 @@ OD.define('performances', {
     let ym = null;
     if (state.mois !== 'ALL') ym = state.mois;
     else {
-      const fin = String(wwLib.wwVariable.getValue(VAR_DATE_FIN) || '').slice(0, 10);
+      const fin = String(getPeriode('fin') || '').slice(0, 10);
       if (/^\d{4}-\d{2}/.test(fin)) ym = fin.slice(0, 7);
     }
     if (!ym) return 1;
@@ -169,7 +180,7 @@ OD.define('performances', {
     let cap = finM;
     const today = new Date();
     if (today < cap) cap = today;
-    const finP = String(wwLib.wwVariable.getValue(VAR_DATE_FIN) || '').slice(0, 10);
+    const finP = String(getPeriode('fin') || '').slice(0, 10);
     if (finP) { const fp = new Date(finP + 'T12:00:00'); if (fp < cap) cap = fp; }
     if (cap < debM) return 0.01;                      // mois futur
     const total = joursOuvres(ymd(debM), ymd(finM));
@@ -516,8 +527,8 @@ OD.define('performances', {
     try {
       if (!SUPABASE_KEY) SUPABASE_KEY = getSupabaseKey();
       const jwt = getUserJwt();
-      const deb = String(wwLib.wwVariable.getValue(VAR_DATE_DEB) || '').slice(0, 10);
-      const fin = String(wwLib.wwVariable.getValue(VAR_DATE_FIN) || '').slice(0, 10);
+      const deb = String(getPeriode('deb') || '').slice(0, 10);
+      const fin = String(getPeriode('fin') || '').slice(0, 10);
       const scope = (state.selection.level === 'all' ? 'perimetre' : state.selection.label)
         .normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9]+/g, '_').slice(0, 40);
       const res = await fetch(SUPABASE_URL + '/functions/v1/export-xslx', {
@@ -558,8 +569,8 @@ OD.define('performances', {
     injectStyle();
     let html = '';
 
-    const curDeb = wwLib.wwVariable.getValue(VAR_DATE_DEB);
-    const curFin = wwLib.wwVariable.getValue(VAR_DATE_FIN);
+    const curDeb = getPeriode('deb');
+    const curFin = getPeriode('fin');
     html += '<div class="pf-bar">';
     html += '<span class="pf-label">Période</span>';
     html += '<button type="button" class="pf-range" id="pf-range">📅 ' + esc(periodResume(curDeb, curFin)) + ' <span class="pf-range-car">▾</span></button>';
@@ -663,13 +674,13 @@ OD.define('performances', {
   async function applyPeriodPf(from, to) {
     closeRangePickerPf();
     if (!from || !to) return;
-    const curDeb = String(wwLib.wwVariable.getValue(VAR_DATE_DEB) || '').slice(0, 10);
-    const curFin = String(wwLib.wwVariable.getValue(VAR_DATE_FIN) || '').slice(0, 10);
+    const curDeb = String(getPeriode('deb') || '').slice(0, 10);
+    const curFin = String(getPeriode('fin') || '').slice(0, 10);
     if (from === curDeb && to === curFin) return;
     const btn = getRoot() && getRoot().querySelector('#pf-range');
     if (btn) { btn.disabled = true; btn.textContent = '⏳ Chargement…'; }
-    wwLib.wwVariable.updateValue(VAR_DATE_DEB, from);
-    wwLib.wwVariable.updateValue(VAR_DATE_FIN, to);
+    setPeriode('deb', from);
+    setPeriode('fin', to);
     try { await loadPerfData(from, to); } catch (e) { console.error('[perf] refetch', e); }
     state.selection = { level: 'all', key: null, label: 'Tout le périmètre' };
     state.busSelPending = true;
@@ -679,7 +690,7 @@ OD.define('performances', {
   function openRangePickerPf(anchor) {
     closeRangePickerPf();
     const pk = { month: null, start: null, end: null, hover: null };
-    const cur = String(wwLib.wwVariable.getValue(VAR_DATE_DEB) || '').slice(0, 10);
+    const cur = String(getPeriode('deb') || '').slice(0, 10);
     const m0 = cur ? new Date(cur + 'T12:00:00') : new Date();
     pk.month = new Date(m0.getFullYear(), m0.getMonth(), 1);
 
@@ -1191,17 +1202,23 @@ OD.define('performances', {
   function ymd(d) { const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, '0'), j = String(d.getDate()).padStart(2, '0'); return y + '-' + m + '-' + j; }
 
   async function bootstrap() {
-    let deb = wwLib.wwVariable.getValue(VAR_DATE_DEB);
-    let fin = wwLib.wwVariable.getValue(VAR_DATE_FIN);
-    const debEmpty = !deb || String(deb).trim() === '';
-    const finEmpty = !fin || String(fin).trim() === '';
-
-    if (debEmpty || finEmpty) {
-      const now = new Date();
-      const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-      if (debEmpty) { deb = ymd(firstOfMonth); wwLib.wwVariable.updateValue(VAR_DATE_DEB, deb); }
-      if (finEmpty) { fin = ymd(now); wwLib.wwVariable.updateValue(VAR_DATE_FIN, fin); }
-    }
+    // La periode est TOUJOURS recalculee au montage : du 1er du mois en cours
+    // a aujourd'hui. Aucune persistance, ni d'une page a l'autre, ni d'une
+    // session a l'autre.
+    //
+    // L'ancienne version ne posait la valeur par defaut que si le magasin
+    // etait vide. Tant que ce magasin retombait sur WeWeb (qui ne connait
+    // plus ces variables), il repondait undefined et la periode repartait a
+    // zero a chaque fois. Depuis que le socle sert ces variables localement
+    // avec persistance en sessionStorage, la periode choisie survivait au
+    // rechargement ET a un changement de compte — un chef des ventes
+    // heritait de la periode selectionnee par le vendeur precedent.
+    const now = new Date();
+    const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const deb = ymd(firstOfMonth);
+    const fin = ymd(now);
+    setPeriode('deb', deb);
+    setPeriode('fin', fin);
     try { await loadPerimeter(); await loadPerfData(deb, fin); } catch (e) { console.error('[perf] chargement init', e); }
     render();
     setTimeout(drawCharts, 0);
