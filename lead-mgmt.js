@@ -455,7 +455,12 @@ if (state.filterSource === undefined)    state.filterSource = 'all';
 if (state.search === undefined)          state.search = '';
 if (state.expanded === undefined)        state.expanded = {};
 if (state.selectedVendeur === undefined) state.selectedVendeur = null;
-if (state.period === undefined)          state.period = defaultPeriod();
+// Periode TOUJOURS reinitialisee a l'arrivee sur la page (13/08/2026).
+// L'etat vit sur window et survit donc aux navigations SPA : avec un test
+// `=== undefined`, une periode choisie suivait l'utilisateur de page en page.
+// Regle produit : par defaut, du 1er du mois courant a aujourd'hui, aucune
+// persistance.
+state.period = defaultPeriod();
 if (state.busSite === undefined)         state.busSite = null;
 if (state.busSelPending === undefined)   state.busSelPending = true;
 if (state.rankingData === undefined)     state.rankingData = null;
