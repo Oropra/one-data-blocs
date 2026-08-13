@@ -23,6 +23,16 @@ OD.define('email', {
   function sb() { return ctx.supabase; }
   function readVar(id) { try { return wwLib.wwVariable.getValue(id); } catch (e) { return null; } }
   function anonKey() { return ctx.tenant.supabase_anon_key; }
+  // Jeton de SESSION pour appeler les edge functions. La cle anon est un JWT
+  // valide : la passerelle l'accepte, mais elle est PUBLIQUE (servie dans le
+  // bundle a chaque visiteur). L'utiliser ici rendait ces fonctions d'envoi
+  // appelables par n'importe qui. Repli sur la cle anon sans session.
+  async function authToken() {
+    try {
+      const { data } = await sb().auth.getSession();
+      return (data && data.session && data.session.access_token) || anonKey();
+    } catch (e) { return anonKey(); }
+  }
   function me() { return (win.oropraUser) || {}; }
   function esc(s) { if (s == null) return ''; return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
   function clientLabel(c) { if (!c) return ''; const soc = c.idmultivu === 1 || c.idmultivu === '1'; return (soc ? [c.CIVILITE, c.NOM] : [c.CIVILITE, c.PRENOM, c.NOM]).filter(Boolean).join(' ').trim(); }
@@ -207,7 +217,7 @@ OD.define('email', {
       fd.append('file', file, file.name);
       fd.append('account_id', String(state.fromId || 'acc'));
       const r = await fetch(SUPABASE_URL + '/functions/v1/email-attachment-upload', {
-        method: 'POST', headers: { apikey: anonKey(), Authorization: 'Bearer ' + anonKey() }, body: fd
+        method: 'POST', headers: { apikey: anonKey(), Authorization: 'Bearer ' + (await authToken()) }, body: fd
       });
       const j = await r.json().catch(() => ({}));
       if (r.status === 413 || j.error === 'file_too_large') throw new Error('trop volumineux (max 20 Mo)');
@@ -453,7 +463,7 @@ OD.define('email', {
     try {
       const fd = new FormData();
       fd.append('file', file, file.name); fd.append('bucket', 'email-assets'); fd.append('account_id', String(state.fromId || 'acc'));
-      const r = await fetch(SUPABASE_URL + '/functions/v1/email-attachment-upload', { method: 'POST', headers: { apikey: anonKey(), Authorization: 'Bearer ' + anonKey() }, body: fd });
+      const r = await fetch(SUPABASE_URL + '/functions/v1/email-attachment-upload', { method: 'POST', headers: { apikey: anonKey(), Authorization: 'Bearer ' + (await authToken()) }, body: fd });
       const j = await r.json().catch(() => ({}));
       if (!r.ok || !j.public_url) throw new Error(j.error || ('HTTP ' + r.status));
       const ed = getRoot() && getRoot().querySelector('.em-sig-ed');
