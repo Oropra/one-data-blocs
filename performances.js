@@ -1030,11 +1030,18 @@ OD.define('performances', {
     closePopup();
     if (!ids || !ids.length) return;
     if (!SUPABASE_KEY) SUPABASE_KEY = getSupabaseKey();
+    // Les 4 lectures ci-dessous portent sur des tables bornees au perimetre.
+    // Elles doivent passer par le jeton de SESSION : avec la cle anon elles
+    // tournaient sous le role anon, qui ne matche aucune policy (resultat
+    // vide, sans erreur) et n'a plus aucun privilege de table depuis le
+    // lot 29 (erreur explicite).
+    const userJwt = await getUserJwt();
+    if (!userJwt) { console.error('[perf] popup detail : pas de jeton de session'); return; }
     const idsStr = [...new Set(ids)].join(',');
     let propales = []; const stockMap = {}, clientMap = {}, pdfMap = {};
     try {
       const res = await fetch(SUPABASE_URL + '/rest/v1/PROPALE_BDC?id_propale_bdc=in.(' + idsStr + ')&select=id_propale_bdc,id_client_vu,VIN,"TotalProp","DateLivraison","TypeFinancement","Contrat_Service","GravageSimple","GravageFranchiseAccident","Waxoyl","VN_VO","LABEL","id_site","id_user_creation"',
-        { headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY } });
+        { headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + userJwt } });
       propales = await res.json();
     } catch (e) { console.error(e); }
     if (state.vnvo !== 'ALL') {
@@ -1043,19 +1050,19 @@ OD.define('performances', {
     const vins = [...new Set(propales.map(p => p.VIN).filter(Boolean))];
     if (vins.length) {
       try {
-        const r2 = await fetch(SUPABASE_URL + '/rest/v1/STOCKVO?VIN=in.(' + vins.join(',') + ')&select=VIN,"MARQUE_DMS","MODELE_DMS","DESIGNATION_DMS","NO_IMMAT"', { headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY } });
+        const r2 = await fetch(SUPABASE_URL + '/rest/v1/STOCKVO?VIN=in.(' + vins.join(',') + ')&select=VIN,"MARQUE_DMS","MODELE_DMS","DESIGNATION_DMS","NO_IMMAT"', { headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + userJwt } });
         for (const s of await r2.json()) stockMap[s.VIN] = s;
       } catch (e) { console.error(e); }
     }
     const clientIds = [...new Set(propales.map(p => p.id_client_vu).filter(Boolean))].join(',');
     if (clientIds) {
       try {
-        const r3 = await fetch(SUPABASE_URL + '/rest/v1/CLIENT?IDVu=in.(' + clientIds + ')&select=*', { headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY } });
+        const r3 = await fetch(SUPABASE_URL + '/rest/v1/CLIENT?IDVu=in.(' + clientIds + ')&select=*', { headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + userJwt } });
         for (const c of await r3.json()) clientMap[c.IDVu] = c;
       } catch (e) { console.error(e); }
     }
     try {
-      const r4 = await fetch(SUPABASE_URL + '/rest/v1/generated_documents?id_propale_bdc=in.(' + idsStr + ')&type=eq.bon_de_commande&status=eq.ready&order=created_at.desc&select=id,id_propale_bdc,storage_path,id_site,id_user_creation,created_at', { headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY } });
+      const r4 = await fetch(SUPABASE_URL + '/rest/v1/generated_documents?id_propale_bdc=in.(' + idsStr + ')&type=eq.bon_de_commande&status=eq.ready&order=created_at.desc&select=id,id_propale_bdc,storage_path,id_site,id_user_creation,created_at', { headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + userJwt } });
       for (const d of await r4.json()) { const k = String(d.id_propale_bdc); if (!pdfMap[k]) pdfMap[k] = d; }
     } catch (e) { console.error(e); }
 
