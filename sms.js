@@ -26,6 +26,15 @@ OD.define('sms', {
   function ensureRoot() { let r = getRoot(); if (!r) { r = doc.createElement('div'); r.id = ROOT_ID; doc.body.appendChild(r); } return r; }
   function sb() { return ctx.supabase; }
   function anonKey() { return ctx.tenant.supabase_anon_key; }
+  // Jeton de SESSION pour appeler les edge functions : sans en-tete
+  // Authorization la passerelle repond 401 UNAUTHORIZED_NO_AUTH_HEADER avant
+  // meme d'executer la fonction. Repli sur la cle anon si pas de session.
+  async function authToken() {
+    try {
+      const { data } = await sb().auth.getSession();
+      return (data && data.session && data.session.access_token) || anonKey();
+    } catch (e) { return anonKey(); }
+  }
   function readVar(id) { try { return wwLib.wwVariable.getValue(id); } catch (e) { return null; } }
 
   const state = window.__smsState || {};
@@ -119,7 +128,7 @@ OD.define('sms', {
     render(true);
     try {
       const res = await fetch(SUPABASE_URL + '/functions/v1/sms-send', {
-        method: 'POST', headers: { 'Content-Type': 'application/json', 'apikey': anonKey() },
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'apikey': anonKey(), 'Authorization': 'Bearer ' + (await authToken()) },
         body: JSON.stringify({ to: toNumber, body: text, agent_auth_uid: agentAuthUid, id_client: idClient, id_site: idSite, id_cycle_com: idCycleCom })
       });
       const data = await res.json();
