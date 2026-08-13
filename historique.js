@@ -14,6 +14,49 @@ OD.define('historique', {
   var VAR_SITE   = '39fecccf-9296-43b7-b5b6-eadaa928290d';
   var doc = wwLib.getFrontDocument();
   var sb = ctx.supabase;
+  // ---- Signature groupee des URL de stockage prive (A2) --------------------
+  // Les buckets call-recordings et wa-attachments sont PRIVES : une URL
+  // publique ne fonctionne plus. On signe APRES la requete et AVANT le rendu,
+  // en un seul appel par bucket (createSignedUrls, au pluriel).
+  // Pourquoi pas au clic : __ctPlay / __rcVoipPlay font a.src = ... puis
+  // a.play() de facon synchrone. Un await avant play() casse la regle du geste
+  // utilisateur et Safari refuse la lecture.
+  if (!window.__odSignRows) window.__odSignRows = async function (sb, rows) {
+    try {
+      if (!Array.isArray(rows) || !rows.length) return rows;
+      var RX = /\/storage\/v1\/object\/public\/([^/]+)\/(.+)$/;
+      var byBucket = {}, refs = [];
+      function collect(url, set) {
+        if (!url || typeof url !== 'string') return;
+        var m = url.match(RX); if (!m) return;
+        var bucket = m[1], path = decodeURIComponent(m[2].split('?')[0]);
+        (byBucket[bucket] = byBucket[bucket] || []).push(path);
+        refs.push({ bucket: bucket, path: path, set: set });
+      }
+      rows.forEach(function (r) {
+        if (!r) return;
+        collect(r.voip_recording_url, function (v) { r.voip_recording_url = v; });
+        var atts = r.attachments;
+        if (typeof atts === 'string' && atts) { try { atts = JSON.parse(atts); } catch (e) { atts = null; } }
+        if (Array.isArray(atts)) {
+          atts.forEach(function (a) { collect(a && a.public_url, function (v) { a.public_url = v; }); });
+          r.attachments = atts;
+        }
+      });
+      if (!refs.length) return rows;
+      var signed = {}, buckets = Object.keys(byBucket);
+      for (var i = 0; i < buckets.length; i++) {
+        var b = buckets[i];
+        var uniq = byBucket[b].filter(function (p, k, arr) { return arr.indexOf(p) === k; });
+        var res = await sb.storage.from(b).createSignedUrls(uniq, 3600);
+        if (res.error) { console.warn('[sign] ' + b + ' : ' + res.error.message); continue; }
+        (res.data || []).forEach(function (d) { if (d && d.path && d.signedUrl) signed[b + '|' + d.path] = d.signedUrl; });
+      }
+      refs.forEach(function (r) { var s = signed[r.bucket + '|' + r.path]; if (s) r.set(s); });
+    } catch (e) { console.warn('[sign] echec : ' + (e && e.message)); }
+    return rows;
+  };
+
   function getRoot() { return __anchor; }
 
   // self-boot/observer retiré (loader)
@@ -84,6 +127,7 @@ OD.define('historique', {
         .eq('id_cycle_com', idCycle).order('date_contact', { ascending: false });
       if (res.error) throw res.error;
       var rows = res.data || [];
+      await window.__odSignRows(sb, rows);
       if (window.__oropraContactFilter) rows = window.__oropraContactFilter(rows);
       var body = ov.querySelector('.hi-ov-body');
       if (!rows.length) { body.innerHTML = '<div class="hi-ov-msg">Aucun échange sur ce cycle.</div>'; return; }
