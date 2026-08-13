@@ -153,7 +153,9 @@ device.on('incoming', (call) => {
   if (ui) ui.incoming({ name: nom0, number: callerPhone, idvu: idClient, client: null })
 
   // Ligne CLIENT complète en arrière-plan
-  const anonKey = wwLib.wwPlugins.supabase?.instance?.supabaseKey
+  // Cle du tenant (ctx.tenant), et non le plugin WeWeb qui n'existe plus :
+  // un apikey undefined fait refuser l'appel par PostgREST.
+  const anonKey = supabaseAnonKey
   if (idClient) {
     // Jeton de session : la lecture CLIENT doit passer par la RLS de l'utilisateur,
     // pas par la cle anon publique.
