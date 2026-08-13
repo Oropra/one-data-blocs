@@ -28,6 +28,49 @@ OD.define('contacts', {
   var formatRdv = function (d) { if (!d) return ''; var dt = new Date(d); var p=function(n){return String(n).padStart(2,'0');}; return 'RDV '+p(dt.getDate())+'/'+p(dt.getMonth()+1)+'/'+dt.getFullYear(); };
   var truncate = function (str, n) { return str && str.length > n ? str.substring(0, n) + '\u2026' : (str || ''); };
   var parseAttachments = function (raw) { try { if (Array.isArray(raw)) return raw; if (typeof raw === 'string' && raw) return JSON.parse(raw); } catch (e) {} return []; };
+  // ---- Signature groupee des URL de stockage prive (A2) --------------------
+  // Les buckets call-recordings et wa-attachments sont PRIVES : une URL
+  // publique ne fonctionne plus. On signe APRES la requete et AVANT le rendu,
+  // en un seul appel par bucket (createSignedUrls, au pluriel).
+  // Pourquoi pas au clic : __ctPlay / __rcVoipPlay font a.src = ... puis
+  // a.play() de facon synchrone. Un await avant play() casse la regle du geste
+  // utilisateur et Safari refuse la lecture.
+  if (!window.__odSignRows) window.__odSignRows = async function (sb, rows) {
+    try {
+      if (!Array.isArray(rows) || !rows.length) return rows;
+      var RX = /\/storage\/v1\/object\/public\/([^/]+)\/(.+)$/;
+      var byBucket = {}, refs = [];
+      function collect(url, set) {
+        if (!url || typeof url !== 'string') return;
+        var m = url.match(RX); if (!m) return;
+        var bucket = m[1], path = decodeURIComponent(m[2].split('?')[0]);
+        (byBucket[bucket] = byBucket[bucket] || []).push(path);
+        refs.push({ bucket: bucket, path: path, set: set });
+      }
+      rows.forEach(function (r) {
+        if (!r) return;
+        collect(r.voip_recording_url, function (v) { r.voip_recording_url = v; });
+        var atts = r.attachments;
+        if (typeof atts === 'string' && atts) { try { atts = JSON.parse(atts); } catch (e) { atts = null; } }
+        if (Array.isArray(atts)) {
+          atts.forEach(function (a) { collect(a && a.public_url, function (v) { a.public_url = v; }); });
+          r.attachments = atts;
+        }
+      });
+      if (!refs.length) return rows;
+      var signed = {}, buckets = Object.keys(byBucket);
+      for (var i = 0; i < buckets.length; i++) {
+        var b = buckets[i];
+        var uniq = byBucket[b].filter(function (p, k, arr) { return arr.indexOf(p) === k; });
+        var res = await sb.storage.from(b).createSignedUrls(uniq, 3600);
+        if (res.error) { console.warn('[sign] ' + b + ' : ' + res.error.message); continue; }
+        (res.data || []).forEach(function (d) { if (d && d.path && d.signedUrl) signed[b + '|' + d.path] = d.signedUrl; });
+      }
+      refs.forEach(function (r) { var s = signed[r.bucket + '|' + r.path]; if (s) r.set(s); });
+    } catch (e) { console.warn('[sign] echec : ' + (e && e.message)); }
+    return rows;
+  };
+
   var formatSize = function (b) { if (!b) return ''; if (b < 1024) return b + ' o'; if (b < 1048576) return Math.round(b/1024) + ' Ko'; return (b/1048576).toFixed(1) + ' Mo'; };
 
   // ---- globals (une fois) : lecteur audio unifié + toggle + download PJ ----
@@ -232,6 +275,7 @@ OD.define('contacts', {
         .select('id_ligne, id_cycle_com, date_contact, media, sens, statut, contenu_texte, agent, voip_recording_url, voip_summary, voip_duration_seconds, delivery_status, email_subject, email_snippet, email_body_html, email_has_attachments, attachments, canal_contact, resultat, dt_activation, note_chatgpt, origine_echange, vehicule_interet, phone_from')
         .eq('id_cycle_com', idCycle).order('date_contact', { ascending: false });
       if (res.error) throw res.error;
+      await window.__odSignRows(sb, res.data || []);
       state.rows = (res.data || []).filter(function (r) {
         if ((r.media || '').toUpperCase() !== 'VOIP') return true;
         // VOIP conservé seulement s'il a un enregistrement ET dure >= 2 s
