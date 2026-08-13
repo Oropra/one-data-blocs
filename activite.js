@@ -83,8 +83,12 @@ function siteBus() {
 
 // --- État -------------------------------------------------------------------
 const state = window.__act || {};
-if (state.period === undefined) {
-  // Par défaut : mois courant (du 1er à aujourd'hui)
+// Periode TOUJOURS reinitialisee a l'arrivee sur la page (13/08/2026).
+// L'etat vit sur window et survit donc aux navigations SPA : avec un test
+// `=== undefined`, une periode choisie suivait l'utilisateur de page en page.
+// Regle produit : par defaut, du 1er du mois courant a aujourd'hui, aucune
+// persistance.
+{
   const now = new Date();
   const from = new Date(now.getFullYear(), now.getMonth(), 1);
   state.period = { from: ymd(from), to: ymd(now) };
