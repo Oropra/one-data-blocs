@@ -24,6 +24,16 @@ OD.define('whatsapp', {
   function ensureRoot() { let r = getRoot(); if (!r) { r = doc.createElement('div'); r.id = ROOT_ID; doc.body.appendChild(r); } return r; }
   function sb() { return ctx.supabase; }
   function anonKey() { return ctx.tenant.supabase_anon_key; }
+  // Jeton de SESSION pour appeler les edge functions. La cle anon est un JWT
+  // valide : la passerelle l'accepte, mais elle est PUBLIQUE (servie dans le
+  // bundle a chaque visiteur). L'utiliser ici rendait ces fonctions d'envoi
+  // appelables par n'importe qui. Repli sur la cle anon sans session.
+  async function authToken() {
+    try {
+      const { data } = await sb().auth.getSession();
+      return (data && data.session && data.session.access_token) || anonKey();
+    } catch (e) { return anonKey(); }
+  }
   function readVar(id) { try { return wwLib.wwVariable.getValue(id); } catch (e) { return null; } }
   function me() { return (win.oropraUser) || {}; }
 
@@ -105,7 +115,7 @@ OD.define('whatsapp', {
     if (!state.conv) return;
     try {
       await fetch(SUPABASE_URL + '/functions/v1/wa-mark-read', {
-        method: 'POST', headers: { 'Content-Type': 'application/json', apikey: anonKey(), Authorization: 'Bearer ' + anonKey() },
+        method: 'POST', headers: { 'Content-Type': 'application/json', apikey: anonKey(), Authorization: 'Bearer ' + (await authToken()) },
         body: JSON.stringify({ conversation_id: state.conv.id })
       });
     } catch (e) { /* non bloquant */ }
@@ -131,7 +141,7 @@ OD.define('whatsapp', {
     state.sending = true; render();
     try {
       const r = await fetch(SUPABASE_URL + '/functions/v1/wa-send-text', {
-        method: 'POST', headers: { 'Content-Type': 'application/json', apikey: anonKey(), Authorization: 'Bearer ' + anonKey() },
+        method: 'POST', headers: { 'Content-Type': 'application/json', apikey: anonKey(), Authorization: 'Bearer ' + (await authToken()) },
         body: JSON.stringify({ conversation_id: state.conv.id, to_phone_e164: toE164(state.client && state.client.TEl_MOB), text })
       });
       const j = await r.json().catch(() => ({}));
@@ -175,7 +185,7 @@ OD.define('whatsapp', {
     state.sending = true; render();
     try {
       const r = await fetch(SUPABASE_URL + '/functions/v1/wa-send-text', {
-        method: 'POST', headers: { 'Content-Type': 'application/json', apikey: anonKey(), Authorization: 'Bearer ' + anonKey() },
+        method: 'POST', headers: { 'Content-Type': 'application/json', apikey: anonKey(), Authorization: 'Bearer ' + (await authToken()) },
         body: JSON.stringify({ conversation_id: state.conv.id, to_phone_e164: toE164(state.client && state.client.TEl_MOB), template_mode: mode, template_param_1: p1, template_param_2: p2, template_param_3: p3 })
       });
       const j = await r.json().catch(() => ({}));
@@ -198,7 +208,7 @@ OD.define('whatsapp', {
       fd.append('conversation_id', state.conv.id);
       fd.append('to_phone_e164', toE164(state.client && state.client.TEl_MOB));
       fd.append('file', file, file.name);
-      const r = await fetch(SUPABASE_URL + '/functions/v1/wa-send-attachment', { method: 'POST', headers: { apikey: anonKey(), Authorization: 'Bearer ' + anonKey() }, body: fd });
+      const r = await fetch(SUPABASE_URL + '/functions/v1/wa-send-attachment', { method: 'POST', headers: { apikey: anonKey(), Authorization: 'Bearer ' + (await authToken()) }, body: fd });
       const j = await r.json().catch(() => ({}));
       if (r.status === 409 || j.error === 'needs_template') { state.sending = false; render(); return; }
       if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
@@ -256,7 +266,7 @@ OD.define('whatsapp', {
       fd.append('conversation_id', state.conv.id);
       fd.append('to_phone_e164', toE164(state.client && state.client.TEl_MOB));
       fd.append('file', blob, 'voice_' + Date.now() + '.webm');
-      const r = await fetch(SUPABASE_URL + '/functions/v1/wa-send-audio', { method: 'POST', headers: { apikey: anonKey(), Authorization: 'Bearer ' + anonKey() }, body: fd });
+      const r = await fetch(SUPABASE_URL + '/functions/v1/wa-send-audio', { method: 'POST', headers: { apikey: anonKey(), Authorization: 'Bearer ' + (await authToken()) }, body: fd });
       const j = await r.json().catch(() => ({}));
       if (r.status === 409) { state.sending = false; render(); return; }
       if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
