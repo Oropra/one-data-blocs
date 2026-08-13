@@ -303,7 +303,16 @@ OD.define('agenda', {
   function renderCollab(force) {
     const host = document.getElementById('agenda-collab'); if (!host) return;
     const sig = collabSignature();
-    if (!force && sig === collabSig && !collabMenuOpen) return;
+    // Le poll rappelle renderCollab(false) toutes les 600 ms. L'ancienne
+    // condition portait `&& !collabMenuOpen` : quand le menu etait OUVERT,
+    // la sortie anticipee ne se declenchait pas et le innerHTML ci-dessous
+    // reconstruisait la liste a chaque tick, remettant scrollTop a zero.
+    // On ne pouvait donc pas atteindre les vendeurs du bas. La condition
+    // disait l'inverse de son intention : c'est justement quand le menu est
+    // ouvert qu'il ne faut pas le reconstruire.
+    // L'etat ouvert/ferme n'a pas besoin d'un rendu : wireCollab pilote
+    // menu.style.display directement.
+    if (!force && sig === collabSig) return;
     collabSig = sig;
     const model = buildCollaborators();
     if (!model) { return; }                              // pas prêt : on retentera au poll
@@ -314,12 +323,20 @@ OD.define('agenda', {
     const curName = model.allById[curId] || model.selfName || '';
     let menu = '';
     for (const g of model.groups) { if (!g.items.length) continue; menu += '<div class="agc-grp">' + esc(g.label) + '</div>'; for (const it of g.items) menu += '<div class="agc-opt' + (String(it.id) === String(curId) ? ' is-sel' : '') + '" data-id="' + it.id + '">' + esc(it.nom) + '</div>'; }
+    // Si le menu est ouvert et que le contenu change vraiment (nouveau
+    // perimetre, vendeurs qui arrivent), on lui rend sa position de
+    // defilement apres reconstruction.
+    const menuPrec = host.querySelector('#agc-menu');
+    const scrollPrec = menuPrec ? menuPrec.scrollTop : 0;
     host.innerHTML =
       '<button type="button" class="agc-trigger" id="agc-trigger">'
       + '<span class="agc-ava">' + esc(initials(curName)) + '</span>'
       + '<span class="agc-name">' + esc(curName || '—') + '</span>'
       + '<span class="agc-chev">▾</span></button>'
       + '<div class="agc-menu" id="agc-menu"' + (collabMenuOpen ? '' : ' style="display:none"') + '>' + menu + '</div>';
+    if (collabMenuOpen && scrollPrec) {
+      const m = host.querySelector('#agc-menu'); if (m) m.scrollTop = scrollPrec;
+    }
     wireCollab(host);
   }
   function wireCollab(host) {
