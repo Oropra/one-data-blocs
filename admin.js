@@ -68,6 +68,7 @@ OD.define('admin', {
   // Colonnes réelles de la table USER (pour le filet de sécurité après création)
   var USER_MATRICULE_FIELDS = ['matricule', 'Matricule', 'MATRICULE'];
   var USER_FONCTION_FIELDS  = ['fonction', 'Fonction', 'FONCTION'];
+  var USER_ROLE_FIELDS      = ['ID_Role', 'id_role', 'ID_ROLE', 'Id_Role'];
 
   var COLUMNS = [
     { field: 'nom',                  label: 'Nom' },
@@ -337,6 +338,9 @@ OD.define('admin', {
       var cV = pickCol(cols, VNVO_FIELDS); if (cV && data.vnvo !== undefined) upd[cV] = data.vnvo || null;
       var cM = pickCol(cols, USER_MATRICULE_FIELDS); if (cM && data.matricule !== undefined) upd[cM] = data.matricule || null;
       var cF = pickCol(cols, USER_FONCTION_FIELDS); if (cF && data.fonction !== undefined) upd[cF] = data.fonction || null;
+      // Périmètre principal porté par la fiche USER (≠ affectations USER_SITE)
+      var cS = pickCol(cols, PRINCIPAL_FIELDS); if (cS && data.id_site_main !== undefined) upd[cS] = data.id_site_main == null ? null : Number(data.id_site_main);
+      var cR = pickCol(cols, USER_ROLE_FIELDS); if (cR && data.id_role !== undefined && data.id_role) upd[cR] = Number(data.id_role);
     }
     return sb().from(TABLE_USER).update(upd).eq('ID_User', idUser);
   }
@@ -763,13 +767,74 @@ OD.define('admin', {
       + '<div><label>VN / VO / VNVO</label><select data-f="vnvo">'
       + ['', 'VN', 'VO', 'VNVO'].map(function (o) { return '<option value="' + o + '"' + (String(rowVnvo(row)).toUpperCase() === o ? ' selected' : '') + '>' + (o || '—') + '</option>'; }).join('')
       + '</select></div>'
-      + '<div class="oda-err-slot"></div></div></div>'
+      + '<div class="oda-err-slot"></div></div>'
+      + '<div class="oda-sep2"></div><p class="oda-subhead">Périmètre principal (fiche utilisateur)</p>'
+      + '<p class="oda-note">Site et rôle portés par la table ' + esc(TABLE_USER) + ' : ils pilotent les défauts du produit (agenda, portefeuille, statistiques). Les affectations site par site se règlent dans « Périmètre et hiérarchie ».</p>'
+      + '<div id="oda-mainperim"><div class="oda-loading"><span class="oda-spin"></span>Lecture de la fiche…</div></div></div>'
       + '<div class="oda-modal-foot"><button class="oda-btn ghost" data-x>Annuler</button><button class="oda-btn primary" data-save>Enregistrer</button></div>');
     ov.querySelectorAll('[data-x]').forEach(function (b) { b.onclick = function () { ov.remove(); }; });
+
+    /* ---- périmètre principal : lu sur USER, pas sur la ligne du tableau ----
+     * row.id_site est le site de la LIGNE (une affectation USER_SITE parmi
+     * d'autres) ; le site principal est une colonne de USER. Les confondre
+     * ferait basculer le principal au gré de la ligne cliquée. */
+    var mp = { id_site: null, id_role: '', reseau: '', affaire: '', loaded: false, cols: null };
+    var mpBox = ov.querySelector('#oda-mainperim');
+    function mpSiteInfo(idSite) { return sitesRef().filter(function (o) { return String(o.id_site) === String(idSite); })[0] || null; }
+    function mpDraw() {
+      if (!mp.loaded) return;
+      function optList(items, sel, ph) { var o = '<option value="">' + esc(ph) + '</option>'; items.forEach(function (x) { o += '<option value="' + esc(x) + '"' + (String(x) === String(sel) ? ' selected' : '') + '>' + esc(x) + '</option>'; }); return o; }
+      var affaires = mp.reseau ? refAffaires(mp.reseau) : [], sites = (mp.reseau && mp.affaire) ? refSites(mp.reseau, mp.affaire) : [];
+      var h = '<div class="oda-cascade">'
+        + '<div class="oda-field"><label>Réseau</label><select data-mp="reseau">' + optList(refReseaux(), mp.reseau, 'Choisir…') + '</select></div>'
+        + '<div class="oda-field"><label>Affaire</label><select data-mp="affaire"' + (mp.reseau ? '' : ' disabled') + '>' + optList(affaires, mp.affaire, 'Choisir…') + '</select></div>'
+        + '<div class="oda-field"><label>Site principal</label><select data-mp="site"' + (mp.affaire ? '' : ' disabled') + '><option value="">Choisir…</option>';
+      sites.forEach(function (s) { h += '<option value="' + esc(s.id_site) + '"' + (String(s.id_site) === String(mp.id_site) ? ' selected' : '') + '>' + esc(s.site) + '</option>'; });
+      h += '</select></div></div>';
+      h += '<div class="oda-place-role"><label>Rôle global</label><select data-mp="role"><option value="">Choisir un rôle…</option>'
+        + state.roles.map(function (r) { return '<option value="' + esc(r.id) + '"' + (String(r.id) === String(mp.id_role) ? ' selected' : '') + '>' + esc(r.label) + '</option>'; }).join('')
+        + '</select></div>';
+      // Cohérence : le site principal doit faire partie des affectations USER_SITE.
+      if (mp.id_site != null) {
+        var affecte = state.rows.some(function (r) { return String(r.id_user) === String(row.id_user) && String(r.id_site) === String(mp.id_site); });
+        if (!affecte) h += '<div class="oda-warn">Ce site n\'est pas dans les affectations de ' + esc(fullName(row)) + '. Le site principal ne crée pas d\'accès : ajoutez-le aussi dans « Périmètre et hiérarchie ».</div>';
+      }
+      mpBox.innerHTML = h;
+      mpBox.querySelectorAll('select[data-mp]').forEach(function (sel) {
+        sel.onchange = function () {
+          var c = sel.getAttribute('data-mp'), v = sel.value;
+          if (c === 'reseau') { mp.reseau = v; mp.affaire = ''; mp.id_site = null; }
+          else if (c === 'affaire') { mp.affaire = v; mp.id_site = null; }
+          else if (c === 'site') { mp.id_site = v ? Number(v) : null; }
+          else if (c === 'role') { mp.id_role = v; }
+          mpDraw();
+        };
+      });
+    }
+    (async function () {
+      var cols = await tableCols(TABLE_USER);
+      mp.cols = cols;
+      var cS = pickCol(cols, PRINCIPAL_FIELDS), cR = pickCol(cols, USER_ROLE_FIELDS);
+      if (!cS && !cR) { mpBox.innerHTML = '<div class="oda-warn">Colonnes de périmètre principal introuvables sur ' + esc(TABLE_USER) + '.</div>'; return; }
+      var sel = ['ID_User'].concat([cS, cR].filter(Boolean)).join(',');
+      var r = await sb().from(TABLE_USER).select(sel).eq('ID_User', row.id_user).limit(1);
+      if (r.error) { mpBox.innerHTML = '<div class="oda-warn">Lecture impossible : ' + esc(r.error.message) + '</div>'; return; }
+      var u = (r.data && r.data[0]) || {};
+      mp.id_site = cS && u[cS] != null ? Number(u[cS]) : null;
+      mp.id_role = cR && u[cR] != null ? String(u[cR]) : '';
+      var info = mp.id_site != null ? mpSiteInfo(mp.id_site) : null;
+      if (info) { mp.reseau = info.reseau || ''; mp.affaire = info.affaire || ''; }
+      mp.loaded = true; mpDraw();
+    })();
+
     ov.querySelector('[data-save]').onclick = async function () {
       var btn = this; btn.disabled = true; btn.textContent = 'Enregistrement…';
       var g = function (f) { var e = ov.querySelector('[data-f="' + f + '"]'); return e ? e.value.trim() : ''; };
-      var res = await updateProfile(row.id_user, { prenom: g('prenom'), nom: g('nom'), email: g('email'), telephone: g('telephone'), voip: g('voip'), matricule: g('matricule'), fonction: g('fonction'), vnvo: g('vnvo') });
+      var data = { prenom: g('prenom'), nom: g('nom'), email: g('email'), telephone: g('telephone'), voip: g('voip'), matricule: g('matricule'), fonction: g('fonction'), vnvo: g('vnvo') };
+      // On n'écrit le périmètre principal que si la lecture a abouti : sinon on
+      // risquerait d'effacer une valeur qu'on n'a jamais affichée.
+      if (mp.loaded) { data.id_site_main = mp.id_site; data.id_role = mp.id_role; }
+      var res = await updateProfile(row.id_user, data);
       if (res && res.error) { btn.disabled = false; btn.textContent = 'Enregistrer'; ov.querySelector('.oda-err-slot').innerHTML = '<div class="oda-error">' + esc(res.error.message || 'Erreur d\'enregistrement.') + '</div>'; return; }
       ov.remove(); toast('Profil mis à jour'); await loadUsers();
     };
@@ -1306,13 +1371,14 @@ OD.define('admin', {
     var uindex = {};
     state.rows.forEach(function (r) {
       if (r.id_user == null) return;
-      if (!uindex[r.id_user]) uindex[r.id_user] = { id: Number(r.id_user), name: [r.prenom, r.nom].filter(Boolean).join(' ') || ('#' + r.id_user), role: Number(r.user_role_id != null ? r.user_role_id : r.id_role), sites: {}, affaires: {}, reseaux: {} };
+      if (!uindex[r.id_user]) uindex[r.id_user] = { id: Number(r.id_user), name: [r.prenom, r.nom].filter(Boolean).join(' ') || ('#' + r.id_user), role: Number(r.user_role_id != null ? r.user_role_id : r.id_role), vnvo: rowVnvo(r), sites: {}, affaires: {}, reseaux: {} };
+      if (!uindex[r.id_user].vnvo) uindex[r.id_user].vnvo = rowVnvo(r);
       if (r.id_site != null) { uindex[r.id_user].sites[Number(r.id_site)] = 1; var pp = PARENT[r.id_site]; if (pp) { uindex[r.id_user].affaires[pp.affaire] = 1; uindex[r.id_user].reseaux[pp.reseau] = 1; } }
     });
     // Directeurs de groupe = N+1 universel, même sans affectation USER_SITE : on les charge depuis USER.
     try {
       var _gd = await sb().from('USER').select('ID_User, prenom, nom, ID_Role, VN_VO').eq('ID_Role', 8);
-      (_gd && _gd.data ? _gd.data : []).forEach(function (u) { var id = Number(u.ID_User); if (!uindex[id]) uindex[id] = { id: id, name: [u.prenom, u.nom].filter(Boolean).join(' ') || ('#' + id), role: 8, sites: {}, affaires: {}, reseaux: {} }; });
+      (_gd && _gd.data ? _gd.data : []).forEach(function (u) { var id = Number(u.ID_User); if (!uindex[id]) uindex[id] = { id: id, name: [u.prenom, u.nom].filter(Boolean).join(' ') || ('#' + id), role: 8, vnvo: u.VN_VO || '', sites: {}, affaires: {}, reseaux: {} }; });
     } catch (e) {}
     // managers pertinents pour (réseau, rôle) : rôle strictement supérieur, couvrant le réseau
     // Candidats N+1 = la chaîne hiérarchique EXACTE du périmètre peint :
@@ -1343,7 +1409,7 @@ OD.define('admin', {
     // N+1 DÉDUIT (unique) : le supérieur le plus proche couvrant le périmètre.
     function deducedMgrForSite(siteId, role) { if (role === 8) return null; var c = managerCandidates({ type: 'site', ref: siteId, reseau: PARENT[siteId] ? PARENT[siteId].reseau : null }, role); return c.length ? c[0].id : null; }
     function deducedMgr(r) { if (r.role === 8) return null; var c = managerCandidates(r.scope, r.role); return c.length ? c[0].id : null; }
-    function mgrName(id) { if (id == null) return ''; var u = uindex[id]; return u ? u.name : ('#' + id); }
+    function mgrName(id) { if (id == null) return ''; var u = uindex[id]; return u ? (u.name + (u.vnvo ? ' · ' + u.vnvo : '')) : ('#' + id); }
 
     // ----- rôle principal du user (défaut du pinceau) -----
     var principalRole = Number(row.user_role_id != null ? row.user_role_id : row.id_role);
@@ -1502,7 +1568,7 @@ OD.define('admin', {
             var cands = managerCandidates(r.scope, r.role);
             if (!cands.length) mgrLine = '<div class="pe-mgrfix need">N+1 introuvable — créez le supérieur sur ce périmètre</div>';
             else {
-              var mopts = cands.map(function (u) { return '<option value="' + u.id + '"' + (String(u.id) === String(r.mgr) ? ' selected' : '') + '>' + esc(u.name) + ' — ' + esc(roleLabel(u.role)) + '</option>'; }).join('');
+              var mopts = cands.map(function (u) { return '<option value="' + u.id + '"' + (String(u.id) === String(r.mgr) ? ' selected' : '') + '>' + esc(u.name) + ' — ' + esc(roleLabel(u.role)) + (u.vnvo ? ' · ' + esc(u.vnvo) : '') + '</option>'; }).join('');
               mgrLine = '<div class="pe-mgrrow"><span class="pe-mgrlbl">N+1</span><select data-rmgr="' + idx + '">' + mopts + '</select></div>';
             }
           }
