@@ -65,6 +65,9 @@ OD.define('admin', {
   // On évite FONCTION en priorité car elle contient déjà le suffixe VN/VO ("Vendeur VN").
   var FONCTION_FIELDS = ['site_role_name', 'user_role_name', 'fonction', 'Fonction', 'FONCTION'];
   var VNVO_FIELDS     = ['VN_VO', 'vn_vo', 'VnVo', 'vnvo', 'VNVO'];
+  // Colonnes réelles de la table USER (pour le filet de sécurité après création)
+  var USER_MATRICULE_FIELDS = ['matricule', 'Matricule', 'MATRICULE'];
+  var USER_FONCTION_FIELDS  = ['fonction', 'Fonction', 'FONCTION'];
 
   var COLUMNS = [
     { field: 'nom',                  label: 'Nom' },
@@ -327,7 +330,15 @@ OD.define('admin', {
     } catch (e) {}
   }
   async function updateProfile(idUser, data) {
-    return sb().from(TABLE_USER).update({ prenom: data.prenom, nom: data.nom, email: data.email, N_de_telephone: data.telephone, voip_number: data.voip }).eq('ID_User', idUser);
+    var upd = { prenom: data.prenom, nom: data.nom, email: data.email, N_de_telephone: data.telephone, voip_number: data.voip };
+    // Colonnes dont le nom exact varie : on les résout sur le schéma réel.
+    var cols = await tableCols(TABLE_USER);
+    if (cols && cols.length) {
+      var cV = pickCol(cols, VNVO_FIELDS); if (cV && data.vnvo !== undefined) upd[cV] = data.vnvo || null;
+      var cM = pickCol(cols, USER_MATRICULE_FIELDS); if (cM && data.matricule !== undefined) upd[cM] = data.matricule || null;
+      var cF = pickCol(cols, USER_FONCTION_FIELDS); if (cF && data.fonction !== undefined) upd[cF] = data.fonction || null;
+    }
+    return sb().from(TABLE_USER).update(upd).eq('ID_User', idUser);
   }
   async function callFn(url, payload) {
     var token = await accessToken(); if (!token) return { error: 'Session expirée, reconnectez-vous.' };
@@ -349,6 +360,46 @@ OD.define('admin', {
     } catch (e) { return { error: String(e && e.message || e) }; }
   }
   async function createUser(payload) { return callFn(FN_CREATE, payload); }
+
+  /* Filet de sécurité après création.
+   * L'edge function admin-create-user ne recopie pas tous les champs de profil
+   * dans USER (constaté sur VN_VO : le front l'envoie, la colonne reste vide).
+   * On relit la ligne créée et on ne complète QUE les colonnes restées vides —
+   * jamais d'écrasement de ce que le serveur a écrit. */
+  async function reconcileNewUser(email, vals, res) {
+    var out = { patched: [], missed: [], error: null };
+    try {
+      var cols = await tableCols(TABLE_USER);
+      if (!cols || !cols.length) { out.error = 'Table ' + TABLE_USER + ' illisible.'; return out; }
+      var want = [];
+      function addCol(v, cands, label) {
+        if (!v) return;
+        var c = pickCol(cols, cands);
+        if (c) want.push({ col: c, val: v, label: label }); else out.missed.push(label);
+      }
+      addCol(vals.vnvo, VNVO_FIELDS, 'VN/VO');
+      addCol(vals.matricule, USER_MATRICULE_FIELDS, 'matricule');
+      addCol(vals.fonction, USER_FONCTION_FIELDS, 'fonction');
+      if (!want.length) return out;
+
+      var newId = res && [res.id_user, res.user_id, res.id, res.user && res.user.ID_User, res.user && res.user.id_user]
+        .filter(function (x) { return x != null; })[0];
+      var sel = ['ID_User'].concat(want.map(function (w) { return w.col; })).join(',');
+      var q = sb().from(TABLE_USER).select(sel);
+      q = (newId != null) ? q.eq('ID_User', Number(newId)) : q.eq('email', email);
+      var r = await q.limit(1);
+      if (r.error) { out.error = r.error.message; return out; }
+      var row = r.data && r.data[0];
+      if (!row) { out.error = 'Utilisateur créé introuvable pour vérification.'; return out; }
+
+      var upd = {};
+      want.forEach(function (w) { if (row[w.col] == null || row[w.col] === '') { upd[w.col] = w.val; out.patched.push(w.label); } });
+      if (!Object.keys(upd).length) { out.patched = []; return out; }
+      var u = await sb().from(TABLE_USER).update(upd).eq('ID_User', row.ID_User);
+      if (u.error) { out.error = u.error.message; out.patched = []; }
+    } catch (e) { out.error = String((e && e.message) || e); }
+    return out;
+  }
   async function upsertUserSite(target, id_site, id_role, manager) { return callFn(FN_US_UP, { target_user_id: target, id_site: id_site, id_role: id_role, manager_user_id: manager }); }
   async function deleteUserSite(target, id_site) { return callFn(FN_US_DEL, { target_user_id: target, id_site: id_site }); }
 
@@ -708,13 +759,17 @@ OD.define('admin', {
       + '<div class="oda-two"><div><label>Prénom</label><input data-f="prenom" value="' + esc(row.prenom) + '"></div><div><label>Nom</label><input data-f="nom" value="' + esc(row.nom) + '"></div></div>'
       + '<div><label>Email</label><input data-f="email" value="' + esc(row.email) + '"></div>'
       + '<div class="oda-two"><div><label>Téléphone</label><input data-f="telephone" value="' + esc(row.telephone) + '"></div><div><label>Numéro VOIP</label><input data-f="voip" value="' + esc(row.voip_number) + '"></div></div>'
+      + '<div class="oda-two"><div><label>Matricule</label><input data-f="matricule" value="' + esc(row.matricule) + '"></div><div><label>Fonction</label><input data-f="fonction" value="' + esc(row.fonction) + '"></div></div>'
+      + '<div><label>VN / VO / VNVO</label><select data-f="vnvo">'
+      + ['', 'VN', 'VO', 'VNVO'].map(function (o) { return '<option value="' + o + '"' + (String(rowVnvo(row)).toUpperCase() === o ? ' selected' : '') + '>' + (o || '—') + '</option>'; }).join('')
+      + '</select></div>'
       + '<div class="oda-err-slot"></div></div></div>'
       + '<div class="oda-modal-foot"><button class="oda-btn ghost" data-x>Annuler</button><button class="oda-btn primary" data-save>Enregistrer</button></div>');
     ov.querySelectorAll('[data-x]').forEach(function (b) { b.onclick = function () { ov.remove(); }; });
     ov.querySelector('[data-save]').onclick = async function () {
       var btn = this; btn.disabled = true; btn.textContent = 'Enregistrement…';
-      var g = function (f) { return ov.querySelector('[data-f="' + f + '"]').value.trim(); };
-      var res = await updateProfile(row.id_user, { prenom: g('prenom'), nom: g('nom'), email: g('email'), telephone: g('telephone'), voip: g('voip') });
+      var g = function (f) { var e = ov.querySelector('[data-f="' + f + '"]'); return e ? e.value.trim() : ''; };
+      var res = await updateProfile(row.id_user, { prenom: g('prenom'), nom: g('nom'), email: g('email'), telephone: g('telephone'), voip: g('voip'), matricule: g('matricule'), fonction: g('fonction'), vnvo: g('vnvo') });
       if (res && res.error) { btn.disabled = false; btn.textContent = 'Enregistrer'; ov.querySelector('.oda-err-slot').innerHTML = '<div class="oda-error">' + esc(res.error.message || 'Erreur d\'enregistrement.') + '</div>'; return; }
       ov.remove(); toast('Profil mis à jour'); await loadUsers();
     };
@@ -1188,10 +1243,16 @@ OD.define('admin', {
       };
       var res = await createUser(payload);
       if (res.error) { btn.disabled = false; btn.textContent = 'Créer'; showErr(res.error); return; }
+      // L'edge function n'écrit pas VN_VO : on complète les colonnes restées vides.
+      var fix = await reconcileNewUser(email, { vnvo: g('vnvo'), matricule: g('matricule'), fonction: g('fonction') }, res);
+      var fixNote = '';
+      if (fix.patched.length) fixNote = '<div class="oda-warn">Complété côté client après création : ' + esc(fix.patched.join(', ')) + '. Ces champs ne sont pas écrits par <code>admin-create-user</code> — à corriger dans l\'edge function.</div>';
+      else if (fix.error) fixNote = '<div class="oda-warn">Vérification du profil impossible (' + esc(fix.error) + '). Contrôlez VN/VO, matricule et fonction sur la fiche.</div>';
+      else if (fix.missed.length) fixNote = '<div class="oda-warn">Colonnes introuvables sur ' + esc(TABLE_USER) + ' pour : ' + esc(fix.missed.join(', ')) + '.</div>';
       var body = ov.querySelector('.oda-modal-body'), foot = ov.querySelector('.oda-modal-foot');
       body.innerHTML = '<p class="oda-note">Utilisateur <b>' + esc(prenom + ' ' + nom) + '</b> créé. Mot de passe temporaire :</p>'
         + '<div class="oda-secret"><code>' + esc(res.temp_password) + '</code><button class="oda-iconbtn" data-copy title="Copier">' + ICON.copy + '</button></div>'
-        + '<p class="oda-note" style="margin-top:10px">Communiquez-le à l\'utilisateur ; il le changera à la première connexion.</p>';
+        + '<p class="oda-note" style="margin-top:10px">Communiquez-le à l\'utilisateur ; il le changera à la première connexion.</p>' + fixNote;
       foot.innerHTML = '<button class="oda-btn primary" data-x>Terminé</button>';
       foot.querySelector('[data-x]').onclick = function () { ov.remove(); };
       body.querySelector('[data-copy]').onclick = function () { copyText(res.temp_password); };
