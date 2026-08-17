@@ -113,7 +113,7 @@ OD.define('admin', {
   /* --------------------------------------------------------------- état app */
   var state = {
     rows: [], loading: true, error: null, isAdmin: null,
-    filters: { reseau: '', affaire: '', site: '' },
+    filters: { reseau: '', affaire: '', site: '', role: '', q: '' },
     expanded: {}, fonctionField: null, vnvoField: null, roles: [], topManagers: []
   };
   var root = null;
@@ -143,6 +143,12 @@ OD.define('admin', {
   + '.oda-head .oda-count{font-size:12px;color:var(--text-mut);}'
   + '.oda-head .oda-create{margin-left:auto;}'
   + '.oda-filters{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:16px;align-items:flex-end;}'
+  + '.oda-searchfield{position:relative;flex:1 1 260px;min-width:220px;}'
+  + '.oda-searchfield input{width:100%;padding:9px 30px 9px 12px;border:1px solid var(--grey-border);border-radius:8px;font-size:14px;font-family:inherit;color:var(--text);background:var(--card);box-sizing:border-box;}'
+  + '.oda-searchfield input:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 3px var(--blue-bg);}'
+  + '.oda-searchfield input::-webkit-search-cancel-button{display:none;}'
+  + '.oda-searchclear{position:absolute;right:8px;bottom:9px;border:0;background:none;font-size:17px;line-height:1;color:var(--text-mut);cursor:pointer;padding:0 2px;}'
+  + '.oda-searchnote{margin:-8px 0 14px;font-size:12px;color:var(--text-mut);}'
   + '.oda-field{display:flex;flex-direction:column;gap:4px;min-width:170px;flex:1 1 170px;max-width:260px;}'
   + '.oda-field label{font-size:10px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--text-mut);}'
   + '.oda-field select,.oda-modal select{appearance:none;border:1px solid var(--border);border-radius:8px;padding:8px 30px 8px 10px;font-size:13px;background:var(--card);color:var(--text);cursor:pointer;font-family:inherit;width:100%;'
@@ -438,17 +444,47 @@ OD.define('admin', {
   function reseauOptions() { return distinct(state.rows.map(function (r) { return r.reseau; })).sort(byLocale); }
   function affaireOptions() { var f = state.filters; return distinct(state.rows.filter(function (r) { return !f.reseau || r.reseau === f.reseau; }).map(function (r) { return r.affaire; })).sort(byLocale); }
   function siteOptions() { var f = state.filters; return distinct(state.rows.filter(function (r) { return (!f.reseau || r.reseau === f.reseau) && (!f.affaire || r.affaire === f.affaire); }).map(function (r) { return r.site_name; })).sort(byLocale); }
-  function filteredRows() {
+  function roleOptions() {
     var f = state.filters;
+    return distinct(state.rows.filter(function (r) {
+      return (!f.reseau || r.reseau === f.reseau) && (!f.affaire || r.affaire === f.affaire)
+          && (!f.site || (r.site_name || '') === f.site);
+    }).map(function (r) { return r.site_role_name || r.user_role_name; })).filter(Boolean).sort(byLocale);
+  }
+  // Recherche : nom, prénom, email, matricule, fonction. Insensible à la casse
+  // ET aux accents — « lecomte » doit trouver « Lecôme » comme « Lecomte ».
+  function fold(v) { return String(v == null ? '' : v).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''); }
+  function matchQuery(r, q) {
+    var hay = fold([r.prenom, r.nom, r.email, r.matricule, r.fonction, r.telephone].filter(Boolean).join(' '));
+    return q.split(/\s+/).filter(Boolean).every(function (mot) { return hay.indexOf(mot) !== -1; });
+  }
+  function searchActive() { return fold(state.filters.q).length >= 2; }
+  function filteredRows() {
+    var f = state.filters, q = fold(f.q);
     return state.rows.filter(function (r) {
       if (f.reseau && r.reseau !== f.reseau) return false;
       if (f.affaire && r.affaire !== f.affaire) return false;
       if (f.site && !(r.site_name || '').toLowerCase().includes(f.site.toLowerCase())) return false;
+      if (f.role && (r.site_role_name || r.user_role_name) !== f.role) return false;
+      if (q.length >= 2 && !matchQuery(r, q)) return false;
       return true;
     });
   }
-  function listReady() { if (REQUIRE_LEVEL === 'reseau') return !!state.filters.reseau; if (REQUIRE_LEVEL === 'affaire') return !!state.filters.affaire; return !!state.filters.site; }
-  function requirePrompt() { if (REQUIRE_LEVEL === 'reseau') return 'Sélectionnez un réseau pour afficher les utilisateurs.'; if (REQUIRE_LEVEL === 'affaire') return 'Sélectionnez un réseau puis une affaire pour afficher les utilisateurs.'; return 'Sélectionnez un réseau, une affaire puis un site pour afficher les utilisateurs.'; }
+  /* La recherche COURT-CIRCUITE l'obligation de choisir un site : sinon il
+   * faudrait déjà savoir où se trouve la personne qu'on cherche, ce qui vide
+   * la recherche de son intérêt. Deux caractères suffisent à ouvrir la liste. */
+  function listReady() {
+    if (searchActive()) return true;
+    if (REQUIRE_LEVEL === 'reseau') return !!state.filters.reseau;
+    if (REQUIRE_LEVEL === 'affaire') return !!state.filters.affaire;
+    return !!state.filters.site;
+  }
+  function requirePrompt() {
+    var suffixe = ' Ou tapez un nom dans la recherche.';
+    if (REQUIRE_LEVEL === 'reseau') return 'Sélectionnez un réseau pour afficher les utilisateurs.' + suffixe;
+    if (REQUIRE_LEVEL === 'affaire') return 'Sélectionnez un réseau puis une affaire pour afficher les utilisateurs.' + suffixe;
+    return 'Sélectionnez un réseau, une affaire puis un site pour afficher les utilisateurs.' + suffixe;
+  }
   function isOpen(key) { return state.expanded[key] !== false; }
 
   /* --------------------------------- référentiel des sites (pour créer/ajouter) */
@@ -686,11 +722,20 @@ OD.define('admin', {
     var html = '<div class="oda-wrap"><div class="oda-head"><h1>Administration des utilisateurs</h1>'
       + '<span class="oda-count">' + ((state.loading || !ready) ? '' : rows.length + ' utilisateur' + (rows.length > 1 ? 's' : '')) + '</span>'
       + '<button class="oda-btn primary oda-create" data-action="create-user">+ Créer un utilisateur</button></div>';
+    var qv = state.filters.q || '';
     html += '<div class="oda-filters">'
+      + '<div class="oda-field oda-searchfield"><label>Rechercher</label>'
+      + '<input type="search" data-search placeholder="Nom, prénom, email, matricule…" value="' + esc(qv) + '" autocomplete="off">'
+      + (qv ? '<button class="oda-searchclear" data-action="clear-search" title="Effacer">×</button>' : '')
+      + '</div>'
       + selectHtml('reseau', 'Réseau', state.filters.reseau, reseauOptions(), 'Tous les réseaux')
       + selectHtml('affaire', 'Affaire', state.filters.affaire, affaireOptions(), 'Toutes les affaires')
       + selectHtml('site', 'Site', state.filters.site, siteOptions(), 'Tous les sites')
+      + selectHtml('role', 'Fonction', state.filters.role, roleOptions(), 'Toutes les fonctions')
       + '<button class="oda-reset" data-action="reset-filters">Réinitialiser</button></div>';
+    if (searchActive() && !state.filters.site) {
+      html += '<p class="oda-searchnote">Recherche sur l\'ensemble du périmètre — les filtres réseau, affaire et site restent actifs s\'ils sont renseignés.</p>';
+    }
     html += '<div class="oda-tablewrap">';
     if (state.loading) html += '<div class="oda-loading"><span class="oda-spin"></span>Chargement des utilisateurs…</div>';
     else if (state.error) html += '<div class="oda-error" style="margin:16px;">' + esc(state.error) + '</div>';
@@ -703,6 +748,12 @@ OD.define('admin', {
     }
     html += '</div></div>';
     root.innerHTML = html;
+    // render() reconstruit tout le DOM : sans ça, le champ perdrait le focus
+    // à chaque frappe et il faudrait recliquer entre deux lettres.
+    if (state._focusSearch) {
+      var si = root.querySelector('[data-search]');
+      if (si) { si.focus(); try { si.setSelectionRange(si.value.length, si.value.length); } catch (e) {} }
+    }
   }
 
   /* --------------------------------------------------------- menu d'actions */
@@ -1948,16 +1999,29 @@ OD.define('admin', {
   /* --------------------------------------------------------- interactions */
   function bindGlobal() {
     var d = frontDoc();
+    var searchTimer = null;
+    root.addEventListener('input', function (e) {
+      var inp = e.target.closest('[data-search]'); if (!inp) return;
+      state.filters.q = inp.value;
+      state._focusSearch = true;
+      // Léger différé : sur un gros groupe, re-rendre le tableau à chaque
+      // touche saccaderait la frappe.
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(function () { render(); }, 160);
+    });
     root.addEventListener('change', function (e) {
       var sel = e.target.closest('select[data-filter]'); if (!sel) return;
+      state._focusSearch = false;
       var f = sel.getAttribute('data-filter'); state.filters[f] = sel.value;
       if (f === 'reseau') { state.filters.affaire = ''; state.filters.site = ''; }
       if (f === 'affaire') { state.filters.site = ''; }
       render();
     });
     root.addEventListener('click', function (e) {
+      if (!e.target.closest('[data-search]')) state._focusSearch = false;
       var create = e.target.closest('[data-action="create-user"]'); if (create) { modalCreate(); return; }
-      var reset = e.target.closest('[data-action="reset-filters"]'); if (reset) { state.filters = { reseau: '', affaire: '', site: '' }; render(); return; }
+      var reset = e.target.closest('[data-action="reset-filters"]'); if (reset) { state.filters = { reseau: '', affaire: '', site: '', role: '', q: '' }; render(); return; }
+      var clr = e.target.closest('[data-action="clear-search"]'); if (clr) { state.filters.q = ''; render(); return; }
       var grp = e.target.closest('[data-exp]'); if (grp) { var k = grp.getAttribute('data-exp'); state.expanded[k] = !isOpen(k); render(); return; }
       var mb = e.target.closest('[data-menu]'); if (mb) { e.stopPropagation(); var row = rowByKey(mb.getAttribute('data-menu')); if (row) openMenu(mb, row); return; }
     });
