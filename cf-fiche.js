@@ -43,6 +43,7 @@ if (state.original === undefined)      state.original = null;
 if (state.saving === undefined)        state.saving = false;
 if (state.error === undefined)         state.error = null;
 if (state.duplicate === undefined)     state.duplicate = null;
+if (state.dupAck === undefined)        state.dupAck = false;
 if (state.addressQuery === undefined)  state.addressQuery = '';
 if (state.addressSuggestions === undefined) state.addressSuggestions = [];
 if (state.addressLoading === undefined) state.addressLoading = false;
@@ -191,29 +192,86 @@ function validate() {
   return errors.length ? errors : null;
 }
 
+const DUP_SEUIL_AFFICHAGE = 40;   // en dessous, c'est un homonyme, pas un doublon
+
+const DUP_LIBELLES = {
+  siret_identique:      'même SIRET',
+  mobile_identique:     'même portable',
+  email_identique:      'même e-mail',
+  fixe_identique:       'même fixe',
+  nom_prenom_exact:     'même nom et prénom',
+  nom_prenom_inverses:  'nom et prénom inversés',
+  nom_trigram:          'nom très proche',
+  naissance_identique:  'même date de naissance',
+  naissance_differente: 'dates de naissance différentes',
+  insee_identique:      'même commune',
+  adresse_trigram:      'adresse très proche',
+  email_different:      'e-mails différents',
+  nature_differente:    'société contre particulier',
+  vin_commun:           'même véhicule'
+};
+function libelleSignal(k) { return DUP_LIBELLES[k] || k; }
+
 async function checkDuplicates() {
   const d = state.client;
-  const supabase = ctx.supabase;
-  const selectCols = 'IDVu, CIVILITE, NOM, PRENOM, EMAIL, TEl_MOB, idmultivu, code_postal, ville';
-  const cleanMob = cleanDigits(d.TEl_MOB);
-  if (cleanMob) {
-    const { data: dup } = await supabase.from('CLIENT').select(selectCols).eq('TEl_MOB', cleanMob).neq('IDVu', d.IDVu).limit(1).maybeSingle();
-    if (dup) return { field: 'TEl_MOB', label: 'Ce numéro de portable', client: dup };
+  if (!d) return null;
+  const payload = {
+    id_client: d.IDVu != null ? String(d.IDVu) : null,
+    nom:       d.NOM || null,
+    prenom:    d.PRENOM || null,
+    mobile:    d.TEl_MOB || null,
+    fixe:      d.TEL_FIXE || null,
+    email:     d.EMAIL || null,
+    cp:        d.code_postal || d.CP_VILLE || null,
+    insee:     d.code_insee || null,
+    adresse:   d.ADRESSE || null,
+    naissance: d.BIRTHDAY || null,
+    siret:     d.SIRET != null && d.SIRET !== '' ? String(d.SIRET) : null,
+    nature:    (d.idmultivu === 1 || d.idmultivu === '1') ? '1' : '0'
+  };
+  try {
+    const { data, error } = await ctx.supabase.rpc('client_doublons', { p_payload: payload });
+    if (error) { console.warn('[cf] client_doublons:', error.message); return null; }
+    const retenus = (data && data.candidats ? data.candidats : [])
+      .filter(c => (c.score || 0) >= DUP_SEUIL_AFFICHAGE);
+    if (!retenus.length) return null;
+    return { score: data.score, seuil: data.seuil, candidats: retenus };
+  } catch (e) {
+    // Une panne du contrôle de doublon ne doit jamais empêcher d'enregistrer.
+    console.warn('[cf] doublons indisponibles:', e && e.message);
+    return null;
   }
-  const e = cleanEmail(d.EMAIL);
-  if (e) {
-    const { data: dup } = await supabase.from('CLIENT').select(selectCols).ilike('EMAIL', e).neq('IDVu', d.IDVu).limit(1).maybeSingle();
-    if (dup) return { field: 'EMAIL', label: 'Cette adresse email', client: dup };
-  }
-  return null;
 }
 
-function dismissDuplicate() { state.duplicate = null; render(); }
-function viewDuplicate() {
-  if (!state.duplicate) return;
-  _writeVar(SELECTED_CLIENT_VAR_ID, Object.assign({}, state.duplicate.client));
+function dismissDuplicate() { state.duplicate = null; state.dupAck = false; render(); }
+
+function viewDuplicate(ev) {
+  const id = ev && ev.currentTarget && ev.currentTarget.getAttribute('data-cf-idvu');
+  if (!id) return;
+  _writeVar(SELECTED_CLIENT_VAR_ID, { IDVu: Number(id) });
   loadClient();
   render();
+}
+
+// Enregistre malgré l'alerte, et laisse une trace pour l'arbitrage.
+async function saveAnyway() {
+  const candidats = state.duplicate ? state.duplicate.candidats.slice() : [];
+  state.dupAck = true;
+  state.duplicate = null;
+  await saveEdit();
+  if (state.error) return;                       // l'enregistrement a échoué
+  const idvu = state.client && state.client.IDVu;
+  if (idvu == null) return;
+  for (const c of candidats) {
+    try {
+      await ctx.supabase.rpc('client_signaler_doublon', {
+        p_id_client_entrant:  idvu,
+        p_id_client_candidat: c.id_client,
+        p_score:  c.score,
+        p_detail: c.detail || {}
+      });
+    } catch (e) { console.warn('[cf] signalement doublon:', e && e.message); }
+  }
 }
 
 async function saveEdit() {
@@ -224,8 +282,10 @@ async function saveEdit() {
   state.duplicate = null;
   render();
   try {
-    const dup = await checkDuplicates();
-    if (dup) { state.duplicate = dup; state.saving = false; render(); return; }
+    if (!state.dupAck) {
+      const dup = await checkDuplicates();
+      if (dup) { state.duplicate = dup; state.saving = false; render(); return; }
+    }
     const supabase = ctx.supabase;
     const now = new Date().toISOString();
     const soc = isSoc();
@@ -262,6 +322,7 @@ async function saveEdit() {
     state.original = JSON.parse(JSON.stringify(updated));
     _writeVar(SELECTED_CLIENT_VAR_ID, Object.assign({}, updated));
     state.mode = 'view';
+    state.dupAck = false;
   } catch (e) {
     console.error('[cf] save', e);
     state.error = e.message || String(e);
@@ -410,6 +471,16 @@ const STYLE = `<style>
 #oropra-client-fiche .cf-duplicate-client{color:#2a5ea9;font-size:13px;line-height:1.5}
 #oropra-client-fiche .cf-duplicate-client strong{display:block;margin-bottom:2px}
 #oropra-client-fiche .cf-duplicate-actions{display:flex;gap:8px;justify-content:flex-end}
+#oropra-client-fiche .cf-duplicate-sub{font-size:12px;color:#8a6a3a;margin-top:2px}
+#oropra-client-fiche .cf-dup-card{background:#fff;border:1px solid #f0d9b5;border-radius:6px;padding:10px 12px;display:flex;flex-direction:column;gap:6px}
+#oropra-client-fiche .cf-dup-card-head{display:flex;justify-content:space-between;align-items:center;gap:10px}
+#oropra-client-fiche .cf-dup-card-head strong{font-size:14px;color:#1f2937}
+#oropra-client-fiche .cf-dup-score{font-family:ui-monospace,Menlo,monospace;font-size:12px;font-weight:600;color:#a85c0e;border:1px solid #e8b877;border-radius:4px;padding:1px 7px;white-space:nowrap}
+#oropra-client-fiche .cf-dup-card-body{font-size:12.5px;color:#6b7280}
+#oropra-client-fiche .cf-dup-veh{color:#2a5ea9;font-weight:500}
+#oropra-client-fiche .cf-dup-tags{display:flex;flex-wrap:wrap;gap:5px}
+#oropra-client-fiche .cf-dup-tag{font-size:11px;background:#fdf3e3;color:#a85c0e;border-radius:3px;padding:2px 7px}
+#oropra-client-fiche .cf-dup-open{align-self:flex-start;font-size:12px;padding:4px 10px}
 #oropra-client-fiche .cf-autocomplete-wrap{position:relative}
 #oropra-client-fiche .cf-suggestions{position:absolute;top:calc(100% + 4px);left:0;right:0;background:#fff;border:1px solid #d9e3f2;border-radius:6px;box-shadow:0 6px 20px rgba(42,94,169,.12);z-index:10;max-height:280px;overflow-y:auto}
 #oropra-client-fiche .cf-suggestion{padding:10px 12px;cursor:pointer;font-size:13px;color:#2a5ea9;border-bottom:1px solid #f0f4fa}
@@ -504,21 +575,42 @@ function renderAddressField() {
 
 function renderDuplicateBlock() {
   if (!state.duplicate) return '';
-  const c = state.duplicate.client;
-  const detail = [
-    `ID Client : ${esc(c.IDVu)}`,
-    c.EMAIL ? esc(c.EMAIL) : '',
-    c.TEl_MOB ? esc(c.TEl_MOB) : '',
-    [c.code_postal, c.ville].filter(Boolean).join(' ')
-  ].filter(Boolean).join(' — ');
+  const cands = state.duplicate.candidats || [];
+  if (!cands.length) return '';
+  const pluriel = cands.length > 1;
+
+  const cartes = cands.map(c => {
+    const a = c.apercu || {};
+    const nom = [a.civilite, a.nom, a.societe ? '' : a.prenom].filter(Boolean).join(' ');
+    const signaux = Object.keys(c.detail || {})
+      .filter(k => (c.detail[k] || 0) > 0)
+      .map(k => `<span class="cf-dup-tag">${esc(libelleSignal(k))}</span>`)
+      .join('');
+    const lieu = [a.code_postal, a.ville].filter(Boolean).join(' ');
+    const contact = [a.mobile, a.email].filter(Boolean).join(' · ');
+    const veh = a.vehicules > 0
+      ? `<span class="cf-dup-veh">${esc(a.vehicules)} véhicule${a.vehicules > 1 ? 's' : ''}</span>`
+      : '';
+    return `<div class="cf-dup-card">
+      <div class="cf-dup-card-head">
+        <strong>${esc(nom)}</strong>
+        <span class="cf-dup-score">${esc(c.score)}/100</span>
+      </div>
+      <div class="cf-dup-card-body">${esc(lieu)}${lieu && contact ? ' — ' : ''}${esc(contact)} ${veh}</div>
+      <div class="cf-dup-tags">${signaux}</div>
+      <button class="cf-btn cf-btn-ghost cf-dup-open" data-cf-action="view-duplicate" data-cf-idvu="${esc(c.id_client)}">${ICON_P}<span>Ouvrir cette fiche</span></button>
+    </div>`;
+  }).join('');
+
   return `<div class="cf-duplicate">
     <div class="cf-duplicate-head">${ICON_WARN}<div>
-      <div class="cf-duplicate-title">${esc(state.duplicate.label)} est déjà utilisé(e) par :</div>
-      <div class="cf-duplicate-client"><strong>${esc(clientFullName(c))}</strong>${detail}</div>
+      <div class="cf-duplicate-title">${pluriel ? 'Ces clients existent' : 'Ce client existe'} peut-être déjà</div>
+      <div class="cf-duplicate-sub">Vous pouvez enregistrer sans choisir : un administrateur vérifiera.</div>
     </div></div>
+    ${cartes}
     <div class="cf-duplicate-actions">
       <button class="cf-btn cf-btn-ghost" data-cf-action="dismiss-duplicate">Modifier ma saisie</button>
-      <button class="cf-btn cf-btn-primary" data-cf-action="view-duplicate">${ICON_P}<span>Voir ce client</span></button>
+      <button class="cf-btn cf-btn-primary" data-cf-action="save-anyway"${state.saving ? ' disabled' : ''}>Enregistrer quand même</button>
     </div>
   </div>`;
 }
@@ -611,6 +703,7 @@ function bindEvents() {
   root.querySelectorAll('[data-cf-action="save-edit"]').forEach(el => el.addEventListener('click', saveEdit));
   root.querySelectorAll('[data-cf-action="dismiss-duplicate"]').forEach(el => el.addEventListener('click', dismissDuplicate));
   root.querySelectorAll('[data-cf-action="view-duplicate"]').forEach(el => el.addEventListener('click', viewDuplicate));
+  root.querySelectorAll('[data-cf-action="save-anyway"]').forEach(el => el.addEventListener('click', saveAnyway));
   root.querySelectorAll('[data-cf-action="pick-address"]').forEach(el => el.addEventListener('click', () => {
     const idx = Number(el.getAttribute('data-idx'));
     if (state.addressSuggestions[idx]) applyAddressSuggestion(state.addressSuggestions[idx]);
