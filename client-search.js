@@ -307,30 +307,46 @@ OD.define('client-search', {
     return errors.length ? errors : null;
   }
 
+  // Détection déléguée à oropra-doublons (module partagé, chargé par le socle).
+  // Si le module manque, on ne bloque pas : mieux vaut un doublon qu'un
+  // vendeur empêché de créer sa fiche.
+  function odDoublons() { return window.oropraDoublons || null; }
+
   async function checkDuplicates() {
     if (!state.modal) return null;
-    const d = state.modal.data;
-    const supabase = ctx.supabase;
-    const selectCols = 'IDVu, CIVILITE, NOM, PRENOM, EMAIL, TEl_MOB, idmultivu, code_postal, ville';
-    const cleanMob = cleanDigits(d.TEl_MOB);
-    if (cleanMob) {
-      const { data: dup } = await supabase.from('CLIENT').select(selectCols).eq('TEl_MOB', cleanMob).limit(1).maybeSingle();
-      if (dup) return { field: 'TEl_MOB', label: 'Ce numéro de portable', client: dup };
-    }
-    const e = cleanEmail(d.EMAIL);
-    if (e) {
-      const { data: dup } = await supabase.from('CLIENT').select(selectCols).ilike('EMAIL', e).limit(1).maybeSingle();
-      if (dup) return { field: 'EMAIL', label: 'Cette adresse email', client: dup };
-    }
-    return null;
+    const od = odDoublons();
+    if (!od) { console.warn('[crs] oropra-doublons absent'); return null; }
+    return od.check(ctx.supabase, state.modal.data, { societe: state.modal.isSoc });
   }
 
-  function dismissDuplicate() { if (state.modal) state.modal.duplicate = null; render(); }
-  function viewDuplicate() {
-    if (!state.modal || !state.modal.duplicate) return;
-    selectRow(state.modal.duplicate.client);
+  function dismissDuplicate() {
+    if (state.modal) { state.modal.duplicate = null; state.modal.dupAck = false; }
+    render();
+  }
+
+  async function viewDuplicate(ev) {
+    const id = ev && ev.currentTarget && ev.currentTarget.getAttribute('data-od-idvu');
+    if (!id) return;
+    const { data } = await ctx.supabase.from('CLIENT').select('*').eq('IDVu', Number(id)).maybeSingle();
+    if (!data) {
+      // Hors du périmètre du vendeur : la RLS n'a rien renvoyé.
+      if (state.modal) state.modal.error = "Cette fiche existe mais n'est pas dans votre périmètre. Prévenez un administrateur.";
+      render();
+      return;
+    }
+    selectRow(data);
     state.modal = null;
     render();
+  }
+
+  // Créer malgré l'alerte : on enregistre, et on laisse une trace.
+  async function saveAnyway() {
+    if (!state.modal) return;
+    const cands = state.modal.duplicate ? state.modal.duplicate.candidats.slice() : [];
+    state.modal.dupAck = true;
+    state.modal.duplicate = null;
+    state.crsDupEnAttente = cands;
+    await saveCreation();
   }
 
   async function saveCreation() {
@@ -342,12 +358,21 @@ OD.define('client-search', {
     state.modal.duplicate = null;
     render();
     try {
-      const dup = await checkDuplicates();
-      if (dup) { state.modal.duplicate = dup; state.modal.saving = false; render(); return; }
+      if (!state.modal.dupAck) {
+        const dup = await checkDuplicates();
+        if (dup) { state.modal.duplicate = dup; state.modal.saving = false; render(); return; }
+      }
       const supabase = ctx.supabase;
       const now = new Date().toISOString();
-      const { data: maxRow } = await supabase.from('CLIENT').select('IDVu').order('IDVu', { ascending: false }).limit(1).maybeSingle();
-      const nextIDVu = (maxRow && maxRow.IDVu != null ? Number(maxRow.IDVu) : 0) + 1;
+      // Numéro de fiche sous verrou : deux vendeurs simultanés ne peuvent
+      // plus tirer le même.
+      const od = odDoublons();
+      const nextIDVu = od
+        ? await od.prochainIdvu(supabase)
+        : (await (async () => {
+            const { data: maxRow } = await supabase.from('CLIENT').select('IDVu').order('IDVu', { ascending: false }).limit(1).maybeSingle();
+            return (maxRow && maxRow.IDVu != null ? Number(maxRow.IDVu) : 0) + 1;
+          })());
       const isSoc = state.modal.isSoc;
       const payload = Object.assign({}, state.modal.data, {
         IDVu: nextIDVu, CreationDate: now, UpdateDate: now,
@@ -367,6 +392,12 @@ OD.define('client-search', {
       if (payload.BIRTHDAY === '') payload.BIRTHDAY = null;
       const { data: inserted, error } = await supabase.from('CLIENT').insert(payload).select('*').single();
       if (error) throw error;
+      // Le vendeur a créé malgré l'alerte : la file d'arbitrage le saura.
+      if (state.crsDupEnAttente && state.crsDupEnAttente.length) {
+        const odt = odDoublons();
+        if (odt) { try { await odt.signaler(supabase, inserted.IDVu, state.crsDupEnAttente); } catch (e) {} }
+        state.crsDupEnAttente = null;
+      }
       if (isSoc && payload.SIRET) {
         try {
           await supabase.functions.invoke(EDGE_FN_SIRENE_UPSERT, {
@@ -560,6 +591,20 @@ OD.define('client-search', {
 #oropra-client-search .crs-modal-grid .two{grid-column:span 2}
 #oropra-client-search .crs-modal-footer{padding:16px 24px;border-top:1px solid #f0f4fa;display:flex;justify-content:flex-end;gap:8px}
 #oropra-client-search .crs-modal-error{color:#c63a3a;font-size:13px;padding:11px 14px;background:#fdf0f0;border-radius:6px;margin-bottom:16px;border:1px solid #f5d0d0}
+#oropra-client-search .crs-dup{background:#fff7e6;border:1px solid #f5c785;border-radius:8px;padding:16px;margin-bottom:18px;display:flex;flex-direction:column;gap:12px}
+#oropra-client-search .crs-dup-head{display:flex;gap:10px;align-items:flex-start;color:#a85c0e}
+#oropra-client-search .crs-dup-title{font-size:13px;font-weight:600}
+#oropra-client-search .crs-dup-sub{font-size:12px;color:#8a6a3a;margin-top:2px}
+#oropra-client-search .crs-dup-card{background:#fff;border:1px solid #f0d9b5;border-radius:6px;padding:10px 12px;display:flex;flex-direction:column;gap:6px}
+#oropra-client-search .crs-dup-card-head{display:flex;justify-content:space-between;align-items:center;gap:10px}
+#oropra-client-search .crs-dup-card-head strong{font-size:14px;color:#1f2937}
+#oropra-client-search .crs-dup-score{font-family:ui-monospace,Menlo,monospace;font-size:12px;font-weight:600;color:#a85c0e;border:1px solid #e8b877;border-radius:4px;padding:1px 7px;white-space:nowrap}
+#oropra-client-search .crs-dup-card-body{font-size:12.5px;color:#6b7280}
+#oropra-client-search .crs-dup-veh{color:#2a5ea9;font-weight:500}
+#oropra-client-search .crs-dup-tags{display:flex;flex-wrap:wrap;gap:5px}
+#oropra-client-search .crs-dup-tag{font-size:11px;background:#fdf3e3;color:#a85c0e;border-radius:3px;padding:2px 7px}
+#oropra-client-search .crs-dup-open{align-self:flex-start;font-size:12px;padding:4px 10px}
+#oropra-client-search .crs-dup-actions{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
 #oropra-client-search .crs-modal-duplicate{background:#fff7e6;border:1px solid #f5c785;border-radius:8px;padding:16px;margin-bottom:18px;display:flex;flex-direction:column;gap:12px}
 #oropra-client-search .crs-modal-duplicate-head{display:flex;gap:10px;align-items:flex-start;color:#a85c0e}
 #oropra-client-search .crs-modal-duplicate-title{font-size:13px;font-weight:600;margin-bottom:6px}
@@ -789,23 +834,12 @@ OD.define('client-search', {
   function renderDuplicateBlock() {
     const m = state.modal;
     if (!m.duplicate) return '';
-    const c = m.duplicate.client;
-    const detail = [
-      `ID Client : ${esc(c.IDVu)}`,
-      c.EMAIL ? esc(c.EMAIL) : '',
-      c.TEl_MOB ? esc(c.TEl_MOB) : '',
-      [c.code_postal, c.ville].filter(Boolean).join(' ')
-    ].filter(Boolean).join(' — ');
-    return `<div class="crs-modal-duplicate">
-    <div class="crs-modal-duplicate-head">${ICON_WARN}<div>
-      <div class="crs-modal-duplicate-title">${esc(m.duplicate.label)} est déjà utilisé(e) par :</div>
-      <div class="crs-modal-duplicate-client"><strong>${esc(clientFullName(c))}</strong>${detail}</div>
-    </div></div>
-    <div class="crs-modal-duplicate-actions">
-      <button class="crs-btn crs-btn-ghost" data-crs-action="dismiss-duplicate">Modifier ma saisie</button>
-      <button class="crs-btn crs-btn-primary" data-crs-action="view-duplicate">${ICON_P}<span>Voir ce client</span></button>
-    </div>
-  </div>`;
+    const od = odDoublons();
+    if (!od) return '';
+    return od.html(m.duplicate, 'crs', {
+      saving: m.saving,
+      libelleForce: 'Créer quand même'
+    });
   }
 
   function renderModal() {
@@ -927,8 +961,9 @@ OD.define('client-search', {
     root.querySelectorAll('[data-crs-action="close-modal"]').forEach(el => el.addEventListener('click', closeModal));
     root.querySelectorAll('[data-crs-action="close-modal-bg"]').forEach(el => el.addEventListener('click', (e) => { if (e.target === el) closeModal(); }));
     root.querySelectorAll('[data-crs-action="save-modal"]').forEach(el => el.addEventListener('click', saveCreation));
-    root.querySelectorAll('[data-crs-action="dismiss-duplicate"]').forEach(el => el.addEventListener('click', dismissDuplicate));
-    root.querySelectorAll('[data-crs-action="view-duplicate"]').forEach(el => el.addEventListener('click', viewDuplicate));
+    root.querySelectorAll('[data-crs-action="dismiss-duplicate"], [data-od-action="dup-dismiss"]').forEach(el => el.addEventListener('click', dismissDuplicate));
+    root.querySelectorAll('[data-crs-action="view-duplicate"], [data-od-action="dup-open"]').forEach(el => el.addEventListener('click', viewDuplicate));
+    root.querySelectorAll('[data-od-action="dup-force"]').forEach(el => el.addEventListener('click', saveAnyway));
     root.querySelectorAll('[data-crs-action="pick-address"]').forEach(el => el.addEventListener('click', () => {
       const idx = Number(el.getAttribute('data-idx'));
       if (state.modal && state.modal.addressSuggestions[idx]) applyAddressSuggestion(state.modal.addressSuggestions[idx]);
