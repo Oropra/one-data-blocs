@@ -33,6 +33,7 @@ OD.define('admin', {
   var FN_RESET   = SUPA_URL + '/functions/v1/admin-reset-password';
   var FN_INVITE  = SUPA_URL + '/functions/v1/email-invite-create';
   var FN_CREATE  = SUPA_URL + '/functions/v1/admin-create-user';
+  var FN_UPDATE  = SUPA_URL + '/functions/v1/admin-update-user';    // si absente -> repli JS
   var FN_US_UP   = SUPA_URL + '/functions/v1/admin-user-site-upsert';
   var FN_US_DEL  = SUPA_URL + '/functions/v1/admin-user-site-delete';
   var FN_PERI    = SUPA_URL + '/functions/v1/admin-user-perimeter-set';
@@ -51,8 +52,8 @@ OD.define('admin', {
   /* Portefeuille redistribue a la desactivation. CYCLE_COM en est exclu :
      c'est un rattachement client/site, pas un portefeuille commercial. */
   var PORTFOLIO = [
-    { table: 'RDV',         label: 'RDV a venir',      futureOnly: true },
-    { table: 'PROPALE_BDC', label: 'Propales et BDC',  futureOnly: false }
+    { tables: ['RDV', 'rdv', 'Rdv', 'RENDEZ_VOUS', 'rendez_vous'], label: 'RDV a venir', futureOnly: true },
+    { tables: ['PROPALE_BDC', 'propale_bdc', 'PROPALE', 'propale', 'Propale_BDC'], label: 'Propales et BDC', futureOnly: false }
   ];
   var TABLE_USER = 'USER';
   var TABLE_ROLE = 'ROLE';
@@ -330,7 +331,24 @@ OD.define('admin', {
       });
     } catch (e) {}
   }
+  /* Mise à jour de fiche.
+   * Chemin normal : edge function admin-update-user (service_role). C'est le
+   * seul chemin qui met AUSSI à jour auth.users quand l'email change — sans
+   * quoi la personne continuerait à se connecter avec son ancienne adresse.
+   * Repli direct conservé pour les tenants où la function n'est pas déployée
+   * et où l'UPDATE sur USER est encore accordé à authenticated. */
   async function updateProfile(idUser, data) {
+    var srv = await callFnRaw(FN_UPDATE, {
+      target_user_id: idUser,
+      prenom: data.prenom, nom: data.nom, email: data.email,
+      telephone: data.telephone, voip_number: data.voip,
+      matricule: data.matricule, fonction: data.fonction, vn_vo: data.vnvo,
+      id_site_main: data.id_site_main, id_role: data.id_role ? Number(data.id_role) : undefined,
+      reset_password: !!data.reset_password, revoke_sessions: !!data.revoke_sessions
+    });
+    if (srv.ok) return { data: srv.data };
+    if (srv.status !== 404 && srv.status !== 0) return { error: { message: srv.error } };
+
     var upd = { prenom: data.prenom, nom: data.nom, email: data.email, N_de_telephone: data.telephone, voip_number: data.voip };
     // Colonnes dont le nom exact varie : on les résout sur le schéma réel.
     var cols = await tableCols(TABLE_USER);
@@ -342,7 +360,16 @@ OD.define('admin', {
       var cS = pickCol(cols, PRINCIPAL_FIELDS); if (cS && data.id_site_main !== undefined) upd[cS] = data.id_site_main == null ? null : Number(data.id_site_main);
       var cR = pickCol(cols, USER_ROLE_FIELDS); if (cR && data.id_role !== undefined && data.id_role) upd[cR] = Number(data.id_role);
     }
-    return sb().from(TABLE_USER).update(upd).eq('ID_User', idUser);
+    var r = await sb().from(TABLE_USER).update(upd).eq('ID_User', idUser);
+    if (r.error && /permission denied/i.test(String(r.error.message || ''))) {
+      return { error: { message: 'Écriture directe refusée sur ' + TABLE_USER + ' (droits retirés) et edge function admin-update-user absente. Déployez-la : c\'est le chemin prévu pour ces modifications.' } };
+    }
+    if (!r.error && data.email) {
+      // Le repli n'a pas touché auth.users : on le dit plutôt que de laisser
+      // croire que l'identifiant de connexion a suivi.
+      return { data: r.data, warn: 'Email modifié dans ' + TABLE_USER + ' uniquement — l\'identifiant de connexion reste inchangé tant que admin-update-user n\'est pas déployée.' };
+    }
+    return r;
   }
   async function callFn(url, payload) {
     var token = await accessToken(); if (!token) return { error: 'Session expirée, reconnectez-vous.' };
@@ -827,16 +854,60 @@ OD.define('admin', {
       mp.loaded = true; mpDraw();
     })();
 
+    /* Changer l'email, c'est changer l'identifiant de connexion : sessions
+     * coupées, mails envoyés. Ça ne se déclenche pas au même clic qu'une
+     * correction de numéro de téléphone. */
+    var identityConfirmed = false;
     ov.querySelector('[data-save]').onclick = async function () {
-      var btn = this; btn.disabled = true; btn.textContent = 'Enregistrement…';
+      var btn = this;
       var g = function (f) { var e = ov.querySelector('[data-f="' + f + '"]'); return e ? e.value.trim() : ''; };
-      var data = { prenom: g('prenom'), nom: g('nom'), email: g('email'), telephone: g('telephone'), voip: g('voip'), matricule: g('matricule'), fonction: g('fonction'), vnvo: g('vnvo') };
+      var slot = ov.querySelector('.oda-err-slot');
+      var oldEmail = String(row.email || '').toLowerCase(), newEmail = g('email').toLowerCase();
+      var emailChange = !!newEmail && newEmail !== oldEmail;
+
+      if (emailChange && !identityConfirmed) {
+        identityConfirmed = true;
+        slot.innerHTML = '<div class="oda-warn"><b>Changement d\'identifiant de connexion.</b>'
+          + '<div style="margin-top:6px">' + esc(fullName(row)) + ' se connectera désormais avec <b>' + esc(newEmail) + '</b>. Sa session en cours reste valable : la nouvelle adresse ne sera demandée qu\'à la prochaine connexion. Un message part vers la nouvelle adresse et une alerte vers l\'ancienne.</div>'
+          + '<label style="display:flex;align-items:center;gap:8px;margin-top:8px;font-size:12.5px"><input type="checkbox" data-f="newpwd" style="width:auto"> Attribuer aussi un nouveau mot de passe temporaire</label>'
+          + '<label style="display:flex;align-items:center;gap:8px;margin-top:4px;font-size:12.5px"><input type="checkbox" data-f="revoke" style="width:auto"> Fermer ses sessions en cours <span style="color:var(--text-mut)">— si le compte change de mains</span></label></div>';
+        btn.textContent = 'Confirmer le changement';
+        btn.classList.add('danger');
+        return;
+      }
+
+      btn.disabled = true; btn.textContent = 'Enregistrement…';
+      var np = ov.querySelector('[data-f="newpwd"]'), rv = ov.querySelector('[data-f="revoke"]');
+      var data = { prenom: g('prenom'), nom: g('nom'), email: g('email'), telephone: g('telephone'), voip: g('voip'), matricule: g('matricule'), fonction: g('fonction'), vnvo: g('vnvo'), reset_password: !!(np && np.checked), revoke_sessions: !!(rv && rv.checked) };
       // On n'écrit le périmètre principal que si la lecture a abouti : sinon on
       // risquerait d'effacer une valeur qu'on n'a jamais affichée.
       if (mp.loaded) { data.id_site_main = mp.id_site; data.id_role = mp.id_role; }
       var res = await updateProfile(row.id_user, data);
-      if (res && res.error) { btn.disabled = false; btn.textContent = 'Enregistrer'; ov.querySelector('.oda-err-slot').innerHTML = '<div class="oda-error">' + esc(res.error.message || 'Erreur d\'enregistrement.') + '</div>'; return; }
-      ov.remove(); toast('Profil mis à jour'); await loadUsers();
+      if (res && res.error) { btn.disabled = false; btn.textContent = emailChange ? 'Confirmer le changement' : 'Enregistrer'; slot.innerHTML = '<div class="oda-error">' + esc(res.error.message || 'Erreur d\'enregistrement.') + '</div>'; return; }
+
+      var d = (res && res.data) || {};
+      // Rien d'utile à montrer : on ferme, comme avant.
+      if (!d.email_login_updated && !res.warn) { ov.remove(); toast('Profil mis à jour'); await loadUsers(); return; }
+
+      var h = '<p class="oda-note">Fiche enregistrée.</p>';
+      if (res.warn) h += '<div class="oda-warn">' + esc(res.warn) + '</div>';
+      if (d.email_login_updated) {
+        h += '<div class="oda-mbox"><dl>'
+          + '<dt>Nouvel identifiant</dt><dd>' + esc(g('email')) + '</dd>'
+          + (data.revoke_sessions ? '<dt>Sessions fermées</dt><dd>' + esc(String(d.sessions_revoked != null ? d.sessions_revoked : 0)) + '</dd>' : '<dt>Session en cours</dt><dd>conservée</dd>')
+          + '<dt>Messages envoyés</dt><dd>' + ((d.notified && d.notified.length) ? esc(d.notified.join(', ')) : '<span class="oda-badge alert">aucun</span>') + '</dd>'
+          + '</dl></div>';
+        if (d.temp_password) h += '<p class="oda-note" style="margin-top:10px">Mot de passe temporaire :</p><div class="oda-secret"><code>' + esc(d.temp_password) + '</code><button class="oda-iconbtn" data-copy title="Copier">' + ICON.copy + '</button></div>';
+        if (d.notify_error) h += '<div class="oda-warn">' + esc(d.notify_error) + '</div>';
+        if (d.action_link) h += '<p class="oda-note" style="margin-top:10px">Aucun mail n\'est parti. Transmettez ce lien de réinitialisation (valable 24 h) par un autre canal :</p><div class="oda-secret"><code style="word-break:break-all">' + esc(d.action_link) + '</code><button class="oda-iconbtn" data-copy title="Copier">' + ICON.copy + '</button></div>';
+      }
+      ov.querySelector('.oda-modal-body').innerHTML = h;
+      ov.querySelector('.oda-modal-foot').innerHTML = '<button class="oda-btn primary" data-x>Fermer</button>';
+      ov.querySelectorAll('[data-x]').forEach(function (b) { b.onclick = function () { ov.remove(); }; });
+      ov.querySelectorAll('[data-copy]').forEach(function (b) {
+        b.onclick = function () { var c = b.previousElementSibling; copyText(c ? c.textContent : ''); toast('Copié'); };
+      });
+      await loadUsers();
     };
   }
 
@@ -981,20 +1052,58 @@ OD.define('admin', {
   }
   function todayISO() { return new Date().toISOString().slice(0, 10); }
 
-  /* ---- portefeuille : inventaire et transfert -------------------------- */
+  /* ---- portefeuille : inventaire et transfert --------------------------
+   * Détection SANS lecture de données. tableCols() infère les colonnes depuis
+   * une ligne : sur une table vide ou filtrée par RLS il renvoie [], et toute
+   * colonne paraît alors « non identifiée ». On interroge donc PostgREST
+   * directement : une table absente répond 42P01, une colonne absente 42703,
+   * un refus de droits 42501 — trois diagnostics distincts, indépendants du
+   * contenu. */
+  function pgCode(err) { return String((err && (err.code || err.message)) || ''); }
+  function isMissingRelation(err) { return /42P01|relation .* does not exist|could not find the table/i.test(pgCode(err) + ' ' + String(err && err.message || '')); }
+  function isMissingColumn(err) { return /42703|column .* does not exist|could not find the .* column/i.test(pgCode(err) + ' ' + String(err && err.message || '')); }
+  function isDenied(err) { return /42501|permission denied|not authorized/i.test(pgCode(err) + ' ' + String(err && err.message || '')); }
+
+  var tableProbeCache = {};
+  async function resolveTable(cands) {
+    var key = cands.join('|');
+    if (Object.prototype.hasOwnProperty.call(tableProbeCache, key)) return tableProbeCache[key];
+    var out = { table: null, reason: 'table introuvable (essayé : ' + cands.join(', ') + ')' };
+    for (var i = 0; i < cands.length; i++) {
+      var r = await sb().from(cands[i]).select('*', { head: true, count: 'exact' });
+      if (!r.error) { out = { table: cands[i], reason: null }; break; }
+      if (isMissingRelation(r.error)) continue;
+      if (isDenied(r.error)) { out = { table: cands[i], reason: 'lecture refusée sur ' + cands[i] + ' (droits ou RLS)' }; break; }
+      out = { table: cands[i], reason: r.error.message }; break;
+    }
+    tableProbeCache[key] = out;
+    return out;
+  }
+  async function resolveCol(table, cands) {
+    for (var i = 0; i < cands.length; i++) {
+      var r = await sb().from(table).select(cands[i], { head: true, count: 'exact' });
+      if (!r.error) return { col: cands[i], reason: null };
+      if (isMissingColumn(r.error)) continue;
+      return { col: null, reason: r.error.message };
+    }
+    return { col: null, reason: 'colonne propriétaire introuvable (essayé : ' + cands.join(', ') + ')' };
+  }
+
   async function scanPortfolio(idUser) {
     var out = [];
     for (var i = 0; i < PORTFOLIO.length; i++) {
-      var p = PORTFOLIO[i], cols = await tableCols(p.table);
-      if (cols === null) { out.push({ def: p, available: false, count: 0, reason: 'table absente ou lecture refusée' }); continue; }
-      var owner = pickCol(cols, OWNER_FIELDS);
-      if (!owner) { out.push({ def: p, available: false, count: 0, reason: 'colonne propriétaire non identifiée' }); continue; }
-      var dateCol = p.futureOnly ? pickCol(cols, DATE_FIELDS) : null;
-      var q = sb().from(p.table).select('*', { count: 'exact', head: true }).eq(owner, idUser);
+      var p = PORTFOLIO[i];
+      var t = await resolveTable(p.tables);
+      if (!t.table || t.reason) { out.push({ def: p, available: false, count: 0, reason: t.reason }); continue; }
+      var o = await resolveCol(t.table, OWNER_FIELDS);
+      if (!o.col) { out.push({ def: p, available: false, count: 0, reason: o.reason }); continue; }
+      var dateCol = null;
+      if (p.futureOnly) { var d = await resolveCol(t.table, DATE_FIELDS); dateCol = d.col; }
+      var q = sb().from(t.table).select('*', { count: 'exact', head: true }).eq(o.col, idUser);
       if (dateCol) q = q.gte(dateCol, todayISO());
       var r = await q;
       if (r.error) { out.push({ def: p, available: false, count: 0, reason: r.error.message }); continue; }
-      out.push({ def: p, available: true, owner: owner, dateCol: dateCol, count: r.count || 0, reason: null });
+      out.push({ def: p, table: t.table, available: true, owner: o.col, dateCol: dateCol, count: r.count || 0, reason: null });
     }
     return out;
   }
@@ -1004,7 +1113,7 @@ OD.define('admin', {
       var s = scan[i];
       if (!s.available || !s.count) continue;
       var upd = {}; upd[s.owner] = toId;
-      var q = sb().from(s.def.table).update(upd).eq(s.owner, fromId);
+      var q = sb().from(s.table).update(upd).eq(s.owner, fromId);
       if (s.dateCol) q = q.gte(s.dateCol, todayISO());
       var r = await q;
       if (r.error) failed.push(s.def.label + ' (' + r.error.message + ')'); else moved += s.count;
@@ -1202,7 +1311,7 @@ OD.define('admin', {
       var box = ov.querySelector('.oda-scan'); if (!box) return;
       var total = scan.reduce(function (a, s) { return a + (s.available ? s.count : 0); }, 0);
       box.innerHTML = '<div class="oda-mbox"><dl>' + scan.map(function (s) {
-        return '<dt>' + esc(s.def.label) + '</dt><dd>' + (s.available ? String(s.count) : '<span class="oda-badge alert">indisponible</span> <span style="font-size:11px">' + esc(s.reason || '') + '</span>') + '</dd>';
+        return '<dt>' + esc(s.def.label) + '</dt><dd>' + (s.available ? String(s.count) : '<span class="oda-badge alert">Indisponible</span> <span style="font-size:11px">' + esc(s.reason || '') + '</span>') + '</dd>';
       }).join('') + '</dl></div>';
       var sc = ov.querySelector('.oda-succ');
       if (total > 0) {
