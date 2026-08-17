@@ -109,7 +109,7 @@ OD.define('admin', {
   var state = {
     rows: [], loading: true, error: null, isAdmin: null,
     filters: { reseau: '', affaire: '', site: '' },
-    expanded: {}, fonctionField: null, vnvoField: null, roles: []
+    expanded: {}, fonctionField: null, vnvoField: null, roles: [], topManagers: []
   };
   var root = null;
 
@@ -206,6 +206,18 @@ OD.define('admin', {
   + '.oda-mrow.active .dot{border-color:var(--blue-dk);background:radial-gradient(circle,var(--blue-dk) 0 4px,transparent 5px);}'
   + '.oda-mrow .nm{font-weight:600;color:var(--text-soft);font-size:13px;} .oda-mrow.active .nm{color:var(--blue-dk);}'
   + '.oda-mrow .rl{margin-left:auto;font-size:11px;color:var(--text-mut);}'
+  + '.oda-mrow .vnvo{font-size:10px;font-weight:700;letter-spacing:.4px;padding:2px 7px;border-radius:20px;background:var(--blue-bg);color:var(--blue-dk);flex:0 0 auto;}'
+  + '.oda-mrow .rl + .vnvo{margin-left:0;}'
+  + '.oda-mgr-empty{border:1px dashed var(--grey-border);border-radius:8px;padding:10px 12px;font-size:12.5px;color:var(--text-mut);background:var(--bg);}'
+  + '.oda-link{background:none;border:0;padding:0;margin-top:6px;color:var(--blue-dk);font-size:12px;font-weight:600;cursor:pointer;text-decoration:underline;}'
+  + '.oda-star{color:var(--red-soft);margin-left:3px;font-weight:700;}'
+  + '.oda-reqbox{margin-top:16px;border:1px solid var(--border);border-radius:10px;background:var(--bg);padding:10px 12px;}'
+  + '.oda-reqbox h4{margin:0 0 8px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-mut);}'
+  + '.oda-reqlist{display:flex;flex-wrap:wrap;gap:7px 16px;}'
+  + '.oda-reqitem{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-mut);}'
+  + '.oda-reqitem .ck{width:15px;height:15px;border-radius:50%;border:1.5px solid var(--grey-border);background:var(--card);display:inline-flex;align-items:center;justify-content:center;font-size:10px;line-height:1;color:#fff;flex:0 0 auto;}'
+  + '.oda-reqitem.ok{color:var(--text-soft);font-weight:600;} .oda-reqitem.ok .ck{background:var(--green);border-color:var(--green);}'
+  + '.oda-btn[disabled]{opacity:.45;cursor:not-allowed;}'
   + '.oda-assign{display:flex;flex-direction:column;gap:10px;margin-bottom:14px;}'
   + '.oda-acard{border:1px solid var(--border);border-radius:12px;padding:12px 14px;background:var(--card);}'
   + '.oda-acard .crumb{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:13px;color:var(--text-soft);margin-bottom:8px;}'
@@ -303,6 +315,17 @@ OD.define('admin', {
       }).filter(function (r) { return r.id != null; }).sort(function (a, b) { return byLocale(a.label, b.label); });
     } catch (e) {}
   }
+  // Directeurs de groupe : N+1 universel, même sans ligne USER_SITE.
+  async function loadTopManagers() {
+    try {
+      var c = sb(); if (!c) return;
+      var res = await c.from(TABLE_USER).select('ID_User, prenom, nom, ID_Role, VN_VO').eq('ID_Role', 8);
+      if (res.error || !res.data) return;
+      state.topManagers = res.data.map(function (u) {
+        return { id_user: Number(u.ID_User), name: [u.prenom, u.nom].filter(Boolean).join(' ') || ('#' + u.ID_User), role_id: 8, role: roleLabelOf(8) || 'Directeur de groupe', vnvo: u.VN_VO || '' };
+      });
+    } catch (e) {}
+  }
   async function updateProfile(idUser, data) {
     return sb().from(TABLE_USER).update({ prenom: data.prenom, nom: data.nom, email: data.email, N_de_telephone: data.telephone, voip_number: data.voip }).eq('ID_User', idUser);
   }
@@ -368,14 +391,147 @@ OD.define('admin', {
     });
     return out.sort(function (a, b) { return byLocale(a.site, b.site); });
   }
-  function managersOnSite(idSite) {
+  /* ==================================================================== *
+   *  HIÉRARCHIE DES RÔLES — même modèle que modalPerimetre.
+   *  Rang : Vendeur < Chef des ventes < Directeur de site < Dir. plaque
+   *         < Dir. marque < Dir. groupe < Admin (hors chaîne).
+   *  Un manager n'est proposé que si son rang est STRICTEMENT supérieur au
+   *  rôle qu'on attribue : un vendeur n'apparaît donc jamais comme N+1.
+   * ==================================================================== */
+  var ROLE_RANK = { 4: 0, 3: 1, 2: 2, 6: 3, 7: 4, 8: 5, 1: 6 };
+  var RANK_BY_LABEL = [
+    [/vendeur|commercial|conseiller/i, 0],
+    [/chef\s*(des)?\s*vente/i, 1],
+    [/plaque/i, 3],
+    [/marque/i, 4],
+    [/groupe/i, 5],
+    [/admin/i, 6],
+    [/directeur|direction|dg\b/i, 2]
+  ];
+  function rankFromLabel(lbl) {
+    if (!lbl) return null;
+    for (var i = 0; i < RANK_BY_LABEL.length; i++) if (RANK_BY_LABEL[i][0].test(String(lbl))) return RANK_BY_LABEL[i][1];
+    return null;
+  }
+  function roleLabelOf(id) { var r = (state.roles || []).filter(function (x) { return String(x.id) === String(id); })[0]; return r ? r.label : ''; }
+  function roleIdOfLabel(lbl) { if (!lbl) return null; var m = (state.roles || []).filter(function (r) { return String(r.label).toLowerCase() === String(lbl).toLowerCase(); })[0]; return m ? m.id : null; }
+  function roleRank(id, label) {
+    var n = Number(id);
+    if (Number.isFinite(n) && ROLE_RANK[n] != null) return ROLE_RANK[n];
+    return rankFromLabel(label || roleLabelOf(id));
+  }
+  // rôle "global" d'une ligne (celui qui porte la couverture réseau/affaire)
+  function rowRoleId(r) {
+    var c = [r.user_role_id, r.id_role, r.ID_Role, r.site_role_id, r.role_id].filter(function (x) { return x != null; })[0];
+    if (c != null) return Number(c);
+    return roleIdOfLabel(r.user_role_name || r.site_role_name);
+  }
+  function rowVnvo(r) { for (var i = 0; i < VNVO_FIELDS.length; i++) { var v = r[VNVO_FIELDS[i]]; if (v != null && v !== '') return String(v); } return ''; }
+
+  // id_site -> { affaire, reseau } d'après le référentiel des sites
+  function siteParents() {
+    var P = {};
+    sitesRef().forEach(function (s) {
+      if (s.id_site == null) return;
+      P[Number(s.id_site)] = { affaire: String(s.id_affaire != null ? s.id_affaire : s.affaire), reseau: s.reseau || null };
+    });
+    return P;
+  }
+  // index des utilisateurs : rôle global + périmètres couverts (sites/affaires/réseaux)
+  function userIndex() {
+    var P = siteParents(), idx = {};
+    state.rows.forEach(function (r) {
+      if (r.id_user == null) return;
+      var id = Number(r.id_user);
+      if (!idx[id]) idx[id] = {
+        id_user: id, name: [r.prenom, r.nom].filter(Boolean).join(' ') || ('#' + id),
+        role_id: rowRoleId(r), role: r.user_role_name || r.site_role_name || '', vnvo: rowVnvo(r),
+        sites: {}, affaires: {}, reseaux: {}
+      };
+      if (!idx[id].vnvo) idx[id].vnvo = rowVnvo(r);
+      if (r.id_site != null) {
+        idx[id].sites[Number(r.id_site)] = 1;
+        var pp = P[Number(r.id_site)];
+        if (pp) { if (pp.affaire != null) idx[id].affaires[pp.affaire] = 1; if (pp.reseau) idx[id].reseaux[pp.reseau] = 1; }
+      }
+    });
+    // directeurs de groupe (N+1 universel) : ils n'ont pas forcément de ligne USER_SITE
+    (state.topManagers || []).forEach(function (u) {
+      if (idx[u.id_user]) return;
+      idx[u.id_user] = { id_user: u.id_user, name: u.name, role_id: u.role_id, role: u.role || roleLabelOf(u.role_id), vnvo: u.vnvo || '', sites: {}, affaires: {}, reseaux: {} };
+    });
+    return idx;
+  }
+
+  /**
+   * Candidats N+1 pour (site, rôle attribué).
+   * Chaîne exacte : dir. site → a une ligne sur CE site ; dir. plaque → couvre
+   * l'AFFAIRE ; dir. marque → couvre le RÉSEAU ; dir. groupe → partout.
+   * Trié du plus proche au plus haut.
+   */
+  function managerCandidatesForSite(idSite, roleId, excludeUserId) {
+    if (idSite == null) return [];
+    var rk = roleRank(roleId); if (rk == null) rk = -1;
+    var P = siteParents(), pp = P[Number(idSite)] || {}, idx = userIndex(), out = [];
+    Object.keys(idx).forEach(function (k) {
+      var u = idx[k];
+      if (excludeUserId != null && String(u.id_user) === String(excludeUserId)) return;
+      if (Number(u.role_id) === 1) return;                       // admin : hors chaîne
+      var ur = roleRank(u.role_id, u.role);
+      if (ur == null || ur <= rk) return;                        // rang strictement supérieur
+      var ok;
+      if (Number(u.role_id) === 8) ok = true;
+      else if (Number(u.role_id) === 7) ok = !!(pp.reseau && u.reseaux[pp.reseau]);
+      else if (Number(u.role_id) === 6) ok = !!(pp.affaire != null && u.affaires[pp.affaire]);
+      else ok = !!u.sites[Number(idSite)];
+      if (ok) out.push(u);
+    });
+    out.sort(function (a, b) {
+      var ra = roleRank(a.role_id, a.role), rb = roleRank(b.role_id, b.role);
+      return (ra - rb) || byLocale(a.name, b.name);
+    });
+    return out;
+  }
+
+  /** Liste brute de tous les collaborateurs d'un site (repli + repreneur de portefeuille). */
+  function managersOnSite(idSite, excludeUserId) {
     var seen = {}, out = [];
     state.rows.forEach(function (r) {
       if (String(r.id_site) !== String(idSite) || r.id_user == null) return;
+      if (excludeUserId != null && String(r.id_user) === String(excludeUserId)) return;
       var k = String(r.id_user); if (seen[k]) return; seen[k] = 1;
-      out.push({ id_user: r.id_user, name: [r.prenom, r.nom].filter(Boolean).join(' ') || ('#' + r.id_user), role: r.site_role_name || r.user_role_name || '' });
+      out.push({
+        id_user: r.id_user, name: [r.prenom, r.nom].filter(Boolean).join(' ') || ('#' + r.id_user),
+        role: r.site_role_name || r.user_role_name || '', role_id: rowRoleId(r), vnvo: rowVnvo(r)
+      });
     });
     return out.sort(function (a, b) { return byLocale(a.role + a.name, b.role + b.name); });
+  }
+
+  /** Ligne « manager » cliquable, avec rôle + pastille VN/VO/VNVO. */
+  function mgrRowHtml(id, name, role, vnvo, active) {
+    return '<div class="oda-mrow' + (active ? ' active' : '') + '" data-mgr="' + esc(id) + '">'
+      + '<span class="dot"></span><span class="nm">' + esc(name) + '</span>'
+      + (role ? '<span class="rl">' + esc(role) + '</span>' : '<span class="rl"></span>')
+      + (vnvo ? '<span class="vnvo">' + esc(vnvo) + '</span>' : '')
+      + '</div>';
+  }
+  /** Bloc complet « Rattaché à » : candidats filtrés par rang, repli optionnel. */
+  function mgrListHtml(idSite, roleId, current, excludeUserId, showAll) {
+    if (!roleId) return '<div class="oda-mgr-empty">Choisissez d\'abord un rôle : la liste des managers possibles en dépend.</div>';
+    var list = showAll
+      ? managersOnSite(idSite, excludeUserId)
+      : managerCandidatesForSite(idSite, roleId, excludeUserId);
+    var h = '<div class="oda-mgr-list">'
+      + mgrRowHtml('__self__', 'Responsable du site', 'aucun manager au-dessus', '', String(current) === '__self__');
+    list.forEach(function (m) { h += mgrRowHtml(m.id_user, m.name, m.role || roleLabelOf(m.role_id), m.vnvo, String(current) === String(m.id_user)); });
+    h += '</div>';
+    if (!showAll && !list.length) {
+      h += '<div class="oda-mgr-empty" style="margin-top:6px">Aucun manager de rang supérieur n\'est rattaché à ce périmètre. Choisissez « Responsable du site » ou élargissez la liste.</div>';
+    }
+    h += '<button type="button" class="oda-link" data-mgr-all="' + (showAll ? '0' : '1') + '">'
+      + (showAll ? 'Revenir aux managers de rang supérieur' : 'Afficher tous les collaborateurs du site') + '</button>';
+    return h;
   }
 
   /* ------------------------------------------------------------------ rendu */
@@ -483,8 +639,8 @@ OD.define('admin', {
   function fullName(r) { return [r.prenom, r.nom].filter(Boolean).join(' ') || r.email || 'Utilisateur'; }
 
   /* -- panneau de placement réutilisable (site + rôle + manager) ------------ */
-  function buildPlacement(container, initial) {
-    var st = { reseau: '', affaire: '', site: '', id_site: null, id_role: '', manager: null };
+  function buildPlacement(container, initial, onChange) {
+    var st = { reseau: '', affaire: '', site: '', id_site: null, id_role: '', manager: null, showAll: false };
     if (initial) {
       st.reseau = initial.reseau || '';
       st.affaire = initial.affaire || '';
@@ -493,40 +649,57 @@ OD.define('admin', {
     }
     function optList(items, sel, ph) { var o = '<option value="">' + esc(ph) + '</option>'; items.forEach(function (x) { o += '<option value="' + esc(x) + '"' + (String(x) === String(sel) ? ' selected' : '') + '>' + esc(x) + '</option>'; }); return o; }
     function roleOpts(sel) { var o = '<option value="">Choisir un rôle…</option>'; state.roles.forEach(function (r) { o += '<option value="' + esc(r.id) + '"' + (String(r.id) === String(sel) ? ' selected' : '') + '>' + esc(r.label) + '</option>'; }); return o; }
-    function mrow(id, name, role, active) { return '<div class="oda-mrow' + (active ? ' active' : '') + '" data-mgr="' + esc(id) + '"><span class="dot"></span><span class="nm">' + esc(name) + '</span>' + (role ? '<span class="rl">' + esc(role) + '</span>' : '') + '</div>'; }
     function draw() {
       var reseaux = refReseaux(), affaires = st.reseau ? refAffaires(st.reseau) : [], sites = (st.reseau && st.affaire) ? refSites(st.reseau, st.affaire) : [];
       var h = '<div class="oda-cascade">'
-        + '<div class="oda-field"><label>Réseau</label><select data-c="reseau">' + optList(reseaux, st.reseau, 'Choisir…') + '</select></div>'
-        + '<div class="oda-field"><label>Affaire</label><select data-c="affaire"' + (st.reseau ? '' : ' disabled') + '>' + optList(affaires, st.affaire, 'Choisir…') + '</select></div>'
-        + '<div class="oda-field"><label>Site</label><select data-c="site"' + (st.affaire ? '' : ' disabled') + '>';
+        + '<div class="oda-field"><label>Réseau<span class="oda-star">*</span></label><select data-c="reseau">' + optList(reseaux, st.reseau, 'Choisir…') + '</select></div>'
+        + '<div class="oda-field"><label>Affaire<span class="oda-star">*</span></label><select data-c="affaire"' + (st.reseau ? '' : ' disabled') + '>' + optList(affaires, st.affaire, 'Choisir…') + '</select></div>'
+        + '<div class="oda-field"><label>Site<span class="oda-star">*</span></label><select data-c="site"' + (st.affaire ? '' : ' disabled') + '>';
       h += '<option value="">Choisir…</option>';
       sites.forEach(function (s) { h += '<option value="' + esc(s.id_site) + '"' + (String(s.id_site) === String(st.id_site) ? ' selected' : '') + '>' + esc(s.site) + '</option>'; });
       h += '</select></div></div>';
       if (st.id_site != null) {
-        h += '<div class="oda-place-role"><label>Rôle sur ce site</label><select data-c="role">' + roleOpts(st.id_role) + '</select></div>';
-        h += '<p class="oda-note">Rattaché à (manager sur ce site) :</p><div class="oda-mgr-list">';
-        h += mrow('__self__', 'Responsable du site', 'aucun manager au-dessus', st.manager === '__self__');
-        managersOnSite(st.id_site).forEach(function (m) { h += mrow(m.id_user, m.name, m.role, String(st.manager) === String(m.id_user)); });
-        h += '</div>';
+        h += '<div class="oda-place-role"><label>Rôle sur ce site<span class="oda-star">*</span></label><select data-c="role">' + roleOpts(st.id_role) + '</select></div>';
+        h += '<p class="oda-note">Rattaché à (manager sur ce site)<span class="oda-star">*</span> :</p>';
+        h += mgrListHtml(st.id_site, st.id_role, st.manager, null, st.showAll);
       }
       container.innerHTML = h; bind();
+      if (typeof onChange === 'function') onChange(st);
+    }
+    // Le manager choisi doit rester éligible quand le rôle change.
+    function pruneManager() {
+      if (st.manager == null || st.manager === '__self__') return;
+      var ok = managerCandidatesForSite(st.id_site, st.id_role, null).some(function (m) { return String(m.id_user) === String(st.manager); })
+        || (st.showAll && managersOnSite(st.id_site).some(function (m) { return String(m.id_user) === String(st.manager); }));
+      if (!ok) st.manager = null;
     }
     function bind() {
       container.querySelectorAll('select[data-c]').forEach(function (sel) {
         sel.onchange = function () {
           var c = sel.getAttribute('data-c'), v = sel.value;
-          if (c === 'reseau') { st.reseau = v; st.affaire = ''; st.site = ''; st.id_site = null; st.manager = null; }
-          else if (c === 'affaire') { st.affaire = v; st.site = ''; st.id_site = null; st.manager = null; }
-          else if (c === 'site') { st.id_site = v ? Number(v) : null; st.site = sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].textContent : ''; st.manager = null; }
-          else if (c === 'role') { st.id_role = v; return; }
+          if (c === 'reseau') { st.reseau = v; st.affaire = ''; st.site = ''; st.id_site = null; st.id_role = ''; st.manager = null; st.showAll = false; }
+          else if (c === 'affaire') { st.affaire = v; st.site = ''; st.id_site = null; st.manager = null; st.showAll = false; }
+          else if (c === 'site') { st.id_site = v ? Number(v) : null; st.site = sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].textContent : ''; st.manager = null; st.showAll = false; }
+          else if (c === 'role') { st.id_role = v; pruneManager(); }
           draw();
         };
       });
       container.querySelectorAll('.oda-mrow').forEach(function (el) { el.onclick = function () { st.manager = el.getAttribute('data-mgr'); draw(); }; });
+      var all = container.querySelector('[data-mgr-all]');
+      if (all) all.onclick = function () { st.showAll = all.getAttribute('data-mgr-all') === '1'; pruneManager(); draw(); };
     }
     draw();
-    return { get: function () { return st; }, valid: function () { return st.id_site != null && st.id_role && st.manager != null; } };
+    return {
+      get: function () { return st; },
+      missing: function () {
+        var m = [];
+        if (st.id_site == null) m.push('site');
+        if (!st.id_role) m.push('role');
+        if (st.manager == null) m.push('manager');
+        return m;
+      },
+      valid: function () { return st.id_site != null && !!st.id_role && st.manager != null; }
+    };
   }
 
   function modalEdit(row) {
@@ -791,26 +964,37 @@ OD.define('admin', {
     var curRole = row.site_role_id != null ? row.site_role_id : (row.user_role_id != null ? row.user_role_id : row.id_role);
     var curMgr = row.manager_user_id != null ? row.manager_user_id : (row.id_superieur != null ? row.id_superieur : null);
     var sel = { role: curRole != null ? String(curRole) : '', mgr: curMgr != null ? String(curMgr) : '__self__' };
-    var mgrs = managersOnSite(row.id_site).filter(function (m) { return String(m.id_user) !== String(row.id_user); });
+    sel.showAll = false;
     var opts = '<option value="">Choisir un rôle…</option>' + state.roles.map(function (r) {
       return '<option value="' + esc(r.id) + '"' + (String(r.id) === sel.role ? ' selected' : '') + '>' + esc(r.label) + '</option>';
     }).join('');
-    var list = '<div class="oda-mrow' + (sel.mgr === '__self__' ? ' active' : '') + '" data-mgr="__self__"><span class="dot"></span><span class="nm">Responsable du site</span><span class="rl">aucun manager au-dessus</span></div>'
-      + mgrs.map(function (m) {
-        return '<div class="oda-mrow' + (String(m.id_user) === sel.mgr ? ' active' : '') + '" data-mgr="' + esc(m.id_user) + '"><span class="dot"></span><span class="nm">' + esc(m.name) + '</span><span class="rl">' + esc(m.role || '') + '</span></div>';
-      }).join('');
     var ov = actionModal({
       title: 'Rôle et manager', sub: fullName(row) + ' · ' + (row.site_name || ''), cta: 'Enregistrer',
-      body: '<div class="oda-place-role"><label>Rôle sur ce site</label><select data-f="role">' + opts + '</select></div>'
-        + '<p class="oda-note">Rattaché à (manager sur ce site) :</p><div class="oda-mgr-list">' + list + '</div>',
+      body: '<div class="oda-place-role"><label>Rôle sur ce site<span class="oda-star">*</span></label><select data-f="role">' + opts + '</select></div>'
+        + '<p class="oda-note">Rattaché à (manager sur ce site)<span class="oda-star">*</span> :</p><div class="oda-mgr-slot"></div>',
       onReady: function (ov2) {
-        ov2.querySelector('[data-f="role"]').onchange = function () { sel.role = this.value; };
-        ov2.querySelectorAll('.oda-mrow').forEach(function (el) {
-          el.onclick = function () {
-            sel.mgr = el.getAttribute('data-mgr');
-            ov2.querySelectorAll('.oda-mrow').forEach(function (x) { x.classList.toggle('active', x === el); });
-          };
-        });
+        var slot = ov2.querySelector('.oda-mgr-slot');
+        function drawMgrs() {
+          slot.innerHTML = mgrListHtml(row.id_site, sel.role, sel.mgr, row.id_user, sel.showAll);
+          slot.querySelectorAll('.oda-mrow').forEach(function (el) {
+            el.onclick = function () {
+              sel.mgr = el.getAttribute('data-mgr');
+              slot.querySelectorAll('.oda-mrow').forEach(function (x) { x.classList.toggle('active', x === el); });
+            };
+          });
+          var all = slot.querySelector('[data-mgr-all]');
+          if (all) all.onclick = function () { sel.showAll = all.getAttribute('data-mgr-all') === '1'; drawMgrs(); };
+        }
+        ov2.querySelector('[data-f="role"]').onchange = function () {
+          sel.role = this.value;
+          // le N+1 retenu doit rester de rang supérieur au nouveau rôle
+          if (sel.mgr !== '__self__' && sel.mgr) {
+            var ok = managerCandidatesForSite(row.id_site, sel.role, row.id_user).some(function (m) { return String(m.id_user) === String(sel.mgr); });
+            if (!ok && !sel.showAll) sel.mgr = '__self__';
+          }
+          drawMgrs();
+        };
+        drawMgrs();
       },
       run: async function (setErr) {
         if (!sel.role) { setErr('Choisissez un rôle.'); return false; }
@@ -933,12 +1117,14 @@ OD.define('admin', {
   function modalCreate() {
     var ov = overlay('<div class="oda-modal-head"><div><h2>Créer un utilisateur</h2><p>Nouvel accès + affectation initiale</p></div><button class="oda-iconbtn" data-x>' + ICON.x + '</button></div>'
       + '<div class="oda-modal-body"><div class="oda-form">'
-      + '<div class="oda-two"><div><label>Prénom</label><input data-f="prenom"></div><div><label>Nom</label><input data-f="nom"></div></div>'
-      + '<div><label>Email</label><input data-f="email" type="email"></div>'
+      + '<div class="oda-two"><div><label>Prénom<span class="oda-star">*</span></label><input data-f="prenom"></div><div><label>Nom<span class="oda-star">*</span></label><input data-f="nom"></div></div>'
+      + '<div><label>Email<span class="oda-star">*</span></label><input data-f="email" type="email"></div>'
       + '<div class="oda-two"><div><label>Téléphone</label><input data-f="telephone"></div><div><label>Numéro VOIP</label><input data-f="voip"></div></div>'
       + '<div class="oda-two"><div><label>Matricule</label><input data-f="matricule"></div><div><label>Fonction</label><input data-f="fonction"></div></div>'
       + '<div><label>VN / VO / VNVO</label><select data-f="vnvo"><option value="">—</option><option value="VN">VN</option><option value="VO">VO</option><option value="VNVO">VNVO</option></select></div>'
-      + '</div><div class="oda-sep2"></div><p class="oda-subhead">Affectation initiale</p><div id="oda-place"></div><div class="oda-err-slot"></div></div>'
+      + '</div><div class="oda-sep2"></div><p class="oda-subhead">Affectation initiale</p><div id="oda-place"></div>'
+      + '<div class="oda-reqbox"><h4>Champs requis pour créer le compte</h4><div class="oda-reqlist"></div></div>'
+      + '<div class="oda-err-slot"></div></div>'
       + '<div class="oda-modal-foot"><button class="oda-btn ghost" data-x>Annuler</button><button class="oda-btn primary" data-go>Créer</button></div>');
     ov.querySelectorAll('[data-x]').forEach(function (b) { b.onclick = function () { ov.remove(); }; });
     // Pré-sélection : si un site est déjà filtré, on le reprend dans le placement.
@@ -955,14 +1141,39 @@ OD.define('admin', {
                   : { reseau: match.reseau, affaire: match.affaire, site: match.site_name, id_site: match.id_site };
       }
     }
-    var place = buildPlacement(ov.querySelector('#oda-place'), pre);
-    ov.querySelector('[data-go]').onclick = async function () {
-      var btn = this, g = function (f) { var e = ov.querySelector('[data-f="' + f + '"]'); return e ? e.value.trim() : ''; };
+    var g = function (f) { var e = ov.querySelector('[data-f="' + f + '"]'); return e ? e.value.trim() : ''; };
+    var goBtn = ov.querySelector('[data-go]'), reqList = ov.querySelector('.oda-reqlist');
+
+    // ---- checklist des prérequis, mise à jour en direct -------------------
+    function reqState() {
+      var miss = place ? place.missing() : ['site', 'role', 'manager'];
+      return [
+        { label: 'Prénom', ok: !!g('prenom') },
+        { label: 'Nom', ok: !!g('nom') },
+        { label: 'Email valide', ok: /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(g('email')) },
+        { label: 'Site d\'affectation', ok: miss.indexOf('site') === -1 },
+        { label: 'Rôle sur ce site', ok: miss.indexOf('role') === -1 },
+        { label: 'Rattachement (N+1)', ok: miss.indexOf('manager') === -1 }
+      ];
+    }
+    function refreshReq() {
+      var items = reqState(), allOk = items.every(function (i) { return i.ok; });
+      reqList.innerHTML = items.map(function (i) {
+        return '<span class="oda-reqitem' + (i.ok ? ' ok' : '') + '"><span class="ck">' + (i.ok ? '✓' : '') + '</span>' + esc(i.label) + '</span>';
+      }).join('');
+      if (goBtn.textContent === 'Créer') goBtn.disabled = !allOk;
+    }
+    var place = buildPlacement(ov.querySelector('#oda-place'), pre, function () { refreshReq(); });
+    ov.querySelectorAll('.oda-form [data-f]').forEach(function (el) { el.addEventListener('input', refreshReq); el.addEventListener('change', refreshReq); });
+    refreshReq();
+
+    goBtn.onclick = async function () {
+      var btn = this;
       var errSlot = ov.querySelector('.oda-err-slot');
       var showErr = function (m) { errSlot.innerHTML = '<div class="oda-error">' + esc(m) + '</div>'; };
       var email = g('email'), prenom = g('prenom'), nom = g('nom');
-      if (!email || !prenom || !nom) { showErr('Prénom, nom et email sont requis.'); return; }
-      if (!place.valid()) { showErr('Choisis un site, un rôle et un rattachement.'); return; }
+      var miss = reqState().filter(function (i) { return !i.ok; });
+      if (miss.length) { showErr('Champs requis manquants : ' + miss.map(function (i) { return i.label.toLowerCase(); }).join(', ') + '.'); return; }
       var p = place.get();
       btn.disabled = true; btn.textContent = 'Création…';
       var ref2 = sitesRef().filter(function (o) { return String(o.id_site) === String(p.id_site); })[0];
@@ -1578,7 +1789,8 @@ OD.define('admin', {
     }
     await checkAdmin();
     if (state.isAdmin === false) { render(); return; }
-    loadRoles();
+    await loadRoles();
+    loadTopManagers();
     await loadUsers();
   }
 
