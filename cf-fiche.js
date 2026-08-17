@@ -306,6 +306,11 @@ async function saveEdit() {
     if (payload.BIRTHDAY === '') payload.BIRTHDAY = null;
     delete payload.CreationDate;
     delete payload.ID_VENDEUR_CREATION;
+    // Colonnes calculées par la base (normalisation RCU) et colonnes d'état
+    // gérées par la fusion : la base refuse qu'on écrive dedans.
+    ['nom_norm','prenom_norm','identite_norm','tel_mob_e164','tel_fixe_e164',
+     'email_norm','cp5','siret_txt','adresse_norm','statut','merged_into']
+      .forEach(k => { delete payload[k]; });
     const idvu = state.client.IDVu;
     delete payload.IDVu;
     const { data: updated, error } = await supabase.from('CLIENT').update(payload).eq('IDVu', idvu).select('*').single();
