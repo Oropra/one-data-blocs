@@ -341,6 +341,14 @@ OD.define('client-search', {
     console.log('[crs][trace] payload envoyé à check:', {
       NOM: state.modal.data.NOM, TEl_MOB: state.modal.data.TEl_MOB, EMAIL: state.modal.data.EMAIL
     });
+    console.log('[crs][trace] ctx.supabase présent ?', !!ctx.supabase, '| .rpc ?', ctx.supabase && typeof ctx.supabase.rpc);
+    // appel direct de la RPC, court-circuitant le module, pour isoler la panne
+    try {
+      const direct = await ctx.supabase.rpc('client_doublons', {
+        p_payload: { nom: state.modal.data.NOM, mobile: state.modal.data.TEl_MOB, email: state.modal.data.EMAIL }
+      });
+      console.log('[crs][trace] RPC directe → error:', direct.error, '| data:', direct.data);
+    } catch (e) { console.log('[crs][trace] RPC directe a levé:', e && e.message); }
     const r = await od.check(ctx.supabase, state.modal.data, { societe: state.modal.isSoc });
     console.log('[crs][trace] od.check renvoie:', r);
     return r;
