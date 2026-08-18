@@ -263,6 +263,8 @@ async function saveAnyway() {
   const idvu = state.client && state.client.IDVu;
   if (idvu == null) return;
   for (const c of candidats) {
+    // Ne jamais se signaler soi-même : la RPC le rejetterait (400).
+    if (c.id_client == null || Number(c.id_client) === Number(idvu)) continue;
     try {
       await ctx.supabase.rpc('client_signaler_doublon', {
         p_id_client_entrant:  idvu,
