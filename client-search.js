@@ -8,6 +8,27 @@ OD.define('client-search', {
   mount(__anchor, ctx) {
     __anchor.id = 'oropra-client-search';
 
+  // --- dépendance : le module partagé de doublons ----------------------
+  // Il n'est pas chargé par OD (c'est un simple script CDN qui pose
+  // window.oropraDoublons). On s'assure de sa présence sans dépendre de
+  // l'ordre du socle : si absent, on l'injecte une fois.
+  const OROPRA_DOUBLONS_URL =
+    'https://cdn.jsdelivr.net/gh/Oropra/one-data-blocs@91388a5c1febe21d909592d04b1c3f2c43ee27c3/oropra-doublons.js';
+  function chargerDoublons() {
+    if (window.oropraDoublons) return Promise.resolve();
+    if (window.__oropraDoublonsChargement) return window.__oropraDoublonsChargement;
+    window.__oropraDoublonsChargement = new Promise((resolve) => {
+      const sc = document.createElement('script');
+      sc.src = OROPRA_DOUBLONS_URL;
+      sc.async = true;
+      sc.onload = () => resolve();
+      sc.onerror = () => { console.warn('[crs] oropra-doublons introuvable'); resolve(); };
+      document.head.appendChild(sc);
+    });
+    return window.__oropraDoublonsChargement;
+  }
+  chargerDoublons();   // lancé au montage, prêt bien avant la première saisie
+
   const LOOKUP_VAR_ID = 'cced74ab-5a0a-418d-9479-2366e05a8754';
   const NPAI_VAR_ID = '7e24f595-e1fd-4257-99f4-76f179032788';
   const SELECTED_CLIENT_VAR_ID = '55490583-c88b-4748-916e-4d203db07742';
@@ -314,6 +335,7 @@ OD.define('client-search', {
 
   async function checkDuplicates() {
     if (!state.modal) return null;
+    await chargerDoublons();                     // s'assure que le module est là
     const od = odDoublons();
     if (!od) { console.warn('[crs] oropra-doublons absent'); return null; }
     return od.check(ctx.supabase, state.modal.data, { societe: state.modal.isSoc });
@@ -364,18 +386,26 @@ OD.define('client-search', {
       }
       const supabase = ctx.supabase;
       const now = new Date().toISOString();
-      // Numéro de fiche sous verrou : deux vendeurs simultanés ne peuvent
-      // plus tirer le même.
-      const od = odDoublons();
-      const nextIDVu = od
-        ? await od.prochainIdvu(supabase)
-        : (await (async () => {
-            const { data: maxRow } = await supabase.from('CLIENT').select('IDVu').order('IDVu', { ascending: false }).limit(1).maybeSingle();
-            return (maxRow && maxRow.IDVu != null ? Number(maxRow.IDVu) : 0) + 1;
-          })());
       const isSoc = state.modal.isSoc;
+
+      // Le site sélectionné dans le topnav : c'est lui qui portera le cycle
+      // commercial ouvert à la création, et qui rend la fiche visible.
+      const siteApi = (window.oropraSite) || null;
+      const idSite = siteApi && siteApi.getSiteId ? siteApi.getSiteId() : null;
+      if (idSite == null) {
+        state.modal.saving = false;
+        state.modal.error = "Aucun site sélectionné. Choisissez un site en haut à droite avant de créer un client.";
+        render();
+        return;
+      }
+
+      // On assemble le payload comme avant, MAIS sans IDVu ni colonnes
+      // calculées : c'est client_creer qui attribue le numéro, ouvre le
+      // cycle et renvoie la fiche, le tout dans une seule transaction —
+      // seule façon de contourner la policy SELECT qui masque une fiche
+      // sans cycle.
       const payload = Object.assign({}, state.modal.data, {
-        IDVu: nextIDVu, CreationDate: now, UpdateDate: now,
+        CreationDate: now, UpdateDate: now,
         ID_VENDEUR_CREATION: viewerId != null ? String(viewerId) : null,
         ID_VENDEUR_UPDATE: viewerId != null ? String(viewerId) : null,
         adresse_checked_at: state.modal.data.adresse_status === 'verified' ? now : null,
@@ -390,18 +420,28 @@ OD.define('client-search', {
         else payload[k] = Number(cleanDigits(payload[k])) || null;
       });
       if (payload.BIRTHDAY === '') payload.BIRTHDAY = null;
-      const { data: inserted, error } = await supabase.from('CLIENT').insert(payload).select('*').single();
+      const od2 = odDoublons();
+      if (od2) od2.nettoyerPayload(payload);      // écarte les colonnes calculées
+      delete payload.IDVu;
+
+      const { data: creation, error } = await supabase.rpc('client_creer', {
+        p_payload: payload,
+        p_id_site: idSite,
+        p_id_user: viewerId != null ? Number(viewerId) : null
+      });
       if (error) throw error;
+      const inserted = creation && creation.client ? creation.client : null;
+      if (!inserted) throw new Error('création : aucune fiche renvoyée');
+
       // Le vendeur a créé malgré l'alerte : la file d'arbitrage le saura.
       if (state.crsDupEnAttente && state.crsDupEnAttente.length) {
-        const odt = odDoublons();
-        if (odt) { try { await odt.signaler(supabase, inserted.IDVu, state.crsDupEnAttente); } catch (e) {} }
+        if (od2) { try { await od2.signaler(supabase, inserted.IDVu, state.crsDupEnAttente); } catch (e) {} }
         state.crsDupEnAttente = null;
       }
-      if (isSoc && payload.SIRET) {
+      if (isSoc && inserted.SIRET) {
         try {
           await supabase.functions.invoke(EDGE_FN_SIRENE_UPSERT, {
-            body: { siret: String(payload.SIRET), idvu: String(nextIDVu), setPrimary: true }
+            body: { siret: String(inserted.SIRET), idvu: String(inserted.IDVu), setPrimary: true }
           });
         } catch (eLink) { console.warn('[crs] sirene-upsert failed (non bloquant):', eLink && eLink.message); }
       }
