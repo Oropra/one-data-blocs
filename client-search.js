@@ -335,10 +335,15 @@ OD.define('client-search', {
 
   async function checkDuplicates() {
     if (!state.modal) return null;
-    await chargerDoublons();                     // s'assure que le module est là
+    await chargerDoublons();
     const od = odDoublons();
-    if (!od) { console.warn('[crs] oropra-doublons absent'); return null; }
-    return od.check(ctx.supabase, state.modal.data, { societe: state.modal.isSoc });
+    if (!od) { console.warn('[crs][trace] oropra-doublons absent après chargement'); return null; }
+    console.log('[crs][trace] payload envoyé à check:', {
+      NOM: state.modal.data.NOM, TEl_MOB: state.modal.data.TEl_MOB, EMAIL: state.modal.data.EMAIL
+    });
+    const r = await od.check(ctx.supabase, state.modal.data, { societe: state.modal.isSoc });
+    console.log('[crs][trace] od.check renvoie:', r);
+    return r;
   }
 
   function dismissDuplicate() {
@@ -380,9 +385,15 @@ OD.define('client-search', {
     state.modal.duplicate = null;
     render();
     try {
+      console.log('[crs][trace] saveCreation — dupAck=', state.modal.dupAck);
       if (!state.modal.dupAck) {
         const dup = await checkDuplicates();
-        if (dup) { state.modal.duplicate = dup; state.modal.saving = false; render(); return; }
+        console.log('[crs][trace] checkDuplicates renvoie:', dup);
+        if (dup) {
+          console.log('[crs][trace] doublon détecté → affichage modal, arrêt création');
+          state.modal.duplicate = dup; state.modal.saving = false; render(); return;
+        }
+        console.log('[crs][trace] aucun doublon retenu → création directe');
       }
       const supabase = ctx.supabase;
       const now = new Date().toISOString();
