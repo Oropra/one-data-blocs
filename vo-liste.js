@@ -20,6 +20,17 @@
 // ============================================================================
 OD.define('vo-liste', {
   async mount(__anchor, ctx) {
+    const OROPRA_DOUBLONS_URL = 'https://cdn.jsdelivr.net/gh/Oropra/one-data-blocs@aa457b862a926340283e1b8e2e956cbff6357658/oropra-doublons.js';
+    function chargerDoublons() {
+      if (window.oropraDoublons) return Promise.resolve();
+      if (window.__oropraDoublonsChargement) return window.__oropraDoublonsChargement;
+      window.__oropraDoublonsChargement = new Promise((resolve) => {
+        const sc = document.createElement('script'); sc.src = OROPRA_DOUBLONS_URL; sc.async = true;
+        sc.onload = () => resolve(); sc.onerror = () => { console.warn('[od] doublons introuvable'); resolve(); };
+        document.head.appendChild(sc);
+      }); return window.__oropraDoublonsChargement;
+    }
+    chargerDoublons().then(function(){ try { if (window.oropraDoublons && !document.getElementById('od-css-vop')) { var e=document.createElement('style'); e.id='od-css-vop'; e.textContent=window.oropraDoublons.css('vop'); document.head.appendChild(e); } } catch(x){} });
   __anchor.id = 'stockvo-root';
   var VER = 1;
 
@@ -801,25 +812,24 @@ OD.define('vo-liste', {
 
     async function checkDuplicates() {
       if (!state.modal) return null;
-      const d = state.modal.data; const supabase = ctx.supabase;
-      const selectCols = 'IDVu, CIVILITE, NOM, PRENOM, EMAIL, TEl_MOB, idmultivu, code_postal, ville';
-      const cleanMob = cleanDigits(d.TEl_MOB);
-      if (cleanMob) {
-        const { data: dup } = await supabase.from('CLIENT').select(selectCols).eq('TEl_MOB', cleanMob).limit(1).maybeSingle();
-        if (dup) return { field: 'TEl_MOB', label: 'Ce numéro de portable', client: dup };
-      }
-      const e = cleanEmail(d.EMAIL);
-      if (e) {
-        const { data: dup } = await supabase.from('CLIENT').select(selectCols).ilike('EMAIL', e).limit(1).maybeSingle();
-        if (dup) return { field: 'EMAIL', label: 'Cette adresse email', client: dup };
-      }
-      return null;
+      await chargerDoublons();
+      const od = window.oropraDoublons;
+      if (!od) return null;
+      return od.check(ctx.supabase, state.modal.data, { societe: state.modal.isSoc });
     }
-    function dismissDuplicate() { if (state.modal) state.modal.duplicate = null; render(); }
-    function viewDuplicate() {
-      if (!state.modal || !state.modal.duplicate) return;
-      state.selectedClient = Object.assign({}, state.modal.duplicate.client);
-      state.modal = null; render();
+    function dismissDuplicate() { if (state.modal) { state.modal.duplicate = null; state.modal.dupAck = false; } render(); }
+    async function viewDuplicate(ev) {
+      const id = ev && ev.currentTarget && ev.currentTarget.getAttribute('data-od-idvu');
+      if (!id) return;
+      const { data } = await ctx.supabase.from('CLIENT').select('*').eq('IDVu', Number(id)).maybeSingle();
+      if (data) { state.selectedClient = Object.assign({}, data); state.modal = null; }
+      render();
+    }
+    async function saveAnyway() {
+      if (!state.modal) return;
+      const cands = state.modal.duplicate ? state.modal.duplicate.candidats.slice() : [];
+      state.modal.dupAck = true; state.modal.duplicate = null; state.__dupEnAttente = cands;
+      await saveCreation();
     }
 
     async function saveCreation() {
@@ -832,11 +842,12 @@ OD.define('vo-liste', {
         if (dup) { state.modal.duplicate = dup; state.modal.saving = false; render(); return; }
         const supabase = ctx.supabase;
         const now = new Date().toISOString();
-        const { data: maxRow } = await supabase.from('CLIENT').select('IDVu').order('IDVu', { ascending: false }).limit(1).maybeSingle();
-        const nextIDVu = (maxRow && maxRow.IDVu != null ? Number(maxRow.IDVu) : 0) + 1;
         const isSoc = state.modal.isSoc;
+        const siteApi = window.oropraSite || null;
+        const idSite = siteApi && siteApi.getSiteId ? siteApi.getSiteId() : null;
+        if (idSite == null) { state.modal.saving = false; state.modal.error = "Aucun site sélectionné (choisissez un site en haut à droite)."; render(); return; }
         const payload = Object.assign({}, state.modal.data, {
-          IDVu: nextIDVu, CreationDate: now, UpdateDate: now,
+          CreationDate: now, UpdateDate: now,
           ID_VENDEUR_CREATION: viewerId != null ? String(viewerId) : null,
           ID_VENDEUR_UPDATE: viewerId != null ? String(viewerId) : null,
           adresse_checked_at: state.modal.data.adresse_status === 'verified' ? now : null,
@@ -851,10 +862,15 @@ OD.define('vo-liste', {
           else payload[k] = Number(cleanDigits(payload[k])) || null;
         });
         if (payload.BIRTHDAY === '') payload.BIRTHDAY = null;
-        const { data: inserted, error } = await supabase.from('CLIENT').insert(payload).select('*').single();
+        const _od = window.oropraDoublons; if (_od) _od.nettoyerPayload(payload);
+        delete payload.IDVu;
+        const { data: creation, error } = await supabase.rpc('client_creer', { p_payload: payload, p_id_site: idSite, p_id_user: viewerId != null ? Number(viewerId) : null });
         if (error) throw error;
+        const inserted = creation && creation.client ? creation.client : null;
+        if (!inserted) throw new Error('création : aucune fiche renvoyée');
+        if (state.__dupEnAttente && state.__dupEnAttente.length && _od) { for (const c of state.__dupEnAttente) { if (c.id_client == null || Number(c.id_client) === Number(inserted.IDVu)) continue; try { await _od.signaler(ctx.supabase, inserted.IDVu, [c]); } catch(e){} } state.__dupEnAttente = null; }
         if (isSoc && payload.SIRET) {
-          try { await supabase.functions.invoke(EDGE_FN_SIRENE_UPSERT, { body: { siret: String(payload.SIRET), idvu: String(nextIDVu), setPrimary: true } }); } catch (e) { }
+          try { await supabase.functions.invoke(EDGE_FN_SIRENE_UPSERT, { body: { siret: String(inserted.SIRET), idvu: String(inserted.IDVu), setPrimary: true } }); } catch (e) { }
         }
         state.selectedClient = Object.assign({}, inserted);
         state.modal = null; render();
@@ -1132,8 +1148,7 @@ OD.define('vo-liste', {
       const m = state.modal; const isSoc = m.isSoc;
       let body = '';
       if (m.duplicate) {
-        const c = m.duplicate.client;
-        body += `<div class="vop-dup"><div class="vop-dup-head">${VOP_ICON_WARN}<div>${vopEsc(m.duplicate.label)} est déjà utilisé(e) par :<div class="vop-dup-client"><strong>${vopEsc(clientFullName(c))}</strong> — ID ${vopEsc(c.IDVu)}</div></div></div><div class="vop-dup-actions"><button class="vop-btn vop-btn-ghost" data-vop-action="dismiss-duplicate">Modifier</button><button class="vop-btn vop-btn-primary" data-vop-action="view-duplicate">Choisir ce client</button></div></div>`;
+        if (window.oropraDoublons) body += window.oropraDoublons.html(m.duplicate, 'vop', { saving: m.saving, libelleForce: 'Créer quand même' });
       }
       if (m.error && !m.duplicate) body += `<div class="vop-modal-error">${vopEsc(m.error)}</div>`;
       body += '<div class="vop-section"><div class="vop-section-title">Identité</div><div class="vop-grid">';
@@ -1198,8 +1213,9 @@ OD.define('vo-liste', {
       root.querySelectorAll('[data-vop-action="close-modal"]').forEach(el => el.addEventListener('click', closeModal));
       root.querySelectorAll('[data-vop-action="close-modal-bg"]').forEach(el => el.addEventListener('click', e => { if (e.target === el) closeModal(); }));
       root.querySelectorAll('[data-vop-action="save-modal"]').forEach(el => el.addEventListener('click', saveCreation));
-      root.querySelectorAll('[data-vop-action="dismiss-duplicate"]').forEach(el => el.addEventListener('click', dismissDuplicate));
-      root.querySelectorAll('[data-vop-action="view-duplicate"]').forEach(el => el.addEventListener('click', viewDuplicate));
+      root.querySelectorAll('[data-vop-action="dismiss-duplicate"], [data-od-action="dup-dismiss"]').forEach(el => el.addEventListener('click', dismissDuplicate));
+      root.querySelectorAll('[data-vop-action="view-duplicate"], [data-od-action="dup-open"]').forEach(el => el.addEventListener('click', viewDuplicate));
+      root.querySelectorAll('[data-od-action="dup-force"]').forEach(el => el.addEventListener('click', saveAnyway));
       root.querySelectorAll('[data-vop-action="pick-address"]').forEach(el => el.addEventListener('click', () => { const idx = Number(el.getAttribute('data-idx')); if (state.modal && state.modal.addressSuggestions[idx]) applyAddressSuggestion(state.modal.addressSuggestions[idx]); }));
       root.querySelectorAll('[data-vop-action="pick-siret"]').forEach(el => el.addEventListener('click', () => { const idx = Number(el.getAttribute('data-idx')); if (state.modal && state.modal.siretSuggestions[idx]) applySiretSuggestion(state.modal.siretSuggestions[idx]); }));
       root.querySelectorAll('[data-vop-mfield]').forEach(el => {
