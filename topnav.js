@@ -218,6 +218,7 @@ OD.define('topnav', {
   ];
   const USER_MENU = [
     { t: 'Mon compte', act: 'account' },
+    { t: 'Doublons', act: 'doublons', badge: true },
     { t: 'Annuaire', p: P.annuaire },
     { t: 'Tutos', p: P.tutos },
     { t: 'Email Support', act: 'support' },
@@ -363,7 +364,8 @@ OD.define('topnav', {
     let userItems = '';
     __userMenu.forEach(function (it) {
       if (it.t === 'Se déconnecter') userItems += '<div class="od-sep"></div>';
-      userItems += '<a ' + (it.p ? 'data-page="' + it.p + '"' : 'data-act="' + it.act + '"') + (it.danger ? ' class="od-danger"' : '') + '>' + esc(it.t) + '</a>';
+      var extra = it.badge ? '<span class="od-arb-badge" id="od-arb-badge" hidden></span>' : '';
+      userItems += '<a ' + (it.p ? 'data-page="' + it.p + '"' : 'data-act="' + it.act + '"') + (it.danger ? ' class="od-danger"' : '') + '>' + esc(it.t) + extra + '</a>';
     });
 
     r.innerHTML = STYLE +
@@ -414,6 +416,7 @@ OD.define('topnav', {
         const wasOpen = parent.classList.contains('open');
         closeAll(parent);
         parent.classList.toggle('open', !wasOpen);
+        if (!wasOpen && parent.classList.contains('od-user')) rafraichirBadgeArbitrage();
       });
     });
     // navigation par data-page
@@ -427,6 +430,7 @@ OD.define('topnav', {
         const a = el.getAttribute('data-act');
         closeAll();
         if (a === 'account') openAccount();
+        else if (a === 'doublons') openArbitrage();
         else if (a === 'support') { try { (wwLib.getFrontWindow && wwLib.getFrontWindow() || window).location.href = 'mailto:' + SUPPORT_MAIL; } catch (er) {} }
         else if (a === 'logout') goAuth();
         else if (a === 'fiche') { if (clientLabel()) openFicheClient(); }
@@ -619,6 +623,374 @@ OD.define('topnav', {
     bg.querySelector('[data-logout]').addEventListener('click', function () { bg.remove(); goAuth(); });
     doc.body.appendChild(bg);
   }
+
+  const ARB_STYLE = '<style id="od-arb-css">' +
+'.od-arb-bg{align-items:flex-start;padding:40px 18px;overflow:auto}' +
+'.od-arb-modal{background:#fff;border-radius:20px;width:680px;max-width:100%;overflow:hidden;box-shadow:0 24px 70px -18px rgba(31,74,133,.4);font-family:"Nunito Sans",system-ui,sans-serif;color:#1F4A85}' +
+'.od-arb-modal *{box-sizing:border-box}' +
+'.od-arb-head{display:flex;align-items:center;gap:14px;padding:18px 22px 15px;border-bottom:1px solid #e8eef7}' +
+'.od-arb-ic{width:40px;height:40px;border-radius:11px;background:#2a5ea9;display:flex;align-items:center;justify-content:center;color:#fff;flex:0 0 auto}' +
+'.od-arb-ic svg{width:21px;height:21px}' +
+'.od-arb-htxt{flex:1 1 auto;min-width:0}.od-arb-htxt h1{font-size:17px;font-weight:900;margin:0;letter-spacing:-.02em}.od-arb-htxt p{margin:2px 0 0;font-size:12px;color:#7a98c5}' +
+'.od-arb-x{width:32px;height:32px;border-radius:8px;border:none;background:none;color:#7a98c5;font-size:20px;cursor:pointer;flex:0 0 auto}.od-arb-x:hover{background:#f7f9fc;color:#1F4A85}' +
+'.od-arb-load{padding:50px 24px;text-align:center;color:#7a98c5;font-size:13.5px}' +
+'.od-arb-erru{margin:12px 22px 0;padding:10px 14px;background:#fcebeb;border:1px solid #f3d4d4;color:#e24b4a;border-radius:10px;font-size:12.5px;font-weight:600}' +
+'.od-arb-ruban{display:flex;align-items:center;gap:12px;padding:11px 22px;background:#f7f9fc;border-bottom:1px solid #e8eef7;font-size:12px;color:#7a98c5;font-weight:600}' +
+'.od-arb-ruban .reste{color:#1F4A85;font-weight:800;font-size:14px}' +
+'.od-arb-jauge{flex:1 1 auto;height:6px;border-radius:99px;background:#e8eef7;overflow:hidden}.od-arb-jauge i{display:block;height:100%;background:#53bda7;border-radius:99px;transition:width .4s cubic-bezier(.3,.8,.3,1)}' +
+'.od-arb-mini{display:flex;gap:14px}.od-arb-mini b{color:#3a8d7b}.od-arb-mini .r b{color:#7a98c5}' +
+'.od-arb-pile{position:relative;padding:22px}' +
+'.od-arb-ghost{position:absolute;left:22px;right:22px;top:22px;height:170px;border-radius:15px;background:#fff;border:1px solid #e8eef7}' +
+'.od-arb-ghost.g1{transform:translateY(9px) scale(.97);opacity:.6;z-index:1}.od-arb-ghost.g2{transform:translateY(18px) scale(.945);opacity:.35;z-index:0}' +
+'.od-arb-carte{position:relative;z-index:2;background:#fff;border:1px solid #e8eef7;border-radius:15px;box-shadow:0 12px 32px -14px rgba(31,74,133,.22);overflow:hidden;animation:odArbMonte .42s cubic-bezier(.2,.7,.3,1)}' +
+'@keyframes odArbMonte{from{transform:translateY(24px) scale(.97);opacity:0}to{transform:none;opacity:1}}' +
+'.od-arb-carte.partir-fusion{animation:odArbFus .5s forwards cubic-bezier(.4,0,.6,1)}@keyframes odArbFus{to{transform:translateY(-38px) scale(.9);opacity:0}}' +
+'.od-arb-carte.partir-rejet{animation:odArbRej .45s forwards ease-in}@keyframes odArbRej{to{transform:translateX(56px) rotate(4deg);opacity:0}}' +
+'.od-arb-carte.partir-report{animation:odArbRep .45s forwards ease-in}@keyframes odArbRep{to{transform:translateY(56px) scale(.94);opacity:0}}' +
+'.od-arb-mtf{display:flex;align-items:center;gap:9px;padding:12px 18px;background:#f7f9fc;border-bottom:1px solid #e8eef7;flex-wrap:wrap}' +
+'.od-arb-force{font-size:10.5px;font-weight:900;letter-spacing:.05em;padding:4px 9px;border-radius:6px;text-transform:uppercase}.od-arb-force.fort{background:#eaf7f4;color:#3a8d7b}.od-arb-force.moyen{background:#fdf6e6;color:#8a5e08}' +
+'.od-arb-mtf .sur{font-size:12px;color:#7a98c5}' +
+'.od-arb-tag{font-size:11px;font-weight:700;background:#fff;border:1px solid #e8eef7;color:#7a98c5;padding:3px 9px;border-radius:99px}.od-arb-tag.pos{border-color:#bce4db;color:#3a8d7b;background:#eaf7f4}.od-arb-tag.neg{border-color:#f3d4d4;color:#e24b4a;background:#fcebeb}' +
+'.od-arb-simple{padding:20px 22px}.od-arb-simple .duo{display:flex;border:1px solid #e8eef7;border-radius:13px;overflow:hidden}' +
+'.od-arb-simple .mini{flex:1;padding:15px 17px}.od-arb-simple .mini.a{background:#eef4fc}.od-arb-simple .mini.b{background:#eaf7f4}' +
+'.od-arb-simple .ref{font-size:10.5px;font-weight:800;letter-spacing:.03em;margin-bottom:6px}.od-arb-simple .mini.a .ref{color:#2a5ea9}.od-arb-simple .mini.b .ref{color:#53bda7}' +
+'.od-arb-simple .n{font-size:15px;font-weight:800;margin-bottom:2px}.od-arb-simple .l{font-size:12px;color:#5a72a0}' +
+'.od-arb-simple .fleche{display:flex;align-items:center;justify-content:center;padding:0 5px;background:#fff;color:#53bda7}.od-arb-simple .fleche svg{width:21px;height:21px}' +
+'.od-arb-simple .verdict{margin-top:15px;text-align:center;font-size:13px;color:#5a72a0}.od-arb-simple .verdict b{color:#1F4A85}' +
+'.od-arb-peint{padding:18px 22px}.od-arb-peint .intro{font-size:12px;color:#7a98c5;margin:0 0 15px;text-align:center}.od-arb-peint .intro b{color:#1F4A85}' +
+'.od-arb-res{border:1.5px solid #bce4db;border-radius:13px;padding:15px 17px;margin-bottom:17px;background:#eaf7f4;position:relative}' +
+'.od-arb-res::before{content:"FICHE FINALE";position:absolute;top:-9px;left:15px;background:#53bda7;color:#fff;font-size:9px;font-weight:900;letter-spacing:.08em;padding:2px 8px;border-radius:5px}' +
+'.od-arb-res .rg{display:grid;grid-template-columns:1fr 1fr;gap:7px 18px;margin-top:3px}' +
+'.od-arb-res .rc{display:flex;flex-direction:column;gap:1px}.od-arb-res .rk{font-size:10px;font-weight:700;color:#7a98c5;text-transform:uppercase;letter-spacing:.03em}' +
+'.od-arb-res .rv{font-size:13px;font-weight:600;min-height:18px}.od-arb-res .rv.vide{color:#7a98c5;opacity:.6;font-weight:400;font-style:italic}' +
+'.od-arb-res .pin{display:inline-block;width:7px;height:7px;border-radius:99px;margin-right:6px;vertical-align:1px}.od-arb-res .pin.a{background:#2a5ea9}.od-arb-res .pin.b{background:#53bda7}' +
+'.od-arb-peint .ct{font-size:11px;font-weight:800;color:#7a98c5;text-transform:uppercase;letter-spacing:.04em;margin:0 0 9px}' +
+'.od-arb-cf{display:grid;grid-template-columns:90px 1fr 1fr;gap:9px;align-items:stretch;margin-bottom:8px}.od-arb-cf .ck{display:flex;align-items:center;font-size:12px;font-weight:700;color:#5a72a0}' +
+'.od-arb-opt{border:2px solid #e8eef7;border-radius:10px;padding:9px 24px 9px 11px;text-align:left;background:#fff;cursor:pointer;position:relative;transition:.15s;font-family:inherit}.od-arb-opt:hover{border-color:#acc5e4}' +
+'.od-arb-opt .ov{font-size:13px;font-weight:700;color:#1F4A85;word-break:break-word;line-height:1.3}.od-arb-opt .ov.vide{color:#7a98c5;opacity:.6;font-weight:400;font-style:italic}' +
+'.od-arb-opt .os{font-size:10px;font-weight:600;margin-left:6px;white-space:nowrap}.od-arb-opt.a .os{color:#2a5ea9}.od-arb-opt.b .os{color:#53bda7}' +
+'.od-arb-opt.a[aria-pressed="true"]{border-color:#2a5ea9;background:#eef4fc}.od-arb-opt.b[aria-pressed="true"]{border-color:#53bda7;background:#eaf7f4}' +
+'.od-arb-opt[aria-pressed="true"]::after{content:"✓";position:absolute;top:8px;right:9px;font-size:11px;font-weight:900}.od-arb-opt.a[aria-pressed="true"]::after{color:#2a5ea9}.od-arb-opt.b[aria-pressed="true"]::after{color:#53bda7}' +
+'.od-arb-id{margin-top:5px}.od-arb-id summary{font-size:12px;color:#7a98c5;cursor:pointer;padding:8px 0;font-weight:600;list-style:none}.od-arb-id summary::-webkit-details-marker{display:none}.od-arb-id summary::before{content:"▸ ";color:#acc5e4}.od-arb-id[open] summary::before{content:"▾ "}' +
+'.od-arb-id .idr{display:grid;grid-template-columns:90px 1fr;gap:9px;font-size:12px;padding:4px 0;color:#5a72a0}.od-arb-id .idk{font-weight:700;color:#7a98c5}' +
+'.od-arb-act{display:flex;gap:9px;padding:15px 22px;border-top:1px solid #e8eef7;background:#f7f9fc}' +
+'.od-arb-b{flex:1;padding:12px 14px;border-radius:11px;font-size:13.5px;font-weight:800;display:inline-flex;align-items:center;justify-content:center;gap:7px;cursor:pointer;border:none;font-family:inherit;transition:.15s}.od-arb-b svg{width:16px;height:16px}.od-arb-b:disabled{opacity:.5;cursor:default}' +
+'.od-arb-b.fusion{background:#53bda7;color:#fff;flex:1.6}.od-arb-b.fusion:hover:not(:disabled){background:#48ad98}' +
+'.od-arb-b.rejet{background:#fff;border:1.5px solid #e8eef7;color:#5a72a0}.od-arb-b.rejet:hover:not(:disabled){border-color:#e24b4a;color:#e24b4a;background:#fcebeb}' +
+'.od-arb-b.report{background:#fff;border:1.5px solid #e8eef7;color:#5a72a0}.od-arb-b.report:hover:not(:disabled){border-color:#fac055;color:#8a5e08;background:#fdf6e6}' +
+'.od-arb-vide{padding:60px 30px;text-align:center}.od-arb-vide .ok{width:64px;height:64px;border-radius:50%;background:#eaf7f4;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;color:#53bda7}.od-arb-vide .ok svg{width:30px;height:30px}' +
+'.od-arb-vide h2{font-size:18px;font-weight:900;margin:0 0 6px}.od-arb-vide p{color:#7a98c5;margin:0;font-size:13px}' +
+'.od-arb-badge{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 5px;margin-left:auto;background:#e24b4a;color:#fff;font-size:11px;font-weight:800;border-radius:99px}' +
+'@media(max-width:620px){.od-arb-modal{width:100%}.od-arb-res .rg{grid-template-columns:1fr}.od-arb-cf{grid-template-columns:1fr;gap:5px}.od-arb-act{flex-wrap:wrap}.od-arb-b{flex:1 1 100%}}' +
+'</style>';
+
+
+
+  // ================================================================
+  //  ARBITRAGE DES DOUBLONS  — modale, dans le menu utilisateur
+  //  Câblé sur : client_file_arbitrage, client_arbitrage_detail,
+  //  client_arbitrer. Périmètre géré côté RPC.
+  // ================================================================
+  const ARB_CHAMPS = [
+    ['civilite','Civilité'], ['nom','Nom'], ['prenom','Prénom'],
+    ['mobile','Portable'], ['email','E-mail'], ['adresse','Adresse'],
+    ['code_postal','Code postal'], ['ville','Ville'], ['naissance','Naissance']
+  ];
+  const ARB_LIB = {
+    siret_identique:'même SIRET', mobile_identique:'même portable',
+    email_identique:'même e-mail', fixe_identique:'même fixe',
+    nom_prenom_exact:'même nom et prénom', nom_prenom_inverses:'nom et prénom inversés',
+    nom_trigram:'nom très proche', naissance_identique:'même naissance',
+    naissance_differente:'naissances différentes', insee_identique:'même commune',
+    adresse_trigram:'adresse très proche', email_different:'e-mails différents',
+    nature_differente:'société vs particulier', vin_commun:'même véhicule'
+  };
+
+  function arbSb() {
+    try { return wwLib.wwPlugins && wwLib.wwPlugins.supabase && wwLib.wwPlugins.supabase.instance; }
+    catch (e) { return null; }
+  }
+  function arbUserId() {
+    const u = user();
+    const v = pick(u, ['ID_User','id_user','ID_USER']);
+    return v !== '' ? Number(v) : null;
+  }
+  function arbVal(f, k) { return f && f[k] != null ? String(f[k]).trim() : ''; }
+  function arbNom(f) { return [f.civilite, f.nom, (f.societe ? '' : f.prenom)].filter(Boolean).join(' '); }
+
+  // ---- badge compteur dans le menu -------------------------------
+  async function rafraichirBadgeArbitrage() {
+    const el = root() && root().querySelector('#od-arb-badge');
+    if (!el) return;
+    const sb = arbSb(), uid = arbUserId();
+    if (!sb || uid == null) return;
+    try {
+      const { data, error } = await sb.rpc('client_file_arbitrage', { p_id_user: uid, p_statut: 'en_attente', p_limit: 99 });
+      if (error) return;
+      const n = data && data.lignes ? data.lignes.length : 0;
+      if (n > 0) { el.textContent = n > 99 ? '99+' : String(n); el.hidden = false; }
+      else { el.hidden = true; }
+    } catch (e) {}
+  }
+
+  // ---- ouverture de la modale ------------------------------------
+  let ARB = null;   // état courant : { file, i, choix, survivant }
+
+  async function openArbitrage() {
+    closeBurger();
+    const sb = arbSb(), uid = arbUserId();
+    const bg = doc.createElement('div');
+    bg.className = 'od-modal-bg od-arb-bg';
+    bg.innerHTML = ARB_STYLE + '<div class="od-arb-modal" id="od-arb"></div>';
+    bg.addEventListener('mousedown', function (e) { if (e.target === bg) bg.remove(); });
+    doc.body.appendChild(bg);
+    ARB = { file: [], i: 0, choix: {}, survivant: 'a', busy: false, fus: 0, rej: 0 };
+
+    arbRender(true);   // état de chargement
+    if (!sb || uid == null) { ARB.err = "Session indisponible."; arbRender(); return; }
+    try {
+      const { data, error } = await sb.rpc('client_file_arbitrage', { p_id_user: uid, p_statut: 'en_attente', p_limit: 200 });
+      if (error) throw error;
+      ARB.file = (data && data.lignes) ? data.lignes : [];
+    } catch (e) { ARB.err = (e && e.message) || 'Erreur de chargement.'; }
+    arbRender();
+  }
+
+  function arbClose() { const bg = doc.querySelector('.od-arb-bg'); if (bg) bg.remove(); ARB = null; rafraichirBadgeArbitrage(); }
+
+  // ---- rendu ------------------------------------------------------
+  function arbRender(loading) {
+    const box = doc.getElementById('od-arb'); if (!box) return;
+    if (loading && !ARB.file.length && !ARB.err) { box.innerHTML = arbHead() + '<div class="od-arb-load">Chargement de la file…</div>'; arbBindClose(); return; }
+    if (ARB.err) { box.innerHTML = arbHead() + '<div class="od-arb-load">' + esc(ARB.err) + '</div>'; arbBindClose(); return; }
+    const reste = ARB.file.length - ARB.i;
+    if (reste <= 0) { box.innerHTML = arbHead() + arbVide(); arbBindClose(); return; }
+
+    const d = ARB.detail || null;
+    if (!d) { box.innerHTML = arbHead() + arbRuban(reste) + '<div class="od-arb-load">Ouverture du dossier…</div>'; arbBindClose(); arbLoadDetail(); return; }
+
+    const conflits = arbAnalyse(d).conflits;
+    const identiques = arbAnalyse(d).identiques;
+    const simple = conflits.length === 0;
+    if (!simple && Object.keys(ARB.choix).length === 0) ARB.choix = arbPreselection(d, conflits);
+
+    box.innerHTML = arbHead() + arbRuban(reste) +
+      '<div class="od-arb-pile">' +
+        (reste > 1 ? '<div class="od-arb-ghost g1"></div>' : '') +
+        (reste > 2 ? '<div class="od-arb-ghost g2"></div>' : '') +
+        '<div class="od-arb-carte" id="od-arb-carte">' +
+          arbMotif(d) +
+          (simple ? arbSimple(d) : arbPeint(d, conflits, identiques)) +
+          arbActions(simple) +
+        '</div>' +
+      '</div>';
+    arbBind(d, conflits, simple);
+  }
+
+  async function arbLoadDetail() {
+    const sb = arbSb(), uid = arbUserId();
+    const ligne = ARB.file[ARB.i]; if (!ligne) return;
+    try {
+      const { data, error } = await sb.rpc('client_arbitrage_detail', { p_id_file: ligne.id_file, p_id_user: uid });
+      if (error) throw error;
+      // fiche_entrant = 'b' (créée), fiche_candidat = 'a' (existante)
+      ARB.detail = {
+        id_file: ligne.id_file, score: ligne.score, detail: ligne.detail || {},
+        a: data.fiche_candidat || {}, b: data.fiche_entrant || {}
+      };
+      ARB.choix = {}; ARB.survivant = 'a';
+      arbRender();
+    } catch (e) { ARB.err = (e && e.message) || 'Dossier illisible.'; arbRender(); }
+  }
+
+  function arbAnalyse(d) {
+    const conflits = [], identiques = [];
+    ARB_CHAMPS.forEach(function (pair) {
+      const k = pair[0], lbl = pair[1];
+      const va = arbVal(d.a, k), vb = arbVal(d.b, k);
+      if (va && vb && va.toLowerCase() === vb.toLowerCase()) identiques.push([k, lbl, va]);
+      else if (!va && !vb) {}
+      else conflits.push([k, lbl, va, vb]);
+    });
+    return { conflits: conflits, identiques: identiques };
+  }
+  function arbPreselection(d, conflits) {
+    const c = {};
+    conflits.forEach(function (row) {
+      const k = row[0], va = row[2], vb = row[3];
+      c[k] = (vb && (!va || vb.length > va.length)) ? 'b' : 'a';
+    });
+    return c;
+  }
+
+  function arbHead() {
+    return '<div class="od-arb-head"><div class="od-arb-ic">' + I_ARB.users + '</div>' +
+      '<div class="od-arb-htxt"><h1>Arbitrage des doublons</h1><p>Deux fiches semblent désigner le même client. Vous tranchez.</p></div>' +
+      '<button class="od-arb-x" data-arb-close>&times;</button></div>';
+  }
+  function arbRuban(reste) {
+    const tot = ARB.file.length, pct = tot ? Math.round(ARB.i / tot * 100) : 0;
+    return '<div class="od-arb-ruban"><span class="reste">' + reste + '</span><span>à arbitrer</span>' +
+      '<div class="od-arb-jauge"><i style="width:' + pct + '%"></i></div>' +
+      '<div class="od-arb-mini"><span><b>' + ARB.fus + '</b> fusionnés</span><span class="r"><b>' + ARB.rej + '</b> écartés</span></div></div>';
+  }
+  function arbMotif(d) {
+    const fort = (d.score >= 90);
+    const sig = Object.keys(d.detail || {}).map(function (k) {
+      const val = d.detail[k]; const cls = val > 0 ? 'pos' : 'neg';
+      return '<span class="od-arb-tag ' + cls + '">' + esc(ARB_LIB[k] || k) + '</span>';
+    }).join('');
+    return '<div class="od-arb-mtf"><span class="od-arb-force ' + (fort ? 'fort' : 'moyen') + '">' +
+      (fort ? 'Quasi certain' : 'À vérifier') + '</span><span class="sur">rapprochement sur</span>' + sig + '</div>';
+  }
+
+  function arbSimple(d) {
+    return '<div class="od-arb-simple"><div class="duo">' +
+      arbMini('a', d.a) + '<div class="fleche">' + I_ARB.arrow + '</div>' + arbMini('b', d.b) +
+    '</div><p class="verdict">Les deux fiches concordent. La fusion conserve <b>' + esc(arbNom(d.a)) +
+    '</b> (fiche ' + esc(d.a.idvu) + ') et récupère les infos de la fiche ' + esc(d.b.idvu) + '.</p></div>';
+  }
+  function arbMini(cote, f) {
+    return '<div class="mini ' + cote + '"><div class="ref">' + (cote === 'a' ? 'Fiche existante' : 'Vient d\'être créée') + '</div>' +
+      '<div class="n">' + esc(arbNom(f)) + '</div>' +
+      '<div class="l">' + esc([f.mobile, f.email].filter(Boolean).join(' · ')) + '</div>' +
+      '<div class="l">' + esc([f.code_postal, f.ville].filter(Boolean).join(' ') + (f.vehicules ? ' · ' + f.vehicules + ' véh.' : '')) + '</div></div>';
+  }
+
+  function arbPeint(d, conflits, identiques) {
+    return '<div class="od-arb-peint">' +
+      '<p class="intro">Pour chaque ligne, <b>touchez la valeur à conserver</b>. La fiche finale se compose au-dessus.</p>' +
+      arbResultat(d, conflits) +
+      '<p class="ct">À trancher — ' + conflits.length + ' champ' + (conflits.length > 1 ? 's' : '') + '</p>' +
+      conflits.map(function (c) { return arbLigne(d, c); }).join('') +
+      (identiques.length ? arbIdentiques(identiques) : '') + '</div>';
+  }
+  function arbResultat(d, conflits) {
+    const cells = ARB_CHAMPS.map(function (pair) {
+      const k = pair[0], lbl = pair[1], va = arbVal(d.a, k), vb = arbVal(d.b, k);
+      let src, v;
+      if (va && vb && va.toLowerCase() === vb.toLowerCase()) { src = ARB.survivant; v = va; }
+      else if (!va && !vb) { src = null; v = ''; }
+      else if (va && vb) { src = ARB.choix[k] || 'a'; v = (src === 'a') ? va : vb; }
+      else { src = va ? 'a' : 'b'; v = va || vb; }
+      const pin = src ? '<span class="pin ' + src + '"></span>' : '';
+      return '<div class="rc"><span class="rk">' + lbl + '</span><span class="rv' + (v ? '' : ' vide') + '">' + pin + (esc(v) || '—') + '</span></div>';
+    }).join('');
+    return '<div class="od-arb-res"><div class="rg">' + cells + '</div></div>';
+  }
+  function arbLigne(d, row) {
+    const k = row[0], lbl = row[1], va = row[2], vb = row[3];
+    return '<div class="od-arb-cf" data-champ="' + k + '"><div class="ck">' + lbl + '</div>' +
+      arbOpt('a', k, va) + arbOpt('b', k, vb) + '</div>';
+  }
+  function arbOpt(cote, k, v) {
+    const on = (ARB.choix[k] || 'a') === cote;
+    const src = (cote === 'a') ? 'existante' : 'saisie vendeur';
+    return '<button class="od-arb-opt ' + cote + '" data-champ="' + k + '" data-cote="' + cote + '" aria-pressed="' + on + '">' +
+      '<span class="ov' + (v ? '' : ' vide') + '">' + (esc(v) || 'non renseigné') + '</span>' +
+      '<span class="os">(' + src + ')</span></button>';
+  }
+  function arbIdentiques(identiques) {
+    return '<details class="od-arb-id"><summary>' + identiques.length + ' champ' + (identiques.length > 1 ? 's identiques' : ' identique') + '</summary>' +
+      identiques.map(function (r) { return '<div class="idr"><span class="idk">' + r[1] + '</span><span>' + esc(r[2]) + '</span></div>'; }).join('') + '</details>';
+  }
+
+  function arbActions(simple) {
+    return '<div class="od-arb-act">' +
+      '<button class="od-arb-b fusion" data-arb="fusion"' + (ARB.busy ? ' disabled' : '') + '>' + I_ARB.check + '<span>' + (simple ? 'Fusionner' : 'Fusionner ainsi') + '</span></button>' +
+      '<button class="od-arb-b rejet" data-arb="rejet"' + (ARB.busy ? ' disabled' : '') + '>' + I_ARB.x + '<span>Pas un doublon</span></button>' +
+      '<button class="od-arb-b report" data-arb="report"' + (ARB.busy ? ' disabled' : '') + '>' + I_ARB.clock + '<span>Plus tard</span></button></div>';
+  }
+  function arbVide() {
+    return '<div class="od-arb-vide"><div class="ok">' + I_ARB.check + '</div><h2>File vide</h2>' +
+      '<p>Plus aucun doublon à arbitrer dans votre périmètre. ' + ARB.fus + ' fusionnés, ' + ARB.rej + ' écartés.</p></div>';
+  }
+
+  // ---- interactions ----------------------------------------------
+  function arbBindClose() {
+    const x = doc.querySelector('[data-arb-close]'); if (x) x.addEventListener('click', arbClose);
+  }
+  function arbBind(d, conflits, simple) {
+    arbBindClose();
+    if (!simple) {
+      doc.querySelectorAll('.od-arb-opt').forEach(function (b) {
+        b.addEventListener('click', function () {
+          ARB.choix[b.getAttribute('data-champ')] = b.getAttribute('data-cote');
+          arbRepeindre(d, conflits);
+        });
+      });
+    }
+    doc.querySelectorAll('[data-arb]').forEach(function (b) {
+      b.addEventListener('click', function () { arbTrancher(b.getAttribute('data-arb'), d, conflits); });
+    });
+  }
+  function arbRepeindre(d, conflits) {
+    const carte = doc.getElementById('od-arb-carte'); if (!carte) return;
+    const old = carte.querySelector('.od-arb-res');
+    const tmp = doc.createElement('div'); tmp.innerHTML = arbResultat(d, conflits);
+    if (old) old.replaceWith(tmp.firstChild);
+    carte.querySelectorAll('.od-arb-opt').forEach(function (b) {
+      b.setAttribute('aria-pressed', String((ARB.choix[b.getAttribute('data-champ')] || 'a') === b.getAttribute('data-cote')));
+    });
+  }
+
+  async function arbTrancher(action, d, conflits) {
+    if (ARB.busy) return;
+    ARB.busy = true;
+    const sb = arbSb(), uid = arbUserId();
+    const carte = doc.getElementById('od-arb-carte');
+    const anim = action === 'fusion' ? 'partir-fusion' : action === 'rejet' ? 'partir-rejet' : 'partir-report';
+
+    try {
+      let params;
+      if (action === 'fusion') {
+        // survivant = fiche qui garde l'identité (le nom) = 'a' par défaut (existante).
+        // Champs peints : pour chaque conflit où l'arbitre a choisi la valeur de
+        // l'absorbé, on la passe à client_merge via p_champs.
+        const survCote = ARB.survivant;                 // 'a'
+        const survivant = survCote === 'a' ? d.a.idvu : d.b.idvu;
+        const absorbe   = survCote === 'a' ? d.b.idvu : d.a.idvu;
+        const champs = {};
+        (conflits || []).forEach(function (row) {
+          const k = row[0]; const choisi = ARB.choix[k] || 'a';
+          if (choisi !== survCote) {
+            // la valeur retenue vient de l'absorbé -> on l'impose
+            const f = choisi === 'a' ? d.a : d.b;
+            champs[k] = f[k];
+          }
+        });
+        params = { p_id_file: d.id_file, p_decision: 'fusionner', p_survivant: Number(survivant), p_absorbe: Number(absorbe), p_id_user: uid, p_champs: champs };
+      } else if (action === 'rejet') {
+        params = { p_id_file: d.id_file, p_decision: 'rejeter', p_id_user: uid };
+      } else {
+        params = { p_id_file: d.id_file, p_decision: 'reporter', p_id_user: uid };
+      }
+      const { error } = await sb.rpc('client_arbitrer', params);
+      if (error) throw error;
+    } catch (e) {
+      ARB.busy = false;
+      // afficher l'erreur sans perdre la carte
+      const box = doc.getElementById('od-arb');
+      if (box) { const w = doc.createElement('div'); w.className = 'od-arb-erru'; w.textContent = (e && e.message) || 'Action refusée.'; box.prepend(w); setTimeout(function(){ w.remove(); }, 4000); }
+      return;
+    }
+
+    if (action === 'fusion') ARB.fus++; else if (action === 'rejet') ARB.rej++;
+    if (carte) carte.classList.add(anim);
+    setTimeout(function () {
+      ARB.i++; ARB.detail = null; ARB.choix = {}; ARB.survivant = 'a'; ARB.busy = false;
+      arbRender();
+    }, action === 'fusion' ? 480 : 430);
+  }
+
+  const I_ARB = {
+    users: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 20a5.5 5.5 0 0 1 11 0"/><path d="M16 5.2a3.2 3.2 0 0 1 0 6M18.5 20a5.5 5.5 0 0 0-3-4.9"/></svg>',
+    arrow: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>',
+    check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>',
+    x: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+    clock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>'
+  };
+
 
   // ---------------------------------------------------------------- boot robuste & ré-entrant
   // (Re)construit la nav dès que #nav-root est présent mais vide : premier rendu,
