@@ -252,8 +252,22 @@ OD.define('client-search', {
     render();
   }
 
-  function selectRow(row) {
+  async function selectRow(row) {
     if (bdcvnActive()) { bdcvnReturn(row.IDVu); return; }   // 🔵 retour import BDC
+    // Ouvrir un cycle sur le site du vendeur si ce client n'en a pas encore
+    // un ici : sans cela, la policy SELECT masquerait la fiche dans son
+    // périmètre. Non bloquant — on navigue même si l'ouverture échoue.
+    try {
+      const siteApi = window.oropraSite || null;
+      const idSite = siteApi && siteApi.getSiteId ? siteApi.getSiteId() : null;
+      if (idSite != null && row && row.IDVu != null) {
+        await ctx.supabase.rpc('cycle_ouvrir', {
+          p_id_client: Number(row.IDVu),
+          p_id_site:   idSite,
+          p_id_user:   viewerId != null ? Number(viewerId) : null
+        });
+      }
+    } catch (e) { console.warn('[crs] cycle_ouvrir:', e && e.message); }
     odSetSelectedClient(Object.assign({}, row, { full_count: state.totalCount }));
     triggerFicheClient(row.IDVu);
     navigateToFiche();
