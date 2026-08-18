@@ -17,7 +17,7 @@
 (function () {
   'use strict';
 
-  var SEUIL_AFFICHAGE = 40;   // en dessous, c'est un homonyme, pas un doublon
+  var SEUIL_AFFICHAGE = 35;   // en dessous, c'est un homonyme, pas un doublon
 
   var LIBELLES = {
     siret_identique:      'même SIRET',
@@ -163,6 +163,8 @@
     var n = 0;
     for (var i = 0; i < candidats.length; i++) {
       var c = candidats[i];
+      // Jamais se signaler soi-même : la RPC rejette entrant == candidat.
+      if (c.id_client == null || Number(c.id_client) === Number(idvu)) continue;
       try {
         var r = await supabase.rpc('client_signaler_doublon', {
           p_id_client_entrant:  idvu,
