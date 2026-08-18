@@ -13,7 +13,7 @@ OD.define('client-search', {
   // window.oropraDoublons). On s'assure de sa présence sans dépendre de
   // l'ordre du socle : si absent, on l'injecte une fois.
   const OROPRA_DOUBLONS_URL =
-    'https://cdn.jsdelivr.net/gh/Oropra/one-data-blocs@91388a5c1febe21d909592d04b1c3f2c43ee27c3/oropra-doublons.js';
+    'https://cdn.jsdelivr.net/gh/Oropra/one-data-blocs@aa457b862a926340283e1b8e2e956cbff6357658/oropra-doublons.js';
   function chargerDoublons() {
     if (window.oropraDoublons) return Promise.resolve();
     if (window.__oropraDoublonsChargement) return window.__oropraDoublonsChargement;
@@ -337,21 +337,8 @@ OD.define('client-search', {
     if (!state.modal) return null;
     await chargerDoublons();
     const od = odDoublons();
-    if (!od) { console.warn('[crs][trace] oropra-doublons absent après chargement'); return null; }
-    console.log('[crs][trace] payload envoyé à check:', {
-      NOM: state.modal.data.NOM, TEl_MOB: state.modal.data.TEl_MOB, EMAIL: state.modal.data.EMAIL
-    });
-    console.log('[crs][trace] ctx.supabase présent ?', !!ctx.supabase, '| .rpc ?', ctx.supabase && typeof ctx.supabase.rpc);
-    // appel direct de la RPC, court-circuitant le module, pour isoler la panne
-    try {
-      const direct = await ctx.supabase.rpc('client_doublons', {
-        p_payload: { nom: state.modal.data.NOM, mobile: state.modal.data.TEl_MOB, email: state.modal.data.EMAIL }
-      });
-      console.log('[crs][trace] RPC directe → error:', direct.error, '| data:', direct.data);
-    } catch (e) { console.log('[crs][trace] RPC directe a levé:', e && e.message); }
-    const r = await od.check(ctx.supabase, state.modal.data, { societe: state.modal.isSoc });
-    console.log('[crs][trace] od.check renvoie:', r);
-    return r;
+    if (!od) { console.warn('[crs] oropra-doublons absent'); return null; }
+    return od.check(ctx.supabase, state.modal.data, { societe: state.modal.isSoc });
   }
 
   function dismissDuplicate() {
@@ -393,15 +380,9 @@ OD.define('client-search', {
     state.modal.duplicate = null;
     render();
     try {
-      console.log('[crs][trace] saveCreation — dupAck=', state.modal.dupAck);
       if (!state.modal.dupAck) {
         const dup = await checkDuplicates();
-        console.log('[crs][trace] checkDuplicates renvoie:', dup);
-        if (dup) {
-          console.log('[crs][trace] doublon détecté → affichage modal, arrêt création');
-          state.modal.duplicate = dup; state.modal.saving = false; render(); return;
-        }
-        console.log('[crs][trace] aucun doublon retenu → création directe');
+        if (dup) { state.modal.duplicate = dup; state.modal.saving = false; render(); return; }
       }
       const supabase = ctx.supabase;
       const now = new Date().toISOString();
