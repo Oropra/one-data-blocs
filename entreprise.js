@@ -1,6 +1,17 @@
 // ENTREPRISE — module One Data (OD.define) v1 (Lot B)
 OD.define('entreprise', {
   mount(__anchor, ctx) {
+    const OROPRA_DOUBLONS_URL = 'https://cdn.jsdelivr.net/gh/Oropra/one-data-blocs@aa457b862a926340283e1b8e2e956cbff6357658/oropra-doublons.js';
+    function chargerDoublons() {
+      if (window.oropraDoublons) return Promise.resolve();
+      if (window.__oropraDoublonsChargement) return window.__oropraDoublonsChargement;
+      window.__oropraDoublonsChargement = new Promise((resolve) => {
+        const sc = document.createElement('script'); sc.src = OROPRA_DOUBLONS_URL; sc.async = true;
+        sc.onload = () => resolve(); sc.onerror = () => { resolve(); };
+        document.head.appendChild(sc);
+      }); return window.__oropraDoublonsChargement;
+    }
+    chargerDoublons().then(function(){ try { if (window.oropraDoublons && !document.getElementById('od-css-er')) { var e=document.createElement('style'); e.id='od-css-er'; e.textContent=window.oropraDoublons.css('er'); document.head.appendChild(e); } } catch(x){} });
     __anchor.id = 'oropra-entreprise-rattachement';
 
 // ============================================================================
@@ -218,14 +229,25 @@ async function saveCreate() {
   const siret = cleanDigits(d.SIRET);
   if (!d.NOM || !String(d.NOM).trim()) { c.error = 'La raison sociale est obligatoire.'; render(); return; }
   if (siret && siret.length !== 14) { c.error = 'Le SIRET doit comporter 14 chiffres.'; render(); return; }
+  // Contrôle de doublon avant création : une société au même SIRET (ou même
+  // raison sociale) existe peut-être déjà. On alerte, on ne bloque pas.
+  if (!c.dupAck) {
+    await chargerDoublons();
+    const od = window.oropraDoublons;
+    if (od) {
+      const dup = await od.check(supa(), { NOM: d.NOM, SIRET: siret || null, ADRESSE: d.ADRESSE, code_postal: d.code_postal }, { societe: true });
+      if (dup) { c.saving = false; c.duplicate = dup; render(); return; }
+    }
+  }
   c.saving = true; c.error = null; render();
   try {
     const sb = supa();
     const now = new Date().toISOString();
-    const { data: maxRow } = await sb.from('CLIENT').select('IDVu').order('IDVu', { ascending: false }).limit(1).maybeSingle();
-    const nextIDVu = (maxRow && maxRow.IDVu != null ? Number(maxRow.IDVu) : 0) + 1;
+    const siteApi = window.oropraSite || null;
+    const idSite = siteApi && siteApi.getSiteId ? siteApi.getSiteId() : null;
+    if (idSite == null) { c.saving = false; c.error = "Aucun site sélectionné (choisissez un site en haut à droite)."; render(); return; }
     const payload = {
-      IDVu: nextIDVu, idmultivu: 1,
+      idmultivu: 1,
       CIVILITE: d.CIVILITE || null, NOM: String(d.NOM).trim(), SIRET: siret ? Number(siret) : null,
       ADRESSE: d.ADRESSE || null, code_postal: d.code_postal || null, ville: d.ville || null,
       CP_VILLE: [d.code_postal, d.ville].filter(Boolean).join(' ') || null,
@@ -235,10 +257,17 @@ async function saveCreate() {
       ID_VENDEUR_CREATION: viewerId != null ? String(viewerId) : null,
       ID_VENDEUR_UPDATE: viewerId != null ? String(viewerId) : null
     };
-    const { data: inserted, error } = await sb.from('CLIENT').insert(payload).select('IDVu, CIVILITE, NOM, SIRET').single();
+    const { data: creation, error } = await sb.rpc('client_creer', { p_payload: payload, p_id_site: idSite, p_id_user: viewerId != null ? Number(viewerId) : null });
     if (error) throw error;
+    const inserted = creation && creation.client ? creation.client : null;
+    if (!inserted) throw new Error('création : aucune fiche renvoyée');
+    // Signalement des doublons que le vendeur a passés outre.
+    if (c.duplicate && c.duplicate.candidats && window.oropraDoublons) {
+      const cc = c.duplicate.candidats.filter(x => x.id_client != null && Number(x.id_client) !== Number(inserted.IDVu));
+      if (cc.length) { try { await window.oropraDoublons.signaler(sb, inserted.IDVu, cc); } catch (e) {} }
+    }
     if (siret) {
-      try { await sb.functions.invoke(EDGE_FN_SIRENE_UPSERT, { body: { siret: String(siret), idvu: String(nextIDVu), setPrimary: true } }); }
+      try { await sb.functions.invoke(EDGE_FN_SIRENE_UPSERT, { body: { siret: String(siret), idvu: String(inserted.IDVu), setPrimary: true } }); }
       catch (eLink) { console.warn('[entr] sirene-upsert (non bloquant):', eLink && eLink.message); }
     }
     state.modal.selected = { IDVu: Number(inserted.IDVu), nom: societeName(inserted) || ('Société #' + inserted.IDVu), siret: inserted.SIRET ? String(inserted.SIRET) : '' };
@@ -464,6 +493,7 @@ function renderModal() {
 function renderCreate(c) {
   let h = '';
   if (c.error) h += `<div class="er-err">${esc(c.error)}</div>`;
+  if (c.duplicate && window.oropraDoublons) h += window.oropraDoublons.html(c.duplicate, 'er', { saving: c.saving, libelleForce: 'Créer quand même' });
   h += `<div class="er-search">${I.search}<input data-cf="sirene" value="${esc(c.sireneQ || '')}" placeholder="Rechercher dans SIRENE (SIRET, SIREN, raison sociale)…" autocomplete="off"></div>`;
   if (c.sireneLoading) h += '<div class="er-status">' + I.spin + ' Recherche SIRENE…</div>';
   if (c.sireneResults && c.sireneResults.length) {
@@ -526,6 +556,8 @@ function bindEvents() {
   on('[data-clear-selected]', 'click', clearSelected);
   on('[data-open-create]', 'click', openCreate);
   on('[data-cancel-create]', 'click', cancelCreate);
+  on('[data-od-action="dup-dismiss"]', 'click', function(){ if (state.modal && state.modal.create) { state.modal.create.duplicate = null; render(); } });
+  on('[data-od-action="dup-force"]', 'click', function(){ if (state.modal && state.modal.create) { state.modal.create.dupAck = true; state.modal.create.duplicate = null; saveCreate(); } });
   on('[data-save-create]', 'click', saveCreate);
   on('[data-attach]', 'click', doAttach);
 
