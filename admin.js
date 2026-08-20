@@ -80,6 +80,22 @@ OD.define('admin', {
     { field: 'email_account_status', label: 'Email statut', kind: 'status' }
   ];
 
+  /* Colonne « Affectation » : un utilisateur multi-sites produit une ligne par
+   * affectation. Sans elle, ces lignes sont rigoureusement identiques et rien
+   * ne dit sur laquelle on agit. On ne l'ajoute que lorsque la liste couvre
+   * plusieurs sites — sur un site unique elle ne ferait que du bruit. */
+  function activeColumns() {
+    if (!state.showSite) return COLUMNS;
+    var out = COLUMNS.slice();
+    out.splice(2, 0, { field: '__affect', label: 'Affectation' });
+    return out;
+  }
+  function affectCell(r) {
+    var parent = [r.reseau, r.affaire].filter(Boolean).join(' · ');
+    return '<span class="oda-affect"><b>' + esc(r.site_name || '—') + '</b>'
+      + (parent ? '<small>' + esc(parent) + '</small>' : '') + '</span>';
+  }
+
   /* ------------------------------------------------------------- utilitaires */
   function inEditor() { try { return window.self !== window.top; } catch (e) { return true; } }
   function sb() { return ctx.supabase; }
@@ -149,6 +165,9 @@ OD.define('admin', {
   + '.oda-searchfield input::-webkit-search-cancel-button{display:none;}'
   + '.oda-searchclear{position:absolute;right:8px;bottom:9px;border:0;background:none;font-size:17px;line-height:1;color:var(--text-mut);cursor:pointer;padding:0 2px;}'
   + '.oda-searchnote{margin:-8px 0 14px;font-size:12px;color:var(--text-mut);}'
+  + '.oda-affect{display:flex;flex-direction:column;line-height:1.25;}'
+  + '.oda-affect b{font-weight:600;font-size:13px;color:var(--text);}'
+  + '.oda-affect small{font-size:11px;color:var(--text-mut);}'
   + '.oda-field{display:flex;flex-direction:column;gap:4px;min-width:170px;flex:1 1 170px;max-width:260px;}'
   + '.oda-field label{font-size:10px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--text-mut);}'
   + '.oda-field select,.oda-modal select{appearance:none;border:1px solid var(--border);border-radius:8px;padding:8px 30px 8px 10px;font-size:13px;background:var(--card);color:var(--text);cursor:pointer;font-family:inherit;width:100%;'
@@ -680,16 +699,17 @@ OD.define('admin', {
 
   function userRowHtml(r, indentClass) {
     var html = '<tr class="oda-user">';
-    COLUMNS.forEach(function (c, i) {
+    activeColumns().forEach(function (c, i) {
       var cls = (i === 0 ? 'oda-nom ' + (indentClass || '') : (c.grow ? 'oda-grow' : '')).trim();
-      var cell = (c.kind === 'status') ? statusBadge(r[c.field]) : esc(r[c.field]);
+      var cell = (c.field === '__affect') ? affectCell(r)
+               : (c.kind === 'status') ? statusBadge(r[c.field]) : esc(r[c.field]);
       html += '<td' + (cls ? ' class="' + cls + '"' : '') + '>' + cell + '</td>';
     });
     html += '<td class="oda-actions-cell"><button class="oda-iconbtn" data-menu="' + esc(rowKey(r)) + '" title="Actions">' + ICON.dots + '</button></td>';
     return html + '</tr>';
   }
   function groupHeaderHtml(label, count, key, sub) {
-    var span = COLUMNS.length + 1;
+    var span = activeColumns().length + 1;
     return '<tr class="oda-grp' + (sub ? ' vnvo' : '') + '" data-exp="' + esc(key) + '"><td colspan="' + span + '"><span class="' + (sub ? 'ind' : '') + '"><span class="oda-exp">' + (isOpen(key) ? '▼' : '▶') + '</span>' + esc(label) + '<span class="oda-grp-count">' + count + '</span></span></td></tr>';
   }
   function tableBody(rows) {
@@ -719,8 +739,14 @@ OD.define('admin', {
     if (!root) return;
     if (state.isAdmin === false) { root.innerHTML = '<div class="oda-wrap"><div class="oda-empty">Accès réservé aux administrateurs.</div></div>'; return; }
     var rows = filteredRows(), ready = listReady();
+    state.showSite = distinct(rows.map(function (r) { return r.site_name; })).length > 1;
+    // Une ligne = une affectation, pas un utilisateur. Quand les deux nombres
+    // divergent, l'annoncer évite de croire à des doublons.
+    var nbUsers = distinct(rows.map(function (r) { return r.id_user; })).length;
+    var compte = nbUsers + ' utilisateur' + (nbUsers > 1 ? 's' : '')
+      + (rows.length > nbUsers ? ' · ' + rows.length + ' affectations' : '');
     var html = '<div class="oda-wrap"><div class="oda-head"><h1>Administration des utilisateurs</h1>'
-      + '<span class="oda-count">' + ((state.loading || !ready) ? '' : rows.length + ' utilisateur' + (rows.length > 1 ? 's' : '')) + '</span>'
+      + '<span class="oda-count">' + ((state.loading || !ready) ? '' : compte) + '</span>'
       + '<button class="oda-btn primary oda-create" data-action="create-user">+ Créer un utilisateur</button></div>';
     var qv = state.filters.q || '';
     html += '<div class="oda-filters">'
@@ -743,7 +769,7 @@ OD.define('admin', {
     else if (rows.length === 0) html += '<div class="oda-empty">Aucun utilisateur ne correspond aux filtres.</div>';
     else {
       html += '<table class="oda-table"><thead><tr>';
-      COLUMNS.forEach(function (c) { html += '<th' + (c.grow ? ' class="oda-grow"' : '') + '>' + esc(c.label) + '</th>'; });
+      activeColumns().forEach(function (c) { html += '<th' + (c.grow ? ' class="oda-grow"' : '') + '>' + esc(c.label) + '</th>'; });
       html += '<th class="oda-actions-cell"></th></tr></thead><tbody>' + tableBody(rows) + '</tbody></table>';
     }
     html += '</div></div>';
