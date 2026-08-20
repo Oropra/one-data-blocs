@@ -22,7 +22,9 @@ function extractAll(re, text, group = 1) {
   return [...out].sort();
 }
 
-const files = readdirSync(root).filter((f) => f.endsWith('.js')).sort();
+const files = readdirSync(root)
+  .filter((f) => f.endsWith('.js') && !f.endsWith('.config.js'))
+  .sort();
 const modules = [];
 const globalTables = new Map();
 const globalRpcs = new Map();

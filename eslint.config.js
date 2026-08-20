@@ -11,6 +11,7 @@ export default tseslint.config(
       '**/dist/**',
       '**/node_modules/**',
       '**/coverage/**',
+      '**/storybook-static/**',
       // Legacy WeWeb modules are frozen; they are inventoried, not linted.
       // Remove entries here as domains are retired (plan Task 17).
       '*.js',

@@ -1,0 +1,87 @@
+/**
+ * One Data design tokens.
+ * Values extracted from the legacy WeWeb modules (see docs/modernization/design-tokens.md).
+ * Tenants may override the brand-tagged properties at runtime via applyTenantBranding().
+ */
+:root {
+  /* Brand (tenant-overridable) */
+  --od-color-primary: #2a5ea9;
+  --od-color-primary-strong: #1f4a85;
+  --od-color-primary-soft: #acc5e4;
+  --od-color-accent: #53bda7;
+  --od-color-accent-strong: #2c7a68;
+
+  /* Semantic */
+  --od-color-background: #f5f8fc;
+  --od-color-surface: #ffffff;
+  --od-color-surface-muted: #eef2f8;
+  --od-color-surface-hover: #e8eef7;
+  --od-color-text: #1a2733;
+  --od-color-text-muted: #5b6b7c;
+  --od-color-border: #d3deeb;
+  --od-color-success: #53bda7;
+  --od-color-warning: #fac055;
+  --od-color-danger: #e24b4a;
+  --od-color-info: #7a98c5;
+  --od-color-focus: #2a5ea9;
+
+  /* On-color pairs (text/icon on top of the matching solid color) */
+  --od-color-on-primary: #ffffff;
+  --od-color-on-danger: #ffffff;
+  --od-color-on-warning: #3a2c05;
+
+  /* Typography */
+  --od-font-family:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --od-font-size-xs: 0.75rem;
+  --od-font-size-sm: 0.875rem;
+  --od-font-size-md: 1rem;
+  --od-font-size-lg: 1.125rem;
+  --od-font-size-xl: 1.375rem;
+  --od-font-size-2xl: 1.75rem;
+  --od-font-weight-normal: 400;
+  --od-font-weight-medium: 500;
+  --od-font-weight-semibold: 600;
+  --od-font-weight-bold: 700;
+  --od-line-height: 1.45;
+
+  /* Spacing scale (4px base) */
+  --od-space-1: 0.25rem;
+  --od-space-2: 0.5rem;
+  --od-space-3: 0.75rem;
+  --od-space-4: 1rem;
+  --od-space-5: 1.5rem;
+  --od-space-6: 2rem;
+  --od-space-8: 3rem;
+
+  /* Radii */
+  --od-radius-sm: 6px;
+  --od-radius-md: 8px;
+  --od-radius-lg: 10px;
+  --od-radius-xl: 12px;
+  --od-radius-full: 999px;
+
+  /* Elevation */
+  --od-shadow-sm: 0 1px 2px rgb(26 39 51 / 8%);
+  --od-shadow-md: 0 2px 8px rgb(26 39 51 / 12%);
+  --od-shadow-lg: 0 8px 24px rgb(26 39 51 / 16%);
+
+  /* Motion */
+  --od-motion-fast: 120ms;
+  --od-motion-normal: 200ms;
+  --od-motion-easing: cubic-bezier(0.2, 0, 0, 1);
+
+  /* Z-index scale */
+  --od-z-dropdown: 100;
+  --od-z-sticky: 200;
+  --od-z-overlay: 300;
+  --od-z-modal: 400;
+  --od-z-toast: 500;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --od-motion-fast: 0ms;
+    --od-motion-normal: 0ms;
+  }
+}
