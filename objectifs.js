@@ -2,7 +2,7 @@
 //  OBJECTIFS — module One Data (OD.define)  v1 (checklist)
 //  Rendu dans __anchor ; SUPABASE_URL/KEY -> ctx.tenant ; getUserJwt() ->
 //  session du client runtime ; doc -> __anchor.ownerDocument. User = oropraUser.
-//  Périmètre 100% v_user_perimeter (VAR_SITES retirée). 0 vestige.
+//  Périmètre 100% v_mon_perimetre (VAR_SITES retirée). 0 vestige.
 // ============================================================================
 OD.define('objectifs', {
   async mount(__anchor, ctx) {
@@ -38,21 +38,21 @@ OD.define('objectifs', {
 function getUserJwt() { return __odJwt; }   // JWT de session (client runtime)
 
 let perimSites = [];
-// Périmètre dérivé de v_user_perimeter (ne dépend plus de VAR_SITES, non fiable depuis la migration).
+// Périmètre dérivé de v_mon_perimetre (ne dépend plus de VAR_SITES, non fiable depuis la migration).
 async function loadPerimeter() {
   try {
     const uid = (((wwLib.getFrontWindow && wwLib.getFrontWindow()) || window).oropraUser || {}).ID_User;
     if (uid == null) return;
     const jwt = getUserJwt();
-    const res = await fetch(SUPABASE_URL + '/rest/v1/v_user_perimeter?viewer_id_user=eq.' + uid + '&select=id_site',
+    const res = await fetch(SUPABASE_URL + '/rest/v1/v_mon_perimetre?viewer_id_user=eq.' + uid + '&select=id_site',
       { headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + (jwt || SUPABASE_KEY) } });
-    if (!res.ok) { console.error('[obj] v_user_perimeter', res.status); return; }
+    if (!res.ok) { console.error('[obj] v_mon_perimetre', res.status); return; }
     const rows = await res.json();
     if (Array.isArray(rows)) perimSites = [...new Set(rows.map(function (r) { return Number(r.id_site) }).filter(function (n) { return !isNaN(n) }))];
   } catch (e) { console.error('[obj] perimeter', e); }
 }
 function getSitesIds() {
-  return perimSites;   // périmètre depuis v_user_perimeter (VAR_SITES retirée)
+  return perimSites;   // périmètre depuis v_mon_perimetre (VAR_SITES retirée)
 }
 
 const PERF_VIEW = 'v_performances_v2'
