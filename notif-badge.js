@@ -66,7 +66,7 @@ OD.define('notif-badge', {
     try {
       let siteIds = me.ID_SITE != null ? [Number(me.ID_SITE)] : [];
       if (!siteIds.length) {
-        const { data: perim } = await c.from('v_user_perimeter').select('id_site').eq('viewer_id_user', meId);
+        const { data: perim } = await c.from('v_mon_perimetre').select('id_site').eq('viewer_id_user', meId);
         siteIds = Array.from(new Set((perim || []).map(r => Number(r.id_site)).filter(x => !isNaN(x))));
       }
       if (!siteIds.length) return [meId];
