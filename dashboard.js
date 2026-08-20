@@ -61,6 +61,12 @@ OD.define('dashboard', {
     if (state.act     === undefined) state.act     = null;   // get_activite_equipe
     if (state.stock   === undefined) state.stock   = null;
     if (state.leads   === undefined) state.leads   = null;
+    // AJOUT 20/08/2026 — entonnoir de COHORTE (get_entonnoir).
+    // Vit à côté du funnel historique, il ne le remplace pas encore :
+    // on garde les deux visibles le temps de les comparer sur de vraies
+    // données, puis on retirera l'ancien.
+    if (state.ent     === undefined) state.ent     = null;   // get_entonnoir
+    if (state.entErr  === undefined) state.entErr  = null;
     // Montage = nouvelle arrivée sur l'accueil : on repart TOUJOURS sans filtre ni
     // détail ouvert (corrige le retour accueil / logo qui laissait un état collé).
     state.selection = { level: 'all', key: null, label: 'Tout le périmètre' };
@@ -215,6 +221,40 @@ OD.define('dashboard', {
       const f = famille();
       if (f === 'vendeur' || f === 'chef' || f === 'marketing') loadLeads();
       if (f === 'chef' || f === 'directeur' || f === 'admin')   loadStock();
+      loadEntonnoir();
+    }
+
+    // ── AJOUT : entonnoir de cohorte ──────────────────────────────────
+    // La cohorte NE SUIT PAS le sélecteur de période de la page, et c'est
+    // volontaire : les contacts de cette semaine n'ont pas eu le temps de
+    // se conclure, les compter écraserait le taux. On prend une fenêtre de
+    // 3 mois qui s'arrête il y a 30 jours, et on l'affiche en clair.
+    function bornesCohorte() {
+      const fin = new Date(); fin.setDate(fin.getDate() - 30);
+      const deb = new Date(fin); deb.setDate(deb.getDate() - 90);
+      return { from: ymd(deb), to: ymd(fin) };
+    }
+    async function loadEntonnoir() {
+      const b = bornesCohorte();
+      const k = viewerId + '|' + b.from + '|' + b.to + '|' + famille();
+      if (state.entKey === k && (state.ent || state.entErr)) return;
+      state.entKey = k;
+      try {
+        const r = await sb.rpc('get_entonnoir', {
+          p_viewer_id_user: Number(viewerId),
+          p_date_from: b.from,
+          p_date_to: b.to,
+          p_id_user: famille() === 'vendeur' ? Number(viewerId) : null
+        });
+        if (r.error) throw r.error;
+        state.ent = (r.data || []).slice().sort((x, y) => num(x.rang) - num(y.rang));
+        state.entErr = null;
+      } catch (e) {
+        console.warn('[dash] get_entonnoir', e);
+        state.ent = null;
+        state.entErr = (e && e.message) || String(e);
+      }
+      render();
     }
     async function loadLeads() {
       if (state.leads) return;
@@ -460,7 +500,7 @@ OD.define('dashboard', {
         (t.rdv_aujourdhui > 0 ? ' <b>' + fr(t.rdv_aujourdhui) + ' RDV</b> aujourd\'hui.' : '');
       return bandeau('Ma journée', phrase, [['Ma position', pos > 0 ? pos + (pos === 1 ? 'er' : 'e') + ' / ' + cls.length : '—'],
         ['Pipeline', fr(t.cycles_ouverts) + ' cycles'], ['Prorata mois', Math.round(p.prorata * 100) + ' %']]) +
-        filtres() + '<div class="d-g">' + carteProjectionPerso(mine) + carteJournee(mine) + carteEntonnoirPerso(mine) + carteClassement('Ma position dans l\'équipe') + '</div>';
+        filtres() + '<div class="d-g">' + carteProjectionPerso(mine) + carteJournee(mine) + carteEntonnoirPerso(mine) + carteClassement('Ma position dans l\'équipe') + carteCohorte() + '</div>';
     }
     function carteProjectionPerso(mine) {
       const t = sum(mine, SUM_D), p = projection(t.commandes_realisees, t.objectif_commandes);
@@ -488,6 +528,82 @@ OD.define('dashboard', {
         if (i < et.length - 1) { const tx = e[1] > 0 ? Math.round(et[i + 1][1] / e[1] * 100) : 0; h += '<div class="d-fn-c">↓ ' + tx + ' %</div>'; } });
       return carte('Mon entonnoir', 'ma période', h + '</div>');
     }
+    // ── AJOUT : l'entonnoir de cohorte, du premier contact à la commande ──
+    // Le funnel historique (carteEntonnoir / carteEntonnoirPerso) divise des
+    // effectifs d'étapes pris à l'instant T. Les affaires mortes ne sont plus
+    // dans aucune étape : elles sortent du dénominateur et le taux paraît
+    // toujours meilleur qu'il n'est. Mesure du 20/08 sur le vendeur 155 :
+    // nb_propales = 1, nb_bdc_tx = 3, commandes = 5 — la hiérarchie
+    // propales >= BDC >= wins est inversée de bout en bout.
+    // Ici on suit une COHORTE : les cycles touchés pendant la fenêtre, et ce
+    // qu'ils sont devenus depuis, quelle que soit la date.
+    function carteCohorte() {
+      const b = bornesCohorte();
+      const sub = jolieDate(b.from) + ' → ' + jolieDate(b.to);
+
+      if (state.entErr) {
+        return carte('Transformation réelle', sub,
+          '<div class="d-empty">Entonnoir indisponible.</div>', 'd-full');
+      }
+      if (!state.ent) {
+        return carte('Transformation réelle', sub,
+          '<div class="d-sk"></div><div class="d-sk"></div><div class="d-sk"></div>', 'd-full');
+      }
+      const e = state.ent;
+      if (!e.length || !num(e[0].total)) {
+        return carte('Transformation réelle', sub,
+          '<div class="d-empty">Aucun contact sortant sur cette période.</div>', 'd-full');
+      }
+
+      const base = num(e[0].total);
+      let h = '<div class="d-co">';
+
+      e.forEach((et, i) => {
+        const tot = num(et.total), fin = num(et.rang) === 4;
+        const larg = Math.max(7, Math.round(100 * tot / base));
+        const parts = fin ? [['ga', tot]]
+                          : [['av', num(et.avance)], ['ec', num(et.en_cours)], ['pe', num(et.perdu)]];
+        h += '<div class="d-co-h"><span class="d-co-n">' + esc(et.etape) + '</span>' +
+             '<span class="d-co-t">' + fr(tot) + '</span></div>' +
+             '<div class="d-co-p" style="width:' + larg + '%">' +
+             parts.map(function (x) {
+               const w = tot > 0 ? Math.round(100 * x[1] / tot) : 0;
+               return '<span class="d-co-f co-' + x[0] + '" style="width:' + w + '%">' +
+                      (w > 14 ? '<b>' + fr(x[1]) + '</b>' : '') + '</span>';
+             }).join('') + '</div>';
+
+        if (e[i + 1]) {
+          const tx = tot > 0 ? Math.round(100 * num(et.avance) / tot) : 0;
+          const dj = et.delai_median_jours;
+          const lib = num(et.rang) === 1 ? 'des contacts donnent une proposition'
+                    : num(et.rang) === 2 ? 'des propositions deviennent un bon de commande'
+                    : 'des bons de commande sont signés';
+          h += '<div class="d-co-c' + (tx < 25 ? ' bas' : '') + '">' +
+               '<span class="d-co-tx">' + tx + ' %</span>' +
+               '<span class="d-co-l">' + lib +
+               (dj != null ? ' · <b>' + dec1(dj) + ' j</b> en médiane' : '') + '</span></div>';
+        }
+      });
+
+      const glob = base > 0 ? Math.round(100 * num(e[3].total) / base) : 0;
+      const decl = num(e[0].perdu_declare), sans = num(e[0].perdu_sans_suite);
+      let phrase = 'du premier contact à la commande.';
+      if (sans > 0) phrase += ' <b>' + fr(sans) + '</b> contacts se sont éteints sans que personne ne les clôture' +
+                              (decl > 0 ? ', contre ' + fr(decl) + ' soldés.' : '.');
+      h += '<div class="d-co-b"><span class="d-co-bn">' + glob + ' %</span>' +
+           '<span class="d-co-bt">' + phrase + '</span></div>';
+
+      if (famille() !== 'vendeur') {
+        h += '<div class="d-co-w">Un client peut être travaillé par plusieurs vendeurs du même site : ' +
+             'les entonnoirs individuels ne s\'additionnent pas pour donner celui du périmètre.</div>';
+      }
+      return carte('Transformation réelle', sub, h + '</div>', 'd-full');
+    }
+    function jolieDate(s) {
+      try { return new Date(s + 'T12:00:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }); }
+      catch (e) { return s; }
+    }
+
     function vueChef() {      // « Qui a besoin de moi aujourd'hui ? »
       const t = sum(dRows(), SUM_D), p = projection(t.commandes_realisees, t.objectif_commandes);
       const inact = vendeursInactifs();
@@ -499,7 +615,7 @@ OD.define('dashboard', {
         ['Équipe', nb + ' vendeurs'], ['Prorata mois', Math.round(p.prorata * 100) + ' %']]) +
         filtres() + '<div class="d-g">' + carteInactifs('Qui a besoin de moi') + carteProjection('équipe') +
         carteRetard('Vendeurs sous le rythme', 'vendeur', r => String(r.id_user), r => r.nom_complet) + cartePouls() +
-        carteEntonnoir() + carteQualite() + carteLeads() + carteStock() + '</div>';
+        carteEntonnoir() + carteQualite() + carteLeads() + carteStock() + carteCohorte() + '</div>';
     }
     function vueDirecteur(titre) {  // « Le mois est-il tenu, et où ça coince ? »
       const t = sum(dRows(), SUM_D), p = projection(t.commandes_realisees, t.objectif_commandes);
@@ -514,7 +630,7 @@ OD.define('dashboard', {
         ['Équipe', parVendeur(dRows(), SUM_D).length + ' vendeurs'], ['Prorata mois', Math.round(pr * 100) + ' %']]) +
         filtres() + '<div class="d-g">' + carteProjection('groupe') +
         carteRetard('Sites sous le rythme', 'site', r => String(r.id_site), r => r.nom_site) +
-        cartePouls() + carteEntonnoir() + carteInactifs('Vendeurs sans activité') + carteQualite() + carteStock() + '</div>';
+        cartePouls() + carteEntonnoir() + carteInactifs('Vendeurs sans activité') + carteQualite() + carteStock() + carteCohorte() + '</div>';
     }
     function vueMarketing() { // périmètre = les MARQUES du user (v_user_perimeter, rôle 5)
       const t = sum(dRows(), SUM_D), a = sum(aRows(), SUM_A);
@@ -524,7 +640,7 @@ OD.define('dashboard', {
         (t.leads_a_traiter > 0 ? ' <dn>' + fr(t.leads_a_traiter) + ' cycles</dn> ont des leads non traités.' : ' Tous les leads sont traités.');
       return bandeau('Mes marques', phrase, [['Marques', reseaux.length + ''], ['Sites', groupBy(dRows(), r => String(r.id_site), r => r.nom_site, SUM_D).length + ''],
         ['Entrants', fr(a.nb_entrants)]]) +
-        filtres() + '<div class="d-g">' + carteLeads() + carteEntonnoir() + carteQualite() + cartePouls() +
+        filtres() + '<div class="d-g">' + carteLeads() + carteEntonnoir() + carteQualite() + cartePouls() + carteCohorte() +
         carteRetard('Sites sous le rythme', 'site', r => String(r.id_site), r => r.nom_site) +
         carte('Par marque', 'commandes de la période',
           '<div class="d-lst">' + reseaux.slice(0, 8).map(x => '<div class="d-lst-r" data-pick="reseau:' + esc(x.key) + '"><span class="d-lst-n">' + esc(x.label) + '</span>' +
@@ -856,6 +972,32 @@ OD.define('dashboard', {
     '#dash-root .d-ok{padding:14px;text-align:center;color:#0f6e56;font-size:12.5px;font-weight:700;background:#eefaf6;border-radius:11px}' +
     '#dash-root .d-sk{height:14px;border-radius:7px;background:linear-gradient(90deg,#eef2f8 25%,#e2eaf5 50%,#eef2f8 75%);background-size:200% 100%;animation:dsk 1.4s infinite;margin-bottom:10px}' +
     '@keyframes dsk{0%{background-position:200% 0}100%{background-position:-200% 0}}' +
+    /* AJOUT : entonnoir de cohorte. Trois traitements franchement distincts,
+       pas trois bleus : plein = passé, hachuré = non résolu, plat = perdu. */
+    '#dash-root .d-co-h{display:flex;align-items:baseline;gap:10px;margin:14px 0 6px}' +
+    '#dash-root .d-co-h:first-child{margin-top:4px}' +
+    '#dash-root .d-co-n{font-size:12.5px;font-weight:800;color:#1F4A85}' +
+    '#dash-root .d-co-t{margin-left:auto;font-size:18px;font-weight:800;color:#1F4A85;letter-spacing:-.03em}' +
+    '#dash-root .d-co-p{height:26px;border-radius:5px;overflow:hidden;display:flex;background:#f5f8fc}' +
+    '#dash-root .d-co-f{height:100%;display:flex;align-items:center;justify-content:center}' +
+    '#dash-root .d-co-f b{font-size:11.5px;font-weight:800;color:#fff}' +
+    '#dash-root .co-av{background:#2a5ea9}' +
+    '#dash-root .co-ec{background:repeating-linear-gradient(-45deg,#eaf0f9 0 6px,#fff 6px 12px);box-shadow:inset 0 0 0 1px #acc5e4}' +
+    '#dash-root .co-pe{background:#dfe6f1}' +
+    '#dash-root .co-ga{background:#53bda7}' +
+    '#dash-root .co-ec b,#dash-root .co-pe b{color:#54678a}' +
+    '#dash-root .d-co-c{display:flex;align-items:center;gap:11px;padding:9px 0 9px 17px;margin-left:2px;border-left:2px dashed #e8eef7;position:relative}' +
+    '#dash-root .d-co-c::before{content:"";position:absolute;left:-5px;top:50%;width:8px;height:8px;border-radius:50%;background:#9bb3d1;transform:translateY(-50%)}' +
+    '#dash-root .d-co-tx{font-size:17px;font-weight:800;color:#2a5ea9;letter-spacing:-.02em;min-width:50px}' +
+    '#dash-root .d-co-l{font-size:12.5px;color:#54678a;font-weight:600}' +
+    '#dash-root .d-co-l b{color:#1F4A85}' +
+    '#dash-root .d-co-c.bas .d-co-tx{color:#e24b4a}' +
+    '#dash-root .d-co-c.bas .d-co-l b{color:#8a2a29}' +
+    '#dash-root .d-co-b{background:#eaf0f9;border-radius:9px;padding:13px 16px;margin-top:16px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}' +
+    '#dash-root .d-co-bn{font-size:28px;font-weight:800;color:#1F4A85;letter-spacing:-.035em;line-height:1}' +
+    '#dash-root .d-co-bt{font-size:12.5px;color:#54678a;font-weight:600;line-height:1.5;flex:1;min-width:200px}' +
+    '#dash-root .d-co-bt b{color:#1F4A85}' +
+    '#dash-root .d-co-w{margin-top:12px;background:#f5f8fc;border-left:3px solid #9bb3d1;padding:10px 13px;border-radius:0 8px 8px 0;font-size:12px;color:#54678a;line-height:1.5}' +
     '@media(max-width:860px){#dash-root .d-g{grid-template-columns:1fr}#dash-root .d-hero-l{font-size:16px}#dash-root .d-pj-n{font-size:40px}#dash-root .d-st{grid-template-columns:1fr}#dash-root .d-q{grid-template-columns:1fr}}' +
     '</style>';
 
