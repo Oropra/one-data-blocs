@@ -1,0 +1,1508 @@
+{
+  "generatedAt": "2026-08-20T08:14:49.970Z",
+  "moduleCount": 43,
+  "filesWithoutDefine": [
+    "oropra-doublons.js",
+    "socle.js"
+  ],
+  "tables": {
+    "USER": [
+      "admin.js",
+      "agenda.js",
+      "annuaire.js",
+      "auth.js",
+      "delco-chat.js",
+      "delco-page.js",
+      "email.js",
+      "kanban.js",
+      "likes.js",
+      "propale-vo.js",
+      "site-bus.js",
+      "vo-liste.js"
+    ],
+    "CLIENT": [
+      "agenda.js",
+      "bdc-vn.js",
+      "cf-fiche.js",
+      "client-search.js",
+      "delco-page.js",
+      "entreprise.js",
+      "fiche-shell.js",
+      "kanban.js",
+      "likes.js",
+      "notifications.js",
+      "oropra-doublons.js",
+      "propale-vo.js",
+      "vehicules.js",
+      "vo-liste.js"
+    ],
+    "rdv_type": [
+      "agenda.js"
+    ],
+    "ROLE": [
+      "annuaire.js"
+    ],
+    "SITE": [
+      "annuaire.js",
+      "delco-page.js",
+      "likes.js",
+      "propale-vo.js",
+      "site-bus.js",
+      "vehicules.js",
+      "vo-liste.js",
+      "whatsapp.js"
+    ],
+    "USER_SITE": [
+      "annuaire.js",
+      "notif-badge.js",
+      "site-bus.js"
+    ],
+    "import_bdc_vn": [
+      "bdc-vn.js"
+    ],
+    "generated_documents": [
+      "bilaterales.js",
+      "kanban.js",
+      "pcom.js"
+    ],
+    "v_contacts_client": [
+      "bilaterales.js",
+      "contacts.js",
+      "historique.js",
+      "rdv.js",
+      "rpv.js",
+      "sms.js"
+    ],
+    "client_view_history": [
+      "cf-fiche.js",
+      "client-history.js"
+    ],
+    "CYCLE_COM": [
+      "contacts.js",
+      "email.js",
+      "rpv.js"
+    ],
+    "agent_chat_messages": [
+      "delco-chat.js"
+    ],
+    "agent_chat_threads": [
+      "delco-chat.js"
+    ],
+    "email_accounts": [
+      "email.js"
+    ],
+    "emails": [
+      "email.js"
+    ],
+    "v_historique_cycles": [
+      "historique.js"
+    ],
+    "APV": [
+      "kanban.js",
+      "vehicules.js",
+      "vo-liste.js"
+    ],
+    "CLIENT_STOCK": [
+      "kanban.js",
+      "likes.js",
+      "vehicules.js",
+      "vo-liste.js"
+    ],
+    "CONTRE_MARQUE": [
+      "kanban.js",
+      "likes.js",
+      "propale-vo.js",
+      "vo-liste.js"
+    ],
+    "PROPALE_BDC": [
+      "kanban.js",
+      "likes.js",
+      "propale-vo.js",
+      "vo-liste.js"
+    ],
+    "STOCKVO": [
+      "kanban.js",
+      "likes.js",
+      "propale-vo.js"
+    ],
+    "v_liste_vo": [
+      "kanban.js",
+      "vo-liste.js"
+    ],
+    "v_cloture_cycle": [
+      "lead-mgmt.js"
+    ],
+    "v_cycles_actifs": [
+      "lead-mgmt.js"
+    ],
+    "v_cycles_kanban": [
+      "lead-mgmt.js"
+    ],
+    "v_lead_kpi_site": [
+      "lead-mgmt.js"
+    ],
+    "v_lead_kpi_vendeur": [
+      "lead-mgmt.js"
+    ],
+    "v_leads": [
+      "lead-mgmt.js"
+    ],
+    "v_premier_contact": [
+      "lead-mgmt.js"
+    ],
+    "v_user_cycles_recent": [
+      "lead-mgmt.js"
+    ],
+    "v_user_perimeter": [
+      "lead-mgmt.js",
+      "notif-badge.js",
+      "performances.js",
+      "site-bus.js"
+    ],
+    "fleet_snapshot": [
+      "onboarding.js"
+    ],
+    "fleet_snapshot_tenant": [
+      "onboarding.js"
+    ],
+    "onboarding_step": [
+      "onboarding.js"
+    ],
+    "v_onboarding": [
+      "onboarding.js"
+    ],
+    "v_performances_v2": [
+      "performances.js"
+    ],
+    "bareme_cheval_fiscal": [
+      "propale-vo.js"
+    ],
+    "bareme_malus_co2": [
+      "propale-vo.js"
+    ],
+    "RAPPORT_VENDEUR": [
+      "rpv.js"
+    ],
+    "sms_messages": [
+      "sms.js"
+    ],
+    "v_wa_thread_items": [
+      "whatsapp.js"
+    ],
+    "wa_contacts": [
+      "whatsapp.js"
+    ],
+    "wa_conversations": [
+      "whatsapp.js"
+    ]
+  },
+  "rpcs": {
+    "get_activite_equipe": [
+      "activite.js",
+      "dashboard.js"
+    ],
+    "get_transfo": [
+      "activite.js"
+    ],
+    "client_creer": [
+      "agenda.js",
+      "client-search.js",
+      "entreprise.js",
+      "kanban.js",
+      "vo-liste.js"
+    ],
+    "create_bilaterale": [
+      "agenda.js"
+    ],
+    "create_creneau": [
+      "agenda.js"
+    ],
+    "create_rdv_client": [
+      "agenda.js"
+    ],
+    "delete_bilaterale": [
+      "agenda.js"
+    ],
+    "delete_rdv_client": [
+      "agenda.js"
+    ],
+    "get_agenda_perimeter": [
+      "agenda.js",
+      "kanban.js"
+    ],
+    "get_calendar_events": [
+      "agenda.js"
+    ],
+    "update_bilaterale": [
+      "agenda.js"
+    ],
+    "update_rdv_client": [
+      "agenda.js"
+    ],
+    "get_current_user": [
+      "auth.js",
+      "socle.js"
+    ],
+    "set_password_changed": [
+      "auth.js"
+    ],
+    "commit_import_bdc_vn": [
+      "bdc-vn.js"
+    ],
+    "get_bilaterale_detail": [
+      "bilaterales.js"
+    ],
+    "get_bilaterale_engagements": [
+      "bilaterales.js"
+    ],
+    "get_bilaterale_tenue_vendeurs": [
+      "bilaterales.js"
+    ],
+    "get_bilaterales": [
+      "bilaterales.js"
+    ],
+    "get_bilaterales_historique": [
+      "bilaterales.js"
+    ],
+    "get_cadence_bilaterales": [
+      "bilaterales.js"
+    ],
+    "get_chefs_bilaterales": [
+      "bilaterales.js"
+    ],
+    "get_engagements_ouverts": [
+      "bilaterales.js"
+    ],
+    "get_perimetre_sites": [
+      "bilaterales.js"
+    ],
+    "get_vendeur_synthese": [
+      "bilaterales.js"
+    ],
+    "realiser_bilaterale_complet": [
+      "bilaterales.js"
+    ],
+    "client_doublons": [
+      "cf-fiche.js",
+      "oropra-doublons.js"
+    ],
+    "client_signaler_doublon": [
+      "cf-fiche.js",
+      "oropra-doublons.js"
+    ],
+    "cycle_ouvrir": [
+      "client-search.js"
+    ],
+    "get_dashboard": [
+      "dashboard.js"
+    ],
+    "get_dashboard_leads": [
+      "dashboard.js"
+    ],
+    "get_stock_synthese": [
+      "dashboard.js"
+    ],
+    "agent_signals_count": [
+      "delco-badge.js"
+    ],
+    "delco_query_sql": [
+      "delco-chat.js"
+    ],
+    "agent_signal_mark": [
+      "delco-page.js"
+    ],
+    "agent_signals_list": [
+      "delco-page.js"
+    ],
+    "enqueue_email": [
+      "email.js"
+    ],
+    "attach_entreprise": [
+      "entreprise.js"
+    ],
+    "detach_rattachement": [
+      "entreprise.js"
+    ],
+    "get_rattachements_particulier": [
+      "entreprise.js"
+    ],
+    "get_affaire_versions": [
+      "kanban.js"
+    ],
+    "get_kanban_cards": [
+      "kanban.js"
+    ],
+    "get_kanban_vendeurs": [
+      "kanban.js"
+    ],
+    "move_propale": [
+      "kanban.js",
+      "propale-vo.js"
+    ],
+    "creer_campagne_sollicitation": [
+      "lead-mgmt.js"
+    ],
+    "get_campagnes_sollicitation": [
+      "lead-mgmt.js"
+    ],
+    "get_classement_vendeur": [
+      "lead-mgmt.js"
+    ],
+    "get_leads_par_jour": [
+      "lead-mgmt.js"
+    ],
+    "get_leads_par_source": [
+      "lead-mgmt.js"
+    ],
+    "get_v_likes": [
+      "likes.js",
+      "vehicules.js"
+    ],
+    "get_user_notifications": [
+      "notif-badge.js",
+      "notifications.js"
+    ],
+    "notif_ignorer_cycle": [
+      "notifications.js"
+    ],
+    "notif_ignorer_orphelin": [
+      "notifications.js"
+    ],
+    "notif_ignorer_rpv": [
+      "notifications.js"
+    ],
+    "client_prochain_idvu": [
+      "oropra-doublons.js"
+    ],
+    "get_propales_client": [
+      "pcom.js"
+    ],
+    "get_rdv_client": [
+      "rdv.js"
+    ],
+    "rpv_close_reopen_cycle": [
+      "rpv.js"
+    ],
+    "client_arbitrage_detail": [
+      "topnav.js"
+    ],
+    "client_arbitrer": [
+      "topnav.js"
+    ],
+    "client_file_arbitrage": [
+      "topnav.js"
+    ]
+  },
+  "edgeFunctions": {
+    "delco-pdf": [
+      "delco-chat.js"
+    ],
+    "export-xslx": [
+      "delco-chat.js"
+    ],
+    "email-send": [
+      "email.js"
+    ]
+  },
+  "storageBuckets": {
+    "email-attachments": [
+      "contacts.js"
+    ]
+  },
+  "realtimeChannels": {
+    "oropra-notifs": [
+      "notifications.js"
+    ],
+    "sms_thread_": [
+      "sms.js"
+    ],
+    "wa_thread_": [
+      "whatsapp.js"
+    ]
+  },
+  "windowGlobals": {
+    "__act": [
+      "activite.js"
+    ],
+    "__actBusBound": [
+      "activite.js"
+    ],
+    "__actDpOutside": [
+      "activite.js"
+    ],
+    "__actDrawCharts": [
+      "activite.js"
+    ],
+    "__actLoadKeyInflight": [
+      "activite.js"
+    ],
+    "__actLoadPromise": [
+      "activite.js"
+    ],
+    "__actObserver": [
+      "activite.js"
+    ],
+    "__chartjsPromise": [
+      "activite.js",
+      "lead-mgmt.js",
+      "performances.js"
+    ],
+    "__renderActivite": [
+      "activite.js"
+    ],
+    "oropraSite": [
+      "activite.js",
+      "agenda.js",
+      "client-search.js",
+      "dashboard.js",
+      "delco-page.js",
+      "entreprise.js",
+      "kanban.js",
+      "lead-mgmt.js",
+      "notif-badge.js",
+      "notifications.js",
+      "performances.js",
+      "site-bus.js",
+      "topnav.js",
+      "vo-liste.js"
+    ],
+    "__odaRO": [
+      "admin.js"
+    ],
+    "__OD_SB__": [
+      "agenda.js",
+      "socle.js"
+    ],
+    "__agendaCollabOutside": [
+      "agenda.js"
+    ],
+    "__agendaPerim": [
+      "agenda.js"
+    ],
+    "__agendaPerimSel": [
+      "agenda.js"
+    ],
+    "__agendaPoll": [
+      "agenda.js"
+    ],
+    "__agendaRefetch": [
+      "agenda.js"
+    ],
+    "__agendaSelected": [
+      "agenda.js"
+    ],
+    "__agendaToastT": [
+      "agenda.js"
+    ],
+    "__dash": [
+      "agenda.js",
+      "dashboard.js"
+    ],
+    "__oropraDoublonsChargement": [
+      "agenda.js",
+      "client-search.js",
+      "entreprise.js",
+      "kanban.js",
+      "vo-liste.js"
+    ],
+    "oropraDoublons": [
+      "agenda.js",
+      "client-search.js",
+      "entreprise.js",
+      "kanban.js",
+      "oropra-doublons.js",
+      "vo-liste.js"
+    ],
+    "__OD_TENANT__": [
+      "auth.js",
+      "socle.js"
+    ],
+    "__authState": [
+      "auth.js"
+    ],
+    "__bil": [
+      "bilaterales.js"
+    ],
+    "__bilDocClickBound": [
+      "bilaterales.js"
+    ],
+    "__bilDraftField": [
+      "bilaterales.js"
+    ],
+    "__bilEngInput": [
+      "bilaterales.js"
+    ],
+    "__bilLoadData": [
+      "bilaterales.js"
+    ],
+    "__bilPeriodTimer": [
+      "bilaterales.js"
+    ],
+    "__bilRO": [
+      "bilaterales.js"
+    ],
+    "__bilResize": [
+      "bilaterales.js"
+    ],
+    "__bilRoute": [
+      "bilaterales.js"
+    ],
+    "__bilSetPeriod": [
+      "bilaterales.js"
+    ],
+    "__bilSuiviSearch": [
+      "bilaterales.js"
+    ],
+    "__bilVer": [
+      "bilaterales.js"
+    ],
+    "__bilViewerId": [
+      "bilaterales.js"
+    ],
+    "__odSignRows": [
+      "bilaterales.js",
+      "contacts.js",
+      "historique.js",
+      "rdv.js"
+    ],
+    "__rcToggle": [
+      "bilaterales.js",
+      "rdv.js"
+    ],
+    "__rcVoipAudio": [
+      "bilaterales.js",
+      "rdv.js"
+    ],
+    "__rcVoipPlay": [
+      "bilaterales.js",
+      "rdv.js"
+    ],
+    "__rcVoipSeek": [
+      "bilaterales.js",
+      "rdv.js"
+    ],
+    "__rcWaPlay": [
+      "bilaterales.js",
+      "rdv.js"
+    ],
+    "__rcWaSeek": [
+      "bilaterales.js",
+      "rdv.js"
+    ],
+    "__realDocClickBound2": [
+      "bilaterales.js"
+    ],
+    "__realRoute2": [
+      "bilaterales.js"
+    ],
+    "__cf": [
+      "cf-fiche.js"
+    ],
+    "__cfListenerBound": [
+      "cf-fiche.js"
+    ],
+    "__ch": [
+      "client-history.js"
+    ],
+    "__chDocOutsideBound": [
+      "client-history.js"
+    ],
+    "__chHistoryListenerBound": [
+      "client-history.js"
+    ],
+    "__chMoBound": [
+      "client-history.js"
+    ],
+    "__crs": [
+      "client-search.js"
+    ],
+    "__contactsState": [
+      "contacts.js",
+      "email.js",
+      "rpv.js"
+    ],
+    "__contactsWatch": [
+      "contacts.js"
+    ],
+    "__ctPlay": [
+      "contacts.js"
+    ],
+    "__ctSeek": [
+      "contacts.js"
+    ],
+    "__emDownload": [
+      "contacts.js"
+    ],
+    "__oropraContactCard": [
+      "contacts.js",
+      "historique.js"
+    ],
+    "__oropraContactFilter": [
+      "contacts.js",
+      "historique.js"
+    ],
+    "__toggle": [
+      "contacts.js"
+    ],
+    "__voipAudio": [
+      "contacts.js"
+    ],
+    "__dashBus": [
+      "dashboard.js"
+    ],
+    "__dashOut": [
+      "dashboard.js"
+    ],
+    "__leadMgmt": [
+      "dashboard.js",
+      "lead-mgmt.js"
+    ],
+    "__delcoBadge": [
+      "delco-badge.js",
+      "delco-page.js",
+      "topnav.js"
+    ],
+    "__delco": [
+      "delco-chat.js"
+    ],
+    "__delcoChatRO": [
+      "delco-chat.js"
+    ],
+    "__delcoChatResize": [
+      "delco-chat.js"
+    ],
+    "__delcoBusHandler": [
+      "delco-page.js"
+    ],
+    "__delcoPage": [
+      "delco-page.js"
+    ],
+    "__delcoPageBusBound": [
+      "delco-page.js"
+    ],
+    "__delcoPageRO": [
+      "delco-page.js"
+    ],
+    "__delcoPageResize": [
+      "delco-page.js"
+    ],
+    "__EMAIL_UI__": [
+      "email.js"
+    ],
+    "__emailState": [
+      "email.js"
+    ],
+    "__entr": [
+      "entreprise.js"
+    ],
+    "__renderEntr": [
+      "entreprise.js"
+    ],
+    "__fsWatch": [
+      "fiche-shell.js"
+    ],
+    "__histoState": [
+      "historique.js",
+      "rpv.js"
+    ],
+    "__histoWatch": [
+      "historique.js"
+    ],
+    "__kanBusBound": [
+      "kanban.js"
+    ],
+    "__kanCurrentVORow": [
+      "kanban.js"
+    ],
+    "__kanDnDBound": [
+      "kanban.js"
+    ],
+    "__kanDocClickBound": [
+      "kanban.js"
+    ],
+    "__kanDpOutside": [
+      "kanban.js"
+    ],
+    "__kanLoadData": [
+      "kanban.js"
+    ],
+    "__kanPerim": [
+      "kanban.js"
+    ],
+    "__kanPerimSel": [
+      "kanban.js"
+    ],
+    "__kanPhotoCache": [
+      "kanban.js"
+    ],
+    "__kanRO": [
+      "kanban.js"
+    ],
+    "__kanResize": [
+      "kanban.js"
+    ],
+    "__kanRoute": [
+      "kanban.js"
+    ],
+    "__kanVendSearch": [
+      "kanban.js"
+    ],
+    "__kanVer": [
+      "kanban.js"
+    ],
+    "__kanban": [
+      "kanban.js"
+    ],
+    "__vop": [
+      "kanban.js",
+      "vo-liste.js"
+    ],
+    "__leadBusBound": [
+      "lead-mgmt.js"
+    ],
+    "__leadRO": [
+      "lead-mgmt.js"
+    ],
+    "__leadResize": [
+      "lead-mgmt.js"
+    ],
+    "__leadVer": [
+      "lead-mgmt.js"
+    ],
+    "__lmDpOutside": [
+      "lead-mgmt.js"
+    ],
+    "__renderLeadMgmt": [
+      "lead-mgmt.js"
+    ],
+    "__likesState": [
+      "likes.js"
+    ],
+    "__likesWatch": [
+      "likes.js"
+    ],
+    "__oropraConfirm": [
+      "likes.js",
+      "vehicules.js"
+    ],
+    "__OROPRA_NOTIF_BADGE__": [
+      "notif-badge.js"
+    ],
+    "oropraNotifBadgeRefresh": [
+      "notif-badge.js",
+      "notifications.js"
+    ],
+    "__objBoot": [
+      "objectifs.js"
+    ],
+    "__objBp": [
+      "objectifs.js"
+    ],
+    "__objCardF": [
+      "objectifs.js"
+    ],
+    "__objResizeObs": [
+      "objectifs.js"
+    ],
+    "__objState": [
+      "objectifs.js"
+    ],
+    "__renderObj": [
+      "objectifs.js"
+    ],
+    "__pcomChangeHandler": [
+      "pcom.js"
+    ],
+    "__pcomClickHandler": [
+      "pcom.js"
+    ],
+    "__pcomReload": [
+      "pcom.js"
+    ],
+    "__OD_PERF_PERIODE__": [
+      "performances.js"
+    ],
+    "__perf": [
+      "performances.js"
+    ],
+    "__perfBusBound": [
+      "performances.js"
+    ],
+    "__perfRO": [
+      "performances.js"
+    ],
+    "__perfResize": [
+      "performances.js"
+    ],
+    "__perfVer": [
+      "performances.js"
+    ],
+    "__pfDpOutside": [
+      "performances.js"
+    ],
+    "__renderPerf": [
+      "performances.js"
+    ],
+    "__rdvClickHandler": [
+      "rdv.js"
+    ],
+    "__rdvReload": [
+      "rdv.js"
+    ],
+    "__rpv": [
+      "rpv.js"
+    ],
+    "__rpvRO": [
+      "rpv.js"
+    ],
+    "__rpvResize": [
+      "rpv.js"
+    ],
+    "oropraUser": [
+      "site-bus.js",
+      "sms.js"
+    ],
+    "__SMS_UI__": [
+      "sms.js"
+    ],
+    "__smsState": [
+      "sms.js"
+    ],
+    "oropraLoadUser": [
+      "socle.js"
+    ],
+    "__navClientEvt": [
+      "topnav.js"
+    ],
+    "__navClientPoll": [
+      "topnav.js"
+    ],
+    "__navHistoMO": [
+      "topnav.js"
+    ],
+    "__navMo": [
+      "topnav.js"
+    ],
+    "__navNotifsPoll": [
+      "topnav.js"
+    ],
+    "__navOutside": [
+      "topnav.js"
+    ],
+    "__navSafety": [
+      "topnav.js"
+    ],
+    "__navSiteApi": [
+      "topnav.js"
+    ],
+    "__navSiteBeat": [
+      "topnav.js"
+    ],
+    "__navSiteEvt": [
+      "topnav.js"
+    ],
+    "__navSiteUnsub": [
+      "topnav.js"
+    ],
+    "__navUserReadyBound": [
+      "topnav.js"
+    ],
+    "__navVer": [
+      "topnav.js"
+    ],
+    "__tutosState": [
+      "tutos.js"
+    ],
+    "__vehState": [
+      "vehicules.js"
+    ],
+    "__vehWatch": [
+      "vehicules.js"
+    ],
+    "__voClearSel": [
+      "vo-liste.js"
+    ],
+    "__voExcel": [
+      "vo-liste.js"
+    ],
+    "__voPosters": [
+      "vo-liste.js"
+    ],
+    "__voReload": [
+      "vo-liste.js"
+    ],
+    "__voSiteEvt": [
+      "vo-liste.js"
+    ],
+    "__voSiteSub": [
+      "vo-liste.js"
+    ],
+    "__VOIP_UI__": [
+      "voip-init.js"
+    ],
+    "__WA_UI__": [
+      "whatsapp.js"
+    ],
+    "__waState": [
+      "whatsapp.js"
+    ]
+  },
+  "domEvents": {
+    "click": [
+      "activite.js",
+      "admin.js",
+      "agenda.js",
+      "annuaire.js",
+      "auth.js",
+      "bdc-vn.js",
+      "bilaterales.js",
+      "cf-fiche.js",
+      "client-history.js",
+      "client-search.js",
+      "dashboard.js",
+      "delco-badge.js",
+      "delco-chat.js",
+      "delco-page.js",
+      "email.js",
+      "fiche-shell.js",
+      "historique.js",
+      "kanban.js",
+      "lead-mgmt.js",
+      "likes.js",
+      "notifications.js",
+      "objectifs.js",
+      "onboarding.js",
+      "pcom.js",
+      "performances.js",
+      "propale-vo.js",
+      "rdv.js",
+      "rpv.js",
+      "sms.js",
+      "topnav.js",
+      "tours.js",
+      "tutos.js",
+      "vehicules.js",
+      "vo-liste.js",
+      "voip-ui.js"
+    ],
+    "mousedown": [
+      "activite.js",
+      "agenda.js",
+      "client-history.js",
+      "dashboard.js",
+      "email.js",
+      "kanban.js",
+      "lead-mgmt.js",
+      "performances.js",
+      "topnav.js",
+      "vo-liste.js"
+    ],
+    "mouseenter": [
+      "activite.js",
+      "agenda.js",
+      "dashboard.js",
+      "kanban.js",
+      "lead-mgmt.js",
+      "performances.js",
+      "vo-liste.js"
+    ],
+    "change": [
+      "admin.js",
+      "agenda.js",
+      "annuaire.js",
+      "bdc-vn.js",
+      "cf-fiche.js",
+      "client-search.js",
+      "dashboard.js",
+      "kanban.js",
+      "lead-mgmt.js",
+      "notifications.js",
+      "objectifs.js",
+      "pcom.js",
+      "propale-vo.js",
+      "rpv.js",
+      "vo-liste.js"
+    ],
+    "input": [
+      "admin.js",
+      "agenda.js",
+      "annuaire.js",
+      "cf-fiche.js",
+      "client-search.js",
+      "delco-chat.js",
+      "email.js",
+      "entreprise.js",
+      "kanban.js",
+      "lead-mgmt.js",
+      "objectifs.js",
+      "propale-vo.js",
+      "rpv.js",
+      "sms.js",
+      "tutos.js",
+      "vo-liste.js"
+    ],
+    "keydown": [
+      "admin.js",
+      "agenda.js",
+      "auth.js",
+      "client-search.js",
+      "delco-chat.js",
+      "email.js",
+      "entreprise.js",
+      "kanban.js",
+      "objectifs.js",
+      "sms.js",
+      "tutos.js",
+      "vo-liste.js"
+    ],
+    "resize": [
+      "admin.js",
+      "bilaterales.js",
+      "delco-chat.js",
+      "delco-page.js",
+      "kanban.js",
+      "lead-mgmt.js",
+      "objectifs.js",
+      "performances.js",
+      "rpv.js",
+      "tours.js"
+    ],
+    "mouseleave": [
+      "agenda.js",
+      "vo-liste.js"
+    ],
+    "drop": [
+      "bdc-vn.js",
+      "kanban.js",
+      "vo-liste.js"
+    ],
+    "canplay": [
+      "bilaterales.js",
+      "rdv.js"
+    ],
+    "oropra-client-selected": [
+      "cf-fiche.js",
+      "client-history.js",
+      "notifications.js",
+      "topnav.js"
+    ],
+    "oropra-history-updated": [
+      "cf-fiche.js",
+      "client-history.js"
+    ],
+    "visibilitychange": [
+      "delco-badge.js",
+      "delco-page.js"
+    ],
+    "blur": [
+      "email.js",
+      "objectifs.js",
+      "onboarding.js"
+    ],
+    "focus": [
+      "email.js",
+      "objectifs.js"
+    ],
+    "dragend": [
+      "kanban.js"
+    ],
+    "dragleave": [
+      "kanban.js",
+      "vo-liste.js"
+    ],
+    "dragover": [
+      "kanban.js",
+      "vo-liste.js"
+    ],
+    "dragstart": [
+      "kanban.js"
+    ],
+    "oropra-notif-refresh": [
+      "notif-badge.js",
+      "notifications.js"
+    ],
+    "oropra-user-ready": [
+      "notif-badge.js",
+      "site-bus.js",
+      "socle.js",
+      "topnav.js"
+    ],
+    "oropra-rpv-saved": [
+      "rpv.js"
+    ],
+    "pointercancel": [
+      "sms.js",
+      "whatsapp.js"
+    ],
+    "pointerdown": [
+      "sms.js",
+      "whatsapp.js"
+    ],
+    "pointermove": [
+      "sms.js",
+      "whatsapp.js"
+    ],
+    "pointerup": [
+      "sms.js",
+      "whatsapp.js"
+    ],
+    "oropra-sms-close": [
+      "sms.js"
+    ],
+    "popstate": [
+      "socle.js"
+    ],
+    "oropra-site-changed": [
+      "topnav.js",
+      "vo-liste.js"
+    ],
+    "scroll": [
+      "tours.js"
+    ],
+    "hashchange": [
+      "tutos.js"
+    ],
+    "mousemove": [
+      "vo-liste.js"
+    ]
+  },
+  "externalUrls": {
+    "https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js": [
+      "activite.js",
+      "performances.js"
+    ],
+    "http://www.w3.org/2000/svg\\": [
+      "admin.js",
+      "sms.js",
+      "whatsapp.js"
+    ],
+    "https://cdn.jsdelivr.net/gh/Oropra/one-data-blocs@aa457b862a926340283e1b8e2e956cbff6357658/oropra-doublons.js": [
+      "agenda.js",
+      "client-search.js",
+      "entreprise.js",
+      "kanban.js",
+      "vo-liste.js"
+    ],
+    "https://cdn.jsdelivr.net/npm/@fullcalendar/core@": [
+      "agenda.js"
+    ],
+    "https://cdn.jsdelivr.net/npm/fullcalendar@": [
+      "agenda.js"
+    ],
+    "https://data.geopf.fr/geocodage/search": [
+      "agenda.js",
+      "cf-fiche.js",
+      "client-search.js",
+      "kanban.js",
+      "vo-liste.js"
+    ],
+    "http://www.w3.org/2000/svg": [
+      "bilaterales.js",
+      "cf-fiche.js",
+      "client-search.js",
+      "dashboard.js",
+      "rdv.js",
+      "vo-liste.js"
+    ],
+    "https://cdn.jsdelivr.net/npm/marked@12/marked.min.js": [
+      "delco-chat.js"
+    ],
+    "https://fonts.googleapis.com/css2?family=Nunito+Sans:opsz,wght@6..12,400;6..12,500;6..12,600;6..12,700;6..12,800&display=swap": [
+      "delco-chat.js"
+    ],
+    "https://fonts.googleapis.com/css2?family=Nunito+Sans:opsz,wght@6..12,400;6..12,500;6..12,600;6..12,700;6..12,800;6..12,900&display=swap": [
+      "delco-page.js"
+    ],
+    "https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js": [
+      "lead-mgmt.js"
+    ],
+    "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm": [
+      "socle.js"
+    ],
+    "https://lerofucjmfrrduohnwet.supabase.co": [
+      "socle.js"
+    ],
+    "https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;700;800&display=swap": [
+      "tours.js"
+    ],
+    "https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;600;700;800&display=swap": [
+      "tutos.js"
+    ],
+    "https://cdn.jsdelivr.net/npm/@twilio/voice-sdk@2.10.2/dist/twilio.min.js": [
+      "voip-init.js"
+    ]
+  },
+  "uuids": {
+    "cbf8b908-0928-4b91-8d97-1321f14f957a": [
+      "admin.js"
+    ],
+    "39fecccf-9296-43b7-b5b6-eadaa928290d": [
+      "agenda.js",
+      "auth.js",
+      "contacts.js",
+      "email.js",
+      "historique.js",
+      "rpv.js",
+      "site-bus.js",
+      "sms.js",
+      "whatsapp.js"
+    ],
+    "3f02442f-a00f-41ba-93ad-787c7fd82763": [
+      "agenda.js"
+    ],
+    "55490583-c88b-4748-916e-4d203db07742": [
+      "agenda.js",
+      "bilaterales.js",
+      "cf-fiche.js",
+      "client-history.js",
+      "client-search.js",
+      "contacts.js",
+      "delco-page.js",
+      "email.js",
+      "entreprise.js",
+      "fiche-shell.js",
+      "historique.js",
+      "kanban.js",
+      "lead-mgmt.js",
+      "likes.js",
+      "notifications.js",
+      "pcom.js",
+      "performances.js",
+      "propale-vo.js",
+      "rdv.js",
+      "rpv.js",
+      "sms.js",
+      "socle.js",
+      "topnav.js",
+      "vehicules.js",
+      "vo-liste.js",
+      "voip-ui.js",
+      "whatsapp.js"
+    ],
+    "7e24f595-e1fd-4257-99f4-76f179032788": [
+      "agenda.js",
+      "cf-fiche.js",
+      "client-search.js",
+      "kanban.js",
+      "socle.js",
+      "vo-liste.js"
+    ],
+    "cced74ab-5a0a-418d-9479-2366e05a8754": [
+      "agenda.js",
+      "cf-fiche.js",
+      "client-search.js",
+      "entreprise.js",
+      "kanban.js",
+      "socle.js",
+      "vo-liste.js"
+    ],
+    "76d470a8-bc86-490b-be55-c1c6b95d5ddf": [
+      "bdc-vn.js",
+      "client-search.js"
+    ],
+    "f5b60fe2-bc14-4b3e-ba84-82ddfa11248c": [
+      "bdc-vn.js",
+      "topnav.js"
+    ],
+    "259f1951-a2d4-4b90-ac83-0b3febe1d4ec": [
+      "bilaterales.js",
+      "client-history.js",
+      "client-search.js",
+      "kanban.js",
+      "lead-mgmt.js",
+      "notifications.js",
+      "rdv.js",
+      "topnav.js",
+      "vo-liste.js",
+      "voip-ui.js"
+    ],
+    "53250f54-d14c-4622-baf4-0b89064316b6": [
+      "bilaterales.js",
+      "kanban.js",
+      "lead-mgmt.js",
+      "rdv.js",
+      "vo-liste.js"
+    ],
+    "851fed59-9397-41ae-b91d-26daa2ff960a": [
+      "bilaterales.js"
+    ],
+    "a440bca0-e10a-4549-a11b-f4ad512b010d": [
+      "bilaterales.js",
+      "kanban.js",
+      "pcom.js"
+    ],
+    "a8a39792-b795-4a07-92a2-8bd307ec105b": [
+      "bilaterales.js",
+      "kanban.js",
+      "pcom.js"
+    ],
+    "aac565e9-ad32-4f81-bf8d-adb611322e62": [
+      "bilaterales.js",
+      "kanban.js",
+      "likes.js",
+      "pcom.js",
+      "propale-vo.js",
+      "socle.js",
+      "vo-liste.js"
+    ],
+    "efb6187d-2330-4392-86ed-bc5ad2489fed": [
+      "bilaterales.js",
+      "kanban.js",
+      "likes.js",
+      "pcom.js",
+      "vo-liste.js"
+    ],
+    "ec8bcc55-a733-4982-a946-13e10ba3b09b": [
+      "client-history.js",
+      "client-search.js",
+      "notifications.js"
+    ],
+    "5ecc8832-d99b-47c7-a853-0921624d80ef": [
+      "client-search.js",
+      "topnav.js"
+    ],
+    "fb2cad2c-cd04-42e0-8909-e3c91c8dcfac": [
+      "client-search.js",
+      "notifications.js",
+      "socle.js",
+      "topnav.js"
+    ],
+    "7759f3ba-c260-4297-9e28-3713c305684c": [
+      "dashboard.js",
+      "lead-mgmt.js"
+    ],
+    "99519997-f935-471a-9147-b0118191b991": [
+      "dashboard.js",
+      "topnav.js",
+      "tours.js"
+    ],
+    "12e65fb5-6e56-410b-b8df-8fd226a132de": [
+      "kanban.js",
+      "vo-liste.js"
+    ],
+    "188b0f0b-5e80-4a77-a856-26469b08b614": [
+      "kanban.js",
+      "topnav.js"
+    ],
+    "1fa0dd68-5069-436c-9a7d-3b54c340f1fa": [
+      "kanban.js",
+      "vo-liste.js"
+    ],
+    "8c7d5738-4d1f-4047-b101-814651576678": [
+      "kanban.js",
+      "likes.js",
+      "vo-liste.js"
+    ],
+    "bcb187ac-e66e-4bfb-bc48-1b7b7dfda0ba": [
+      "kanban.js",
+      "likes.js",
+      "propale-vo.js",
+      "vo-liste.js"
+    ],
+    "9fc0eca4-2325-4774-8e27-4c66515a9166": [
+      "notif-badge.js",
+      "topnav.js"
+    ],
+    "e6331054-02e1-4f9d-b737-753455040b93": [
+      "notifications.js",
+      "propale-vo.js",
+      "vo-liste.js"
+    ],
+    "20ec044e-28cb-4f1e-9d3d-362f3e6c3f38": [
+      "pcom.js",
+      "socle.js"
+    ],
+    "8d167d39-be55-45de-940b-78657d7f400d": [
+      "performances.js"
+    ],
+    "95f3e5dc-e760-4506-84d8-070c65b3cb07": [
+      "performances.js"
+    ],
+    "ee5d0c01-f520-403c-b8bd-ae471c0ac279": [
+      "performances.js"
+    ],
+    "63559984-eee4-4621-9145-b2a306333042": [
+      "propale-vo.js"
+    ],
+    "9e90d49a-215f-4c2b-b2bb-2d7c4f9aabd6": [
+      "propale-vo.js",
+      "topnav.js",
+      "tours.js"
+    ],
+    "a7b18463-aeb8-456a-99ee-9ee0d8b4bca5": [
+      "propale-vo.js",
+      "socle.js"
+    ],
+    "cddb6b4a-7bec-4a8d-9fb5-ce940ea50398": [
+      "propale-vo.js",
+      "socle.js"
+    ],
+    "f2a30399-02d6-4a95-bace-742f23a076f9": [
+      "propale-vo.js",
+      "socle.js"
+    ],
+    "77236b74-a383-48cc-b5df-d798ea1c65d0": [
+      "rdv.js",
+      "socle.js"
+    ],
+    "9fee26d2-65d3-4b66-8105-9ce1e528db9a": [
+      "sms.js",
+      "socle.js"
+    ],
+    "8b103baa-30a5-42e5-8f17-42120781a596": [
+      "socle.js"
+    ],
+    "ab8a0894-78dc-4523-8e96-07fdc56bd793": [
+      "socle.js"
+    ],
+    "d6e8c441-31a5-4e35-9724-3181f9767292": [
+      "socle.js",
+      "voip-ui.js"
+    ],
+    "1499f15f-e8cb-4561-aea8-bdeeeb080b68": [
+      "topnav.js",
+      "tours.js"
+    ],
+    "1d30e3ac-fdee-4cce-b9c5-190aee995d23": [
+      "topnav.js"
+    ],
+    "3395973c-c8eb-476b-bda2-9862b5a3e30f": [
+      "topnav.js"
+    ],
+    "55717966-7e07-4957-9969-399198cce1ad": [
+      "topnav.js",
+      "tours.js"
+    ],
+    "5a11786d-59a3-49eb-a7a9-542f7d3c460e": [
+      "topnav.js"
+    ],
+    "7bfcfe73-4e89-40cf-bc84-1e07ddb478a6": [
+      "topnav.js"
+    ],
+    "8868fa49-e115-482d-9da2-4249e16196da": [
+      "topnav.js"
+    ],
+    "a6c1a683-2490-4263-8dc5-5e187bcbec87": [
+      "topnav.js"
+    ],
+    "a97c534c-b592-4282-bd20-d0333f28ff75": [
+      "topnav.js"
+    ],
+    "c9b4f9a6-460a-4365-8a06-95e30a13cbdb": [
+      "topnav.js",
+      "tours.js"
+    ],
+    "da5005d5-42e4-4b37-9d42-f8b8728ddb0e": [
+      "topnav.js"
+    ],
+    "f84d6f00-de35-45b9-ae23-c1f1e46bfa69": [
+      "topnav.js"
+    ],
+    "05ac91b9-fc68-470e-aa7b-1cbbbfdcd154": [
+      "vo-liste.js"
+    ],
+    "c9982ed5-2c7e-4a79-8f0f-b8fb1a0e499d": [
+      "vo-liste.js"
+    ]
+  }
+}
