@@ -178,15 +178,29 @@ OD.define('propale-vo', {
     // Repli du site : la variable de contexte est souvent vide (« Site #— »),
     // et un dossier sans id_site fait échouer move_propale
     // (« Affaire hors périmètre de l'utilisateur (site <NULL>) »).
-    // Priorité : site du véhicule (STOCKVO.IDSITE), puis site-bus.
+    //
+    // ORDRE CORRIGÉ le 20/08/2026 — le site-bus D'ABORD, le véhicule ensuite.
+    // Règle métier : un vendeur peut vendre N'IMPORTE QUEL VO du groupe, et
+    // c'est LE SITE QUI VEND qui porte l'affaire, pas celui où dort le
+    // véhicule. L'ordre inverse créait des dossiers sur un site hors du
+    // périmètre du vendeur : move_propale les refusait ensuite avec
+    // « Affaire hors de votre périmètre » — un dossier créé mais impossible
+    // à faire avancer, et une commande comptée au mauvais site si elle
+    // passait. Constaté sur le dossier 30041333 (vendeur du site 2009,
+    // véhicule en stock sur le 2022).
     if (!P.id_site) {
-      let fallback = ST.vehicule ? num(ST.vehicule.IDSITE) : null;
-      if (!fallback) {
-        try {
-          const w = (wwLib.getFrontWindow && wwLib.getFrontWindow()) || window;
-          const sBus = w.oropraSite;
-          fallback = num(sBus && (sBus.ID_SITE ?? sBus.id_site ?? sBus));
-        } catch (e) { /* pas de site-bus */ }
+      let fallback = null;
+      try {
+        const w = (wwLib.getFrontWindow && wwLib.getFrontWindow()) || window;
+        const sBus = w.oropraSite;
+        fallback = num(sBus && (sBus.ID_SITE ?? sBus.id_site ?? sBus));
+      } catch (e) { /* pas de site-bus */ }
+      // Dernier recours seulement : le site du véhicule. Mieux vaut un
+      // dossier rattaché au site du stock qu'un dossier sans site du tout,
+      // mais ça reste un pis-aller — d'où l'avertissement.
+      if (!fallback && ST.vehicule) {
+        fallback = num(ST.vehicule.IDSITE);
+        if (fallback) console.warn('[propaleVO] site-bus indisponible : repli sur le site du véhicule (' + fallback + '). Vérifier que ce site est bien dans le périmètre du vendeur.');
       }
       if (fallback) { P.id_site = fallback; console.log('[propaleVO] id_site déduit =', fallback); }
       else console.warn('[propaleVO] id_site introuvable : le dossier sera hors périmètre');
