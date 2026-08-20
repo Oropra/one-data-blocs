@@ -58,14 +58,14 @@ OD.define('performances', {
   // Données : relues dynamiquement (la collection peut se charger après ce script en prod).
   const sb = ctx.supabase;
   let allRawData = [];
-  // Périmètre : dérivé directement de v_user_perimeter (ne dépend plus de VAR_SITES,
+  // Périmètre : dérivé directement de v_mon_perimetre (ne dépend plus de VAR_SITES,
   // qui n'est plus alimentée de façon fiable depuis la migration). Self-sufficient.
   let perimSites = [];
   async function loadPerimeter() {
     const me = (((wwLib.getFrontWindow && wwLib.getFrontWindow()) || window).oropraUser) || {};
     if (me.ID_User == null) return perimSites;
-    const { data, error } = await sb.from('v_user_perimeter').select('id_site').eq('viewer_id_user', me.ID_User);
-    if (error) { console.error('[perf] v_user_perimeter', error); return perimSites; }
+    const { data, error } = await sb.from('v_mon_perimetre').select('id_site').eq('viewer_id_user', me.ID_User);
+    if (error) { console.error('[perf] v_mon_perimetre', error); return perimSites; }
     const arr = [...new Set((data || []).map(r => Number(r.id_site)).filter(n => !isNaN(n)))];
     if (arr.length) perimSites = arr;
     return perimSites;
@@ -97,7 +97,7 @@ OD.define('performances', {
   window.__perf = state;
 
   const viewerIdUser = allRawData[0]?.viewer_id_user || null;
-  // (périmètre : voir perimSites, dérivé de v_user_perimeter)
+  // (périmètre : voir perimSites, dérivé de v_mon_perimetre)
 
   // --- Synchronisation avec le bus ---------------------------------------------
   function applyBusSitePerf(siteId) {
