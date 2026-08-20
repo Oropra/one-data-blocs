@@ -15,7 +15,9 @@
     "test:e2e": "pnpm --filter web test:e2e",
     "storybook": "pnpm --filter web storybook",
     "inventory:check": "node scripts/inventory-legacy.mjs --check",
-    "quality": "pnpm inventory:check && pnpm lint && pnpm typecheck && pnpm test -- --run && pnpm build"
+    "contracts:generate": "node scripts/contracts-generate.mjs",
+    "contracts:check": "node scripts/check-contracts.mjs",
+    "quality": "pnpm inventory:check && pnpm contracts:check && pnpm lint && pnpm typecheck && pnpm test -- --run && pnpm build"
   },
   "devDependencies": {
     "@eslint/js": "^9.35.0",

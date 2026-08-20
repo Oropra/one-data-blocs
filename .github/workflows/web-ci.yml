@@ -28,6 +28,9 @@ jobs:
       - name: Legacy inventory drift check
         run: pnpm inventory:check
 
+      - name: Backend contracts drift check
+        run: pnpm contracts:check
+
       - name: Lint
         run: pnpm lint
 
