@@ -45,10 +45,11 @@
     function getSlug() {
         const DEV_SLUG = 'oropra';
         // Correspondance explicite domaine -> slug (prioritaire). Ajoute chaque client.
-        const HOST_MAP = {
-            'one-data-dev.oropra.com': 'oropra',
-            'app.oropra.com': 'oropra',
-        };
+const HOST_MAP = {
+    'one-data-dev.oropra.com': 'oropra',
+    'app.oropra.com': 'oropra',
+    'oropra.one-data.fr': 'oropra',        // ← la nouvelle
+};
         const p = new URLSearchParams(location.search);
         if (p.get('tenant')) return p.get('tenant');
         const host = location.hostname;
@@ -235,19 +236,51 @@
                 '77236b74-a383-48cc-b5df-d798ea1c65d0', // cache RDV
                 '20ec044e-28cb-4f1e-9d3d-362f3e6c3f38', // cache P.Com
             ]);
+            // Le projet WeWeb ONE_DATA ne contient PLUS AUCUNE variable (verifie
+            // le 12/08/2026 via le MCP : searchVariables '*' renvoie une liste
+            // vide). Toutes celles que les modules manipulent encore par UUID
+            // sont donc servies par ce magasin local — le socle EST devenu le
+            // magasin d'etat.
+            //
+            // Sans ce drapeau, chaque UUID doit d'abord etre "appris" : le shim
+            // appelle le vrai updateValue de WeWeb, qui journalise DEUX erreurs
+            // rouges en console avant qu'on ne le classe mort. Comportement
+            // correct, mais 2 erreurs par variable et par session, sur des
+            // ecritures qui fonctionnent — de quoi noyer un vrai probleme.
+            //
+            // A repasser a false si une variable est un jour recreee cote WeWeb :
+            // l'auto-apprentissage ci-dessous reprend alors son role.
+            const OD_VARS_ALL_LOCAL = true;
+
+            // PERSISTANCE RETIREE (12/08/2026).
+            //
+            // Le magasin etait restaure depuis sessionStorage a chaque
+            // chargement. Tant que le shim retombait sur WeWeb pour les
+            // variables inconnues, cette restauration restait sans effet :
+            // getValue ne lisait le magasin qu'apres avoir "appris" que la
+            // variable etait morte, donc jamais au premier acces d'une page.
+            //
+            // Depuis OD_VARS_ALL_LOCAL, getValue lit le magasin d'emblee — et
+            // la restauration est devenue visible : une periode choisie sur
+            // Performances survivait au rechargement ET a une deconnexion,
+            // si bien qu'un chef des ventes heritait de la selection du
+            // vendeur precedent.
+            //
+            // Ces variables portent de l'etat d'ECRAN, pas des preferences :
+            // elles n'ont pas a survivre a un chargement de page. Le magasin
+            // reste en memoire pour la duree de la session applicative, et
+            // repart vide a chaque chargement — le comportement d'avant.
+            //
+            // sessionStorage est purge au passage, pour que les valeurs
+            // laissees par les versions precedentes ne ressurgissent pas.
             const SKEY = 'od_vars';
-            try {
-                const raw = sessionStorage.getItem(SKEY);
-                if (raw) Object.entries(JSON.parse(raw)).forEach(([k, v]) => store.set(k, v));
-            } catch (e) {}
-            const persist = () => {
-                try { sessionStorage.setItem(SKEY, JSON.stringify(Object.fromEntries(store))); } catch (e) {}
-            };
+            try { sessionStorage.removeItem(SKEY); } catch (e) {}
+            const persist = () => {};
             const realGet = wwLib.wwVariable.getValue.bind(wwLib.wwVariable);
             const realSet = wwLib.wwVariable.updateValue.bind(wwLib.wwVariable);
 
             wwLib.wwVariable.getValue = function (id) {
-                if (dead.has(id)) return store.has(id) ? store.get(id) : undefined;
+                if (OD_VARS_ALL_LOCAL || dead.has(id)) return store.has(id) ? store.get(id) : undefined;
                 let v;
                 try { v = realGet.apply(null, arguments); } catch (e) { v = undefined; }
                 // Valeur absente côté WeWeb mais connue localement (ex. variable
@@ -256,7 +289,7 @@
                 return v;
             };
             wwLib.wwVariable.updateValue = function (id, val) {
-                if (dead.has(id)) { store.set(id, val); persist(); return; }
+                if (OD_VARS_ALL_LOCAL || dead.has(id)) { store.set(id, val); persist(); return; }
                 let r;
                 try { r = realSet.apply(null, arguments); } catch (e) {}
                 // Auto-détection : si WeWeb ne relit pas la valeur, la variable
@@ -276,7 +309,7 @@
                 Object.keys(OD_REF_VARS).forEach(k => { dead.add(k); store.set(k, OD_REF_VARS[k]); });
                 persist();
             } catch (e) {}
-            console.log('[bootstrap] ✅ filet variables (auto-apprenant) + ' + Object.keys(OD_REF_VARS).length + ' référentiels');
+            console.log('[bootstrap] ✅ filet variables (' + (OD_VARS_ALL_LOCAL ? 'tout local' : 'auto-apprenant') + ') + ' + Object.keys(OD_REF_VARS).length + ' référentiels');
         }
     } catch (e) { console.warn('[bootstrap] shim variables KO', e); }
 
@@ -360,6 +393,10 @@
     // Tout le reste est "page-level" : re-monté à chaque navigation SPA.
     OD.persistent = OD.persistent || new Set([
         'topnav', 'voip-init', 'voip-ui', 'sms', 'whatsapp', 'email',
+        // Rendu DANS la top nav (elle-même persistante) : son ancre ne bouge
+        // jamais. Sans ça, chaque navigation le re-montait pour rien — une
+        // requête sur client_view_history à chaque fois.
+        'client-history',
         // Ex-blocs on-app-load devenus modules : ils portent un état global
         // (bus de site, badges, abonnements) -> montés UNE fois pour toute la
         // session, jamais re-montés en navigation.
