@@ -539,7 +539,10 @@ OD.define('dashboard', {
     // qu'ils sont devenus depuis, quelle que soit la date.
     function carteCohorte() {
       const b = bornesCohorte();
-      const sub = jolieDate(b.from) + ' → ' + jolieDate(b.to);
+      // Le sous-titre dit la RÈGLE, pas les bornes : « 22 avr. → 21 juil. »
+      // n'explique pas pourquoi la fenêtre s'arrête un mois avant
+      // aujourd'hui, et laisse croire à un réglage arbitraire.
+      const sub = 'contacts d\'il y a 1 à 4 mois';
 
       if (state.entErr) {
         return carte('Transformation réelle', sub,
@@ -593,10 +596,13 @@ OD.define('dashboard', {
       h += '<div class="d-co-b"><span class="d-co-bn">' + glob + ' %</span>' +
            '<span class="d-co-bt">' + phrase + '</span></div>';
 
-      if (famille() !== 'vendeur') {
-        h += '<div class="d-co-w">Un client peut être travaillé par plusieurs vendeurs du même site : ' +
-             'les entonnoirs individuels ne s\'additionnent pas pour donner celui du périmètre.</div>';
-      }
+      h += '<div class="d-co-w">Fenêtre du ' + jolieDate(b.from) + ' au ' + jolieDate(b.to) +
+           ' : on laisse un mois aux affaires les plus récentes pour se conclure, ' +
+           'sinon le taux serait écrasé par des contacts encore en cours.' +
+           (famille() !== 'vendeur'
+             ? ' Un client peut être travaillé par plusieurs vendeurs du même site : les entonnoirs ' +
+               'individuels ne s\'additionnent pas pour donner celui du périmètre.'
+             : '') + '</div>';
       return carte('Transformation réelle', sub, h + '</div>', 'd-full');
     }
     function jolieDate(s) {
