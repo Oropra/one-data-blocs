@@ -79,7 +79,7 @@ const __initialVendeurCible = (userConnected.ID_Role === ROLE_VENDEUR) ? userCon
 // de « Suivi leads » (voir ensureCycles), scopés au vendeur ciblé. Un manager sur
 // « Synthèse » (page par défaut) n'en charge aucun -> premier affichage rapide.
 const [__perim, __kpiSite, __kpiVend, __clotures, __leads, __userCycles, __premier] = await Promise.all([
-  sb.from('v_user_perimeter').select('*').eq('viewer_id_user', userConnected.ID_User),
+  sb.from('v_mon_perimetre').select('*').eq('viewer_id_user', userConnected.ID_User),
   sb.from('v_lead_kpi_site').select('*'),
   sb.from('v_lead_kpi_vendeur').select('*'),
   sb.from('v_cloture_cycle').select('*'),
