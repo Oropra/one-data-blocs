@@ -193,7 +193,17 @@ OD.define('propale-vo', {
       try {
         const w = (wwLib.getFrontWindow && wwLib.getFrontWindow()) || window;
         const sBus = w.oropraSite;
-        fallback = num(sBus && (sBus.ID_SITE ?? sBus.id_site ?? sBus));
+        // Le site-bus expose une API de MÉTHODES ({getSiteId, getUsers,
+        // getSites, setSiteId, onChange}), pas des propriétés. L'ancien code
+        // lisait sBus.ID_SITE / sBus.id_site : toujours undefined, donc ce
+        // repli ne rendait JAMAIS rien et on tombait systématiquement sur le
+        // site du véhicule. C'est la cause réelle du dossier 30041334 créé
+        // sur le site 2022 par un vendeur du 2009.
+        if (sBus) {
+          fallback = num(typeof sBus.getSiteId === 'function'
+            ? sBus.getSiteId()
+            : (sBus.ID_SITE ?? sBus.id_site ?? sBus));
+        }
       } catch (e) { /* pas de site-bus */ }
       // Dernier recours seulement : le site du véhicule. Mieux vaut un
       // dossier rattaché au site du stock qu'un dossier sans site du tout,
