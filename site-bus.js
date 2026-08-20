@@ -56,7 +56,7 @@ OD.define('site-bus', {
   async function loadPerimeter(meId) {
     const s = st(); const c = sb();
     if (s.sites !== null) return s.sites;
-    const { data: perim, error: e1 } = await c.from('v_user_perimeter').select('id_site').eq('viewer_id_user', Number(meId));
+    const { data: perim, error: e1 } = await c.from('v_mon_perimetre').select('id_site').eq('viewer_id_user', Number(meId));
     if (e1) throw e1;
     const siteIds = Array.from(new Set((perim || []).map(r => Number(r.id_site)).filter(x => !isNaN(x))));
     if (!siteIds.length) { s.sites = []; return s.sites; }
