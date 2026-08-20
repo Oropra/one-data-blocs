@@ -378,6 +378,11 @@ const HOST_MAP = {
             if (!def?.mount) throw new Error(`module '${key}' chargé mais sans mount()`);
             const props = el.dataset.odProps ? JSON.parse(el.dataset.odProps) : {};
             await def.mount(el, { el, supabase: sb, tenant, user: OD.getUser(), fn: OD.fn, props });
+            // Horodatage du montage : remountPage s'en sert pour NE PAS purger une
+            // ancre montée à l'instant même. Sans lui, la séquence observer (50 ms)
+            // puis onNav (80 ms) montait DEUX FOIS le même nœud à chaque navigation
+            // — les écouteurs s'empilaient et les bascules s'annulaient entre elles.
+            el.dataset.odMountedAt = String(Date.now());
             console.log('[loader] ✅ monté :', key);
         } catch (e) {
             delete el.dataset.odMounted;
@@ -407,9 +412,19 @@ const HOST_MAP = {
     // data-od-mounted et un contenu figé. On efface le drapeau des ancres NON
     // persistantes et on les re-monte → contenu toujours frais, quelle que soit la
     // page. AUCUNE modif des modules déjà déployés n'est nécessaire.
+    // Fenêtre de grâce : une ancre montée il y a moins de OD.REMOUNT_GRACE ms vient
+    // d'être traitée par le MutationObserver pour CETTE navigation — la purger la
+    // ferait remonter une seconde fois. Une ancre RÉUTILISÉE par WeWeb, elle, porte
+    // l'horodatage de la navigation précédente : elle est donc bien purgée.
+    OD.REMOUNT_GRACE = OD.REMOUNT_GRACE || 1500;
+
     OD.remountPage = () => {
+        const seuil = Date.now() - OD.REMOUNT_GRACE;
         document.querySelectorAll('[data-od-module][data-od-mounted]').forEach(el => {
-            if (!OD.persistent.has(el.dataset.odModule)) delete el.dataset.odMounted;
+            if (OD.persistent.has(el.dataset.odModule)) return;
+            if (Number(el.dataset.odMountedAt || 0) > seuil) return;   // montée à l'instant
+            delete el.dataset.odMounted;
+            delete el.dataset.odMountedAt;
         });
         OD.mountAll();
     };
