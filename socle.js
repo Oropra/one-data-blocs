@@ -372,20 +372,25 @@ const HOST_MAP = {
         if (el.dataset.odMounted) return;
         const key = el.dataset.odModule;
         el.dataset.odMounted = '1';
+        // Horodatage posé AVANT le montage, pas après : c'est l'instant où
+        // l'ancre est PRISE EN CHARGE qui compte pour remountPage, pas celui
+        // où le module a fini de se monter. Delco mettait plus de 1,5 s à se
+        // monter au premier chargement (module non caché + init du chat) :
+        // l'horodatage tombait hors de la fenêtre de grâce, remountPage
+        // purgeait l'ancre et le module se montait deux fois. Aux visites
+        // suivantes, module en cache, montage instantané, plus de doublon —
+        // d'où un défaut qui semblait disparaître tout seul.
+        el.dataset.odMountedAt = String(Date.now());
         try {
             await ensureLoaded(key);
             const def = OD.modules[key];
             if (!def?.mount) throw new Error(`module '${key}' chargé mais sans mount()`);
             const props = el.dataset.odProps ? JSON.parse(el.dataset.odProps) : {};
             await def.mount(el, { el, supabase: sb, tenant, user: OD.getUser(), fn: OD.fn, props });
-            // Horodatage du montage : remountPage s'en sert pour NE PAS purger une
-            // ancre montée à l'instant même. Sans lui, la séquence observer (50 ms)
-            // puis onNav (80 ms) montait DEUX FOIS le même nœud à chaque navigation
-            // — les écouteurs s'empilaient et les bascules s'annulaient entre elles.
-            el.dataset.odMountedAt = String(Date.now());
             console.log('[loader] ✅ monté :', key);
         } catch (e) {
             delete el.dataset.odMounted;
+            delete el.dataset.odMountedAt;
             console.error('[loader] montage KO :', key, e);
         }
     }
