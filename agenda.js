@@ -153,7 +153,7 @@ OD.define('agenda', {
   // ==========================================================================
   function uniqVendeurs(rows) {
     const seen = {}, out = [];
-    for (const r of rows) { const k = String(r.id_user); if (seen[k]) continue; seen[k] = 1; out.push({ id: Number(r.id_user), nom: r.nom_complet || ('Vendeur ' + r.id_user), vnvo: (r.vn_vo || '').toUpperCase(), fonction: (r.fonction || '').trim(), id_site: r.id_site }); }
+    for (const r of rows) { const k = String(r.id_user); if (seen[k]) continue; seen[k] = 1; out.push({ id: Number(r.id_user), nom: r.nom_complet || ('Vendeur ' + r.id_user), vnvo: (r.vn_vo || '').toUpperCase(), fonction: (r.fonction || '').trim(), id_role: r.id_role != null ? Number(r.id_role) : null, id_site: r.id_site }); }
     return out;
   }
   const sortNom = (a, b) => String(a.nom).localeCompare(String(b.nom), 'fr');
@@ -168,15 +168,15 @@ OD.define('agenda', {
     const allById = {}; const groups = [];
 
     if (role === 3) {
-      const vd = uniqVendeurs(rows).filter(v => v.id !== vid);
-      const vn = [], vo = [], vnvo = [], autre = [];
-      for (const v of vd) { const s = v.vnvo; if (s.includes('VN') && s.includes('VO')) vnvo.push(v); else if (s.includes('VN')) vn.push(v); else if (s.includes('VO')) vo.push(v); else autre.push(v); }
-      [vn, vo, vnvo, autre].forEach(a => a.sort(sortNom));
+      // Même regroupement que la cascade : par fonction, avec le suffixe VN/VO
+      // sur les vendeurs et les chefs, et tri alphabétique dans chaque groupe.
+      const vd = uniqVendeurs(rows)
+        .filter(v => v.id !== vid)
+        .map(v => ({ id: v.id, id_user: v.id, nom: v.nom, vn_vo: v.vnvo, id_role: v.id_role != null ? v.id_role : 4 }));
       groups.push({ label: 'Chef des ventes', items: [{ id: vid, nom: vname }] });
-      if (vn.length)   groups.push({ label: 'VN', items: vn });
-      if (vo.length)   groups.push({ label: 'VO', items: vo });
-      if (vnvo.length) groups.push({ label: 'VN / VO', items: vnvo });
-      if (autre.length) groups.push({ label: 'Autres', items: autre });
+      for (const g of groupeParFonction(vd, vid)) {
+        groups.push({ label: g.label, items: g.items });
+      }
     } else {
       // rôles 1/2/5/6/7/8 : cascade Réseau→Affaire→Site→Vendeur (périmètre complet, RPC dédié)
       return { mode: 'cascade', selfName: vname, selfId: vid };
@@ -213,6 +213,9 @@ OD.define('agenda', {
         affaire: r.affaire || '(Sans affaire)',
         id_affaire: r.id_affaire != null ? Number(r.id_affaire) : null,
         id_role: r.id_role != null ? Number(r.id_role) : null,
+        role_nom: (r.role_nom || '').trim(),
+        fonction: (r.fonction || '').trim(),
+        niveau: r.niveau != null ? Number(r.niveau) : null,
         vn_vo: (r.vn_vo || '').toUpperCase()
       }));
       setPerimRows(rows);
@@ -253,18 +256,52 @@ OD.define('agenda', {
     return { reseaux, affaires, sites, vendeurs, sel };
   }
   // Catégorie d'un collaborateur pour le regroupement du menu (rôle, + VN/VO pour les vendeurs).
+  // Regroupement du menu déroulant, commun aux deux sélecteurs (chef et cascade).
+  //
+  // Le libellé du groupe est celui de la table ROLE, remonté par
+  // get_agenda_perimeter sous le nom role_nom, à partir de USER_SITE.ID_Role —
+  // le rôle de la personne SUR CE SITE. Plus aucune correspondance codée en
+  // dur ici : ajouter un rôle en base suffit.
+  //
+  // Pour les vendeurs (4) ET les chefs des ventes (3), on ajoute le suffixe
+  // VN / VO / VN-VO, lu sur USER.VN_VO. Le tri à l'intérieur d'un groupe est
+  // alphabétique sur le nom (locale fr).
+  //
+  // ROLE_FALLBACK ne sert que si role_nom est absent — tenant pas encore migré,
+  // ou données lues depuis window.__dash.rawData, qui ne porte pas ce libellé.
+  const ROLE_FALLBACK = { 1: 'Admin', 2: 'Directeur', 3: 'Chef des ventes', 4: 'Vendeur', 5: 'Responsable Marketing', 6: 'Directeur plaque', 7: 'Directeur marque', 8: 'Directeur groupe' };
+  // Ordre d'affichage des groupes : du plus haut au plus bas dans la hiérarchie.
+  const ROLE_ORDRE = { 8: 10, 7: 20, 6: 30, 2: 40, 5: 50, 1: 60, 3: 70, 4: 88 };
+  function vnvoSuffixe(s) {
+    const v = String(s || '').toUpperCase();
+    const vn = v.includes('VN'), vo = v.includes('VO');
+    if (vn && vo) return { sfx: ' VN/VO', ord: 3 };
+    if (vn)       return { sfx: ' VN',    ord: 1 };
+    if (vo)       return { sfx: ' VO',    ord: 2 };
+    return { sfx: '', ord: 4 };
+  }
   function collabCategory(r) {
     const role = Number(r.id_role);
-    if (role === 4) {
-      const s = String(r.vn_vo || '').toUpperCase(); const vn = s.includes('VN'), vo = s.includes('VO');
-      if (vn && vo) return { key: 'v3', label: 'Vendeurs VN/VO', order: 90 };
-      if (vn)       return { key: 'v1', label: 'Vendeurs VN',    order: 88 };
-      if (vo)       return { key: 'v2', label: 'Vendeurs VO',    order: 89 };
-      return { key: 'v0', label: 'Vendeurs', order: 91 };
+    const nom = String(r.role_nom || ROLE_FALLBACK[role] || 'Autres').trim();
+    const base = ROLE_ORDRE[role] != null ? ROLE_ORDRE[role] : 99;
+    if (role === 4 || role === 3) {
+      const t = vnvoSuffixe(r.vn_vo);
+      return { key: 'r' + role + '_' + t.ord, label: nom + t.sfx, order: base + t.ord };
     }
-    const M = { 8: ['Directeurs groupe', 10], 7: ['Directeurs marque', 20], 6: ['Directeurs plaque', 30], 2: ['Directeurs', 40], 5: ['Responsables Marketing', 50], 1: ['Admins', 60], 3: ['Chefs des ventes', 70] };
-    const m = M[role] || ['Autres', 99];
-    return { key: 'r' + role, label: m[0], order: m[1] };
+    return { key: 'r' + role, label: nom, order: base };
+  }
+  // Construit les optgroups triés à partir d'une liste de personnes.
+  // Chaque entrée doit porter id_role et vn_vo ; nom sert au tri.
+  function groupeParFonction(items, exclureId) {
+    const cats = {};
+    for (const v of items) {
+      if (exclureId != null && String(v.id_user != null ? v.id_user : v.id) === String(exclureId)) continue;
+      const c = collabCategory(v);
+      (cats[c.key] = cats[c.key] || { label: c.label, order: c.order, items: [] }).items.push(v);
+    }
+    const grps = Object.values(cats).sort((a, b) => a.order - b.order);
+    grps.forEach(g => g.items.sort((a, b) => String(a.nom).localeCompare(String(b.nom), 'fr')));
+    return grps;
   }
   function renderCascade(host, model) {
     const rows = perimRows();
@@ -282,15 +319,8 @@ OD.define('agenda', {
         + opts.map(o => '<option value="' + esc(o.key) + '"' + (String(o.key) === String(val) ? ' selected' : '') + '>' + esc(o.label) + '</option>').join('')
         + '</select></label>';
     };
-    // Menu collaborateur : "Moi" épinglé, puis optgroups par catégorie, triés par nom dans chaque groupe.
-    const cats = {};
-    for (const v of r.vendeurs) {
-      if (String(v.id_user) === String(selfId)) continue;          // le viewer est déjà épinglé en "Moi"
-      const c = collabCategory(v);
-      (cats[c.key] = cats[c.key] || { label: c.label, order: c.order, items: [] }).items.push(v);
-    }
-    const grps = Object.values(cats).sort((a, b) => a.order - b.order);
-    grps.forEach(g => g.items.sort((a, b) => String(a.nom).localeCompare(String(b.nom), 'fr')));
+    // Menu collaborateur : "Moi" épinglé, puis optgroups par fonction, triés par nom dans chaque groupe.
+    const grps = groupeParFonction(r.vendeurs, selfId);
     const vendOpts = '<option value="' + esc(selfId) + '"' + (String(selVal) === String(selfId) ? ' selected' : '') + '>Moi (mon agenda)</option>'
       + grps.map(g => '<optgroup label="' + esc(g.label) + '">'
           + g.items.map(v => '<option value="' + esc(v.id_user) + '"' + (String(v.id_user) === String(selVal) ? ' selected' : '') + '>' + esc(v.nom) + '</option>').join('')
