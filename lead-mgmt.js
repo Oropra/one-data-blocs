@@ -230,14 +230,27 @@ styleEl.textContent = `
 #lead-mgmt-root .lm-synthese { display:flex; flex-direction:column; gap:18px; }
 #lead-mgmt-root .lm-block { background:var(--card); border:1px solid var(--border); border-radius:8px; padding:14px 16px; }
 #lead-mgmt-root .lm-block-title { font-size:11px; font-weight:600; color:var(--text-soft); text-transform:uppercase; letter-spacing:.5px; margin-bottom:12px; display:flex; align-items:center; justify-content:space-between; }
-/* AJOUT 20/08/2026 — synthese focalisee sur un vendeur */
+/* AJOUT 20/08/2026 — portee de la synthese */
+#lead-mgmt-root .lm-portee { display:flex; align-items:center; gap:9px; flex-wrap:wrap; margin-bottom:10px; }
+#lead-mgmt-root .lm-portee-l { font-size:11.5px; color:var(--text-mut); }
+#lead-mgmt-root .lm-portee-v { font-size:14px; font-weight:700; color:var(--blue-dk); }
+#lead-mgmt-root .lm-portee-x, #lead-mgmt-root .lm-portee-go { border:1px solid var(--border); background:var(--card); color:var(--blue-dk); font:inherit; font-size:11.5px; font-weight:600; padding:4px 11px; border-radius:99px; cursor:pointer; }
+#lead-mgmt-root .lm-portee-x:hover, #lead-mgmt-root .lm-portee-go:hover { background:#eaf0f9; }
+#lead-mgmt-root .lm-portee-go { margin-left:auto; }
+#lead-mgmt-root .lm-team-table tr.is-scope { box-shadow:inset 3px 0 0 var(--blue-dk); }
+#lead-mgmt-root .lm-team-table tr.is-scope td:first-child { font-weight:700; }
+
+/* AJOUT 20/08/2026 — compteurs du vendeur */
 #lead-mgmt-root .lm-focus { background:var(--card); border:1px solid var(--border); border-radius:8px; padding:14px 18px; margin-bottom:12px; }
 #lead-mgmt-root .lm-focus-h { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:14px; }
 #lead-mgmt-root .lm-focus-back { border:1px solid var(--border); background:var(--card); color:var(--blue-dk); font:inherit; font-size:12px; font-weight:600; padding:6px 13px; border-radius:99px; cursor:pointer; }
 #lead-mgmt-root .lm-focus-back:hover { background:#eaf0f9; }
 #lead-mgmt-root .lm-focus-nom { font-size:17px; font-weight:700; color:var(--blue-dk); letter-spacing:-.01em; }
 #lead-mgmt-root .lm-focus-kpi { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; }
-#lead-mgmt-root .lm-focus-c { background:#f5f8fc; border-radius:8px; padding:11px 13px; }
+#lead-mgmt-root .lm-focus-c { background:#f5f8fc; border:1px solid transparent; border-radius:8px; padding:11px 13px; text-align:left; font:inherit; cursor:pointer; transition:background .14s, border-color .14s; }
+#lead-mgmt-root .lm-focus-c:hover { background:#eaf0f9; border-color:var(--border); }
+#lead-mgmt-root .lm-focus-c:focus-visible { outline:2px solid var(--blue-dk); outline-offset:2px; }
+#lead-mgmt-root .lm-focus-c.alerte .lm-focus-n { color:#b8851a; }
 #lead-mgmt-root .lm-focus-n { display:block; font-size:23px; font-weight:700; color:var(--blue-dk); line-height:1; letter-spacing:-.03em; font-variant-numeric:tabular-nums; }
 #lead-mgmt-root .lm-focus-l { display:block; font-size:10.5px; color:var(--text-mut); margin-top:5px; }
 #lead-mgmt-root .lm-focus-go { text-align:right; margin-bottom:12px; }
@@ -498,7 +511,7 @@ doc.head.appendChild(styleEl);
 // --- 4. État local ------------------------------------------
 const state = window.__leadMgmt || {};
 if (state.section === undefined)         state.section = isManager ? 'synthese' : 'suivi_leads';
-if (state.view === undefined)            state.view = 'a_traiter';
+if (state.view === undefined)            state.view = isVendeur ? 'synthese' : 'a_traiter';
 if (state.filterSource === undefined)    state.filterSource = 'all';
 if (state.search === undefined)          state.search = '';
 if (state.expanded === undefined)        state.expanded = {};
@@ -540,7 +553,12 @@ if (state.entKey === undefined)          state.entKey = null;
 // dans le tableau d'equipe, on reste dans la synthese et on la recalcule
 // pour lui, au lieu de basculer vers le suivi des leads : le chef veut
 // COMPRENDRE ce vendeur avant d'aller voir ses cycles un par un.
-if (state.syntheseVendeur === undefined) state.syntheseVendeur = null;
+// PORTÉE de la synthese. null = tout le perimetre du viewer.
+// { type:'reseau'|'affaire'|'site'|'vendeur', label, sites:[ids], id_user }
+// La synthese SUIT le noeud choisi dans l'arbre d'equipe, a tous les niveaux
+// — comme le tableau de bord. Reseau, affaire et site se ramenent tous a une
+// liste de sites ; seul le vendeur passe par id_user.
+if (state.syntheseScope === undefined)   state.syntheseScope = null;
 window.__leadMgmt = state;
 
 if (isVendeur && !state.selectedVendeur && userId != null) {
@@ -799,15 +817,24 @@ function bornesCohorte() {
 // Sur QUI porte l'entonnoir : le vendeur focalise, sinon le vendeur connecte
 // s'il en est un, sinon tout son perimetre.
 function entonnoirCible() {
-  if (state.syntheseVendeur) return Number(state.syntheseVendeur.id_user);
-  if (isVendeur) return Number(userId);
-  return null;
+  const sc = state.syntheseScope;
+  if (sc && sc.type === 'vendeur')       return { id_user: Number(sc.id_user), sites: null };
+  if (sc && sc.sites && sc.sites.length) return { id_user: null, sites: sc.sites.map(Number) };
+  if (isVendeur)                         return { id_user: Number(userId), sites: null };
+  return { id_user: null, sites: null };
+}
+
+function libellePortee() {
+  const sc = state.syntheseScope;
+  if (!sc) return isVendeur ? 'mes contacts' : 'tout mon perimetre';
+  return sc.label || 'la selection';
 }
 
 async function fetchEntonnoir() {
   const b = bornesCohorte();
-  const cible = entonnoirCible();
-  const key = b.from + '_' + b.to + '_' + (cible == null ? 'perim' : cible);
+  const c = entonnoirCible();
+  const key = b.from + '_' + b.to + '_u' + (c.id_user == null ? '-' : c.id_user) +
+              '_s' + (c.sites ? c.sites.join('.') : '-');
   if (state.entLoading) return;
   if (state.entKey === key && state.entData !== null) return;
 
@@ -820,7 +847,9 @@ async function fetchEntonnoir() {
       p_viewer_id_user: Number(userId),
       p_date_from: b.from,
       p_date_to: b.to,
-      p_id_user: cible
+      p_id_user: c.id_user,
+      p_seuil_sans_suite: 90,
+      p_sites: c.sites
     });
     if (error) throw error;
     state.entData = (data || []).slice().sort((x, y) => (x.rang || 0) - (y.rang || 0));
@@ -840,6 +869,22 @@ function jolieDateCourte(s) {
 
 // Le bloc affiche la PREMIERE MARCHE en grand — c'est le sujet de la page —
 // et le reste de l'entonnoir en petit, pour situer.
+// Dit SUR QUOI porte l'entonnoir, et permet d'en sortir. Sans ce bandeau,
+// un chef qui a clique sur un site croirait lire tout son perimetre.
+function renderBandeauPortee() {
+  const sc = state.syntheseScope;
+  let h = '<div class="lm-portee">';
+  h += '<span class="lm-portee-l">Transformation de</span>';
+  h += '<span class="lm-portee-v">' + escapeHtml(libellePortee()) + '</span>';
+  if (sc) {
+    h += '<button type="button" class="lm-portee-x" data-action="portee-reset">&times; tout mon perimetre</button>';
+    if (sc.type === 'vendeur') {
+      h += '<button type="button" class="lm-portee-go" data-action="portee-cycles">Voir ses cycles &rarr;</button>';
+    }
+  }
+  return h + '</div>';
+}
+
 function renderEntonnoirCohorte() {
   if (state.entError) return '';
   const b = bornesCohorte();
@@ -1430,7 +1475,13 @@ function siteRow(s, sKey) {
   const isBus = state.busSite != null && String(state.busSite) === String(s.id_site);
   const villeHtml = s.ville ? ' <span style="color:var(--text-mut);font-size:10px;font-weight:400">· ' + escapeHtml(s.ville) + '</span>' : '';
   const pin = isBus ? '<span class="lm-site-pin" title="Site global">📍</span>' : '';
-  return '<tr class="row-site' + (isBus ? ' is-bus-focus' : '') + '" data-expand-key="' + escapeHtml(sKey) + '" data-site-id="' + escapeHtml(s.id_site) + '"><td>' + expandIcon(sOpen) + escapeHtml(s.label) + villeHtml + pin + '</td>' + kpiCells(s.kpi) + '</tr>';
+  // data-scope-* : le clic sur la ligne fixe la portee de la synthese.
+  const scSel = state.syntheseScope && state.syntheseScope.type === 'site' &&
+                String(state.syntheseScope.sites[0]) === String(s.id_site);
+  return '<tr class="row-site' + (isBus ? ' is-bus-focus' : '') + (scSel ? ' is-scope' : '') +
+         '" data-expand-key="' + escapeHtml(sKey) + '" data-site-id="' + escapeHtml(s.id_site) +
+         '" data-scope-type="site" data-scope-sites="' + escapeHtml(s.id_site) +
+         '" data-scope-label="' + escapeHtml(s.label || ('Site ' + s.id_site)) + '"><td>' + expandIcon(sOpen) + escapeHtml(s.label) + villeHtml + pin + '</td>' + kpiCells(s.kpi) + '</tr>';
 }
 function renderTeamTable() {
   adoptBusSelectionLead();
@@ -1474,7 +1525,13 @@ function renderTeamTable() {
       const rKey = 'r:' + r.label;
       const rOpen = !!state.expanded[rKey] || collapseReseau;
       if (!collapseReseau) {
-        rows += '<tr class="row-reseau" data-expand-key="' + escapeHtml(rKey) + '"><td>' + expandIcon(rOpen) + escapeHtml(r.label) + '</td>' + kpiCells(r.kpi) + '</tr>';
+        const rSites = [];
+        r.affaires.forEach(function (aa) { aa.sites.forEach(function (ss) { rSites.push(ss.id_site); }); });
+        const rSel = state.syntheseScope && state.syntheseScope.type === 'reseau' &&
+                     state.syntheseScope.label === r.label;
+        rows += '<tr class="row-reseau' + (rSel ? ' is-scope' : '') + '" data-expand-key="' + escapeHtml(rKey) +
+                '" data-scope-type="reseau" data-scope-sites="' + escapeHtml(rSites.join(',')) +
+                '" data-scope-label="' + escapeHtml(r.label) + '"><td>' + expandIcon(rOpen) + escapeHtml(r.label) + '</td>' + kpiCells(r.kpi) + '</tr>';
       }
       if (!rOpen) continue;
       const collapseAffaire = collapseReseau && r.affaires.length === 1;
@@ -1482,7 +1539,12 @@ function renderTeamTable() {
         const aKey = rKey + '|a:' + a.label;
         const aOpen = !!state.expanded[aKey] || collapseAffaire;
         if (!collapseAffaire) {
-          rows += '<tr class="row-affaire" data-expand-key="' + escapeHtml(aKey) + '"><td>' + expandIcon(aOpen) + escapeHtml(a.label) + '</td>' + kpiCells(a.kpi) + '</tr>';
+          const aSites = a.sites.map(function (ss) { return ss.id_site; });
+          const aSel = state.syntheseScope && state.syntheseScope.type === 'affaire' &&
+                       state.syntheseScope.label === a.label;
+          rows += '<tr class="row-affaire' + (aSel ? ' is-scope' : '') + '" data-expand-key="' + escapeHtml(aKey) +
+                  '" data-scope-type="affaire" data-scope-sites="' + escapeHtml(aSites.join(',')) +
+                  '" data-scope-label="' + escapeHtml(a.label) + '"><td>' + expandIcon(aOpen) + escapeHtml(a.label) + '</td>' + kpiCells(a.kpi) + '</tr>';
         }
         if (!aOpen) continue;
         for (const s of a.sites) {
@@ -1525,39 +1587,31 @@ function renderSyntheseVendeur(idUser, nom, avecRetour) {
   const v = dataKpiVend.find(function (x) { return Number(x.id_user) === Number(idUser); }) || {};
   const n = function (x) { const y = parseFloat(x); return isNaN(y) ? 0 : y; };
 
-  let html = '';
-  html += '<div class="lm-focus">';
-  html += '<div class="lm-focus-h">';
-  if (avecRetour) {
-    html += '<button type="button" class="lm-focus-back" data-action="synthese-retour">&larr; L\'equipe</button>';
-  }
-  html += '<span class="lm-focus-nom">' + escapeHtml(nom || 'Ce vendeur') + '</span>';
-  html += '</div>';
+  // Chaque compteur mene a la vue qui le detaille : un chiffre qui ne se
+  // creuse pas est un chiffre qu'on regarde une fois puis qu'on ignore.
+  const cartes = [
+    { n: n(v.cycles_total), l: 'cycles ouverts',  go: 'a_traiter' },
+    { n: n(v.a_traiter),    l: 'a traiter',       go: 'a_traiter', alerte: n(v.a_traiter) > 0 },
+    { n: n(v.pipeline),     l: 'en pipeline',     go: 'pipeline'  },
+    { n: n(v.clos_recent),  l: 'clos recemment',  go: 'a_traiter' }
+  ];
 
-  html += '<div class="lm-focus-kpi">' +
-    '<div class="lm-focus-c"><span class="lm-focus-n">' + n(v.cycles_total) + '</span><span class="lm-focus-l">cycles ouverts</span></div>' +
-    '<div class="lm-focus-c"><span class="lm-focus-n">' + n(v.a_traiter) + '</span><span class="lm-focus-l">a traiter</span></div>' +
-    '<div class="lm-focus-c"><span class="lm-focus-n">' + n(v.pipeline) + '</span><span class="lm-focus-l">en pipeline</span></div>' +
-    '<div class="lm-focus-c"><span class="lm-focus-n">' + n(v.clos_recent) + '</span><span class="lm-focus-l">clos recemment</span></div>' +
-    '</div>';
-  html += '</div>';
+  let html = '<div class="lm-focus">';
+  html += '<div class="lm-focus-kpi">';
+  cartes.forEach(function (c) {
+    html += '<button type="button" class="lm-focus-c' + (c.alerte ? ' alerte' : '') +
+            '" data-goto="' + c.go + '">' +
+            '<span class="lm-focus-n">' + c.n + '</span>' +
+            '<span class="lm-focus-l">' + c.l + '</span></button>';
+  });
+  html += '</div></div>';
 
+  html += renderBandeauPortee();
   html += renderEntonnoirCohorte();
-
-  if (avecRetour) {
-    html += '<div class="lm-focus-go">' +
-            '<button type="button" class="lm-focus-btn" data-action="synthese-voir-cycles">' +
-            'Voir ses cycles un par un &rarr;</button></div>';
-  }
   return html;
 }
 
 function renderViewSynthese() {
-  // Mode focalise : le chef a clique sur un vendeur.
-  if (state.syntheseVendeur) {
-    return renderSyntheseVendeur(state.syntheseVendeur.id_user,
-                                 state.syntheseVendeur.vendeur_nom, true);
-  }
   const kpi = computeSyntheseKpi();
   if (state.rankingData === null || state.rankingKey !== periodKey()) {
     fetchClassement();
@@ -1568,7 +1622,10 @@ function renderViewSynthese() {
   html += renderTeamTable();
   html += renderPeriodBar();
   html += '<div class="lm-synthese">';
-  html += renderEntonnoirCohorte();   // AJOUT : en tete, c'est le sujet de la page
+  // L'entonnoir suit la selection faite dans le tableau d'equipe ci-dessus :
+  // le tableau reste visible, c'est lui qui pilote.
+  html += renderBandeauPortee();
+  html += renderEntonnoirCohorte();
   html += '<div class="lm-synth-kpi">';
   html += '<div class="lm-synth-kpi-card"><div class="lm-synth-kpi-label">Cycles actifs</div><div class="lm-synth-kpi-value">' + kpi.cyclesActifs + '</div><div class="lm-synth-kpi-sub">Cycles ouverts (instantané)</div></div>';
   const winClass = kpi.winCount > 0 ? 'kpi-good' : '';
@@ -2178,11 +2235,12 @@ function renderAll() {
     else                                    html += renderSectionSuiviLeads();
   } else {
     html += '<div class="lm-toggle">';
+    // La synthese EN PREMIER : on regarde ou on en est avant d'attaquer la
+    // liste. L'ordre precedent (cycles d'abord) faisait de la page une file
+    // de taches sans recul.
+    html += '<button type="button" class="lm-toggle-btn' + (state.view === 'synthese'  ? ' active' : '') + '" data-view="synthese">Ma synthese</button>';
     html += '<button type="button" class="lm-toggle-btn' + (state.view === 'a_traiter' ? ' active' : '') + '" data-view="a_traiter">Cycles actifs</button>';
     html += '<button type="button" class="lm-toggle-btn' + (state.view === 'pipeline'  ? ' active' : '') + '" data-view="pipeline">Pipeline</button>';
-    // AJOUT : le vendeur a droit a sa synthese, lui aussi. Il voyait
-    // jusqu'ici ses cycles sans jamais savoir ce qu'il en faisait.
-    html += '<button type="button" class="lm-toggle-btn' + (state.view === 'synthese'  ? ' active' : '') + '" data-view="synthese">Ma synthese</button>';
     html += '</div>';
     if (state.view === 'pipeline')      html += renderViewKanban();
     else if (state.view === 'synthese') html += renderSyntheseVendeur(userId, 'Ma synthese', false);
@@ -2192,7 +2250,7 @@ function renderAll() {
   bindEvents();
   // Les graphes n'existent que dans la synthese d'equipe : ne pas les
   // dessiner en mode focalise, leur canvas n'est pas rendu.
-  if (state.section === 'synthese' && !state.syntheseVendeur) {
+  if (state.section === 'synthese') {
     setTimeout(() => { drawGraphes(); }, 0);
   }
 }
@@ -2310,6 +2368,20 @@ function bindEvents() {
       e.stopPropagation();
       const key = el.getAttribute('data-expand-key');
       state.expanded[key] = !state.expanded[key];
+
+      // La synthese suit le noeud clique. Recliquer le meme noeud la remet
+      // sur tout le perimetre — c'est le comportement d'un filtre, pas d'un
+      // interrupteur a sens unique.
+      const scType = el.getAttribute('data-scope-type');
+      if (scType && state.section === 'synthese') {
+        const label = el.getAttribute('data-scope-label') || '';
+        const sites = (el.getAttribute('data-scope-sites') || '')
+                        .split(',').filter(function (x) { return x !== ''; }).map(Number);
+        const deja = state.syntheseScope && state.syntheseScope.type === scType &&
+                     state.syntheseScope.label === label;
+        state.syntheseScope = deja ? null : { type: scType, label: label, sites: sites, id_user: null };
+      }
+
       const siteId = el.getAttribute('data-site-id');
       if (siteId) {
         state.busSite = String(siteId);
@@ -2329,10 +2401,14 @@ function bindEvents() {
 
       if (state.section === 'synthese') {
         // MODIFIÉ 20/08/2026 — on ne bascule plus vers le suivi des leads.
-        // Le chef reste dans la synthese, recalculee pour ce vendeur ; un
-        // bouton explicite l'emmene vers ses cycles s'il veut aller plus loin.
-        state.selectedVendeur   = { id_user: idUser, id_site: idSite, vendeur_nom: nom };
-        state.syntheseVendeur   = { id_user: idUser, id_site: idSite, vendeur_nom: nom };
+        // Le chef reste dans la synthese : elle se recalcule pour ce vendeur,
+        // le tableau d'equipe reste visible au-dessus, et un bouton explicite
+        // l'emmene vers les cycles s'il veut aller plus loin.
+        const dejaLui = state.syntheseScope && state.syntheseScope.type === 'vendeur' &&
+                        Number(state.syntheseScope.id_user) === idUser;
+        state.selectedVendeur = { id_user: idUser, id_site: idSite, vendeur_nom: nom };
+        state.syntheseScope   = dejaLui ? null
+          : { type: 'vendeur', label: nom || 'Ce vendeur', sites: null, id_user: idUser };
         renderAll();
         return;
       }
@@ -2348,20 +2424,30 @@ function bindEvents() {
     });
   });
 
-  root.querySelectorAll('[data-action="synthese-retour"]').forEach(el => {
-    el.addEventListener('click', () => {
-      state.syntheseVendeur = null;
+  root.querySelectorAll('[data-action="portee-reset"]').forEach(el => {
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      state.syntheseScope = null;
       state.selectedVendeur = null;
       renderAll();
     });
   });
 
-  root.querySelectorAll('[data-action="synthese-voir-cycles"]').forEach(el => {
-    el.addEventListener('click', () => {
-      const v = state.syntheseVendeur;
-      state.syntheseVendeur = null;
+  root.querySelectorAll('[data-action="portee-cycles"]').forEach(el => {
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const sc = state.syntheseScope;
       state.section = 'suivi_leads';
-      if (v) selectVendeurCible(v.id_user); else renderAll();
+      if (sc && sc.id_user) selectVendeurCible(sc.id_user); else renderAll();
+    });
+  });
+
+  // Vendeur : ses quatre compteurs mènent à la vue correspondante.
+  root.querySelectorAll('[data-goto]').forEach(el => {
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      state.view = el.getAttribute('data-goto');
+      renderAll();
     });
   });
 
