@@ -117,7 +117,8 @@ OD.define('dashboard', {
         fonction: r.fonction || '', vn_vo: (r.vn_vo || '').toString().toUpperCase(),
         id_site: r.id_site != null ? Number(r.id_site) : null, nom_site: r.nom_site || ('Site ' + r.id_site),
         reseau: r.reseau || '(Sans réseau)', affaire: r.affaire || '(Sans affaire)',
-        id_affaire: r.id_affaire != null ? Number(r.id_affaire) : null };
+        id_affaire: r.id_affaire != null ? Number(r.id_affaire) : null,
+        id_role: r.id_role != null ? Number(r.id_role) : null };
       for (const k of SUM_D) o[k] = num(r[k]);
       return o;
     }
@@ -126,6 +127,7 @@ OD.define('dashboard', {
         id_site: r.id_site != null ? Number(r.id_site) : null, nom_site: r.nom_site || '',
         reseau: r.reseau || '', affaire: r.affaire || '',
         vn_vo: (r.vn_vo || '').toString().toUpperCase(),
+        id_role: r.id_role != null ? Number(r.id_role) : null,
         jour: r.jour ? String(r.jour).slice(0, 10) : null };   // null = vendeur sans activité
       for (const k of SUM_A) o[k] = num(r[k]);
       return o;
@@ -159,6 +161,30 @@ OD.define('dashboard', {
     const dRows = () => (state.rawData || []).filter(inScope);
     const aRows = () => (state.act || []).filter(inScope);
 
+    // ── VOLUME vs ATTEINTE ───────────────────────────────────────────────
+    // Depuis 20260821210000, les deux RPC remontent aussi les chefs des
+    // ventes (id_role = 3). Une commande signée par un chef EST une
+    // commande de la concession : elle compte dans le VOLUME.
+    // Mais un chef n'a quasiment jamais d'objectif — l'inclure au
+    // numérateur d'un taux d'atteinte dont il est absent au dénominateur
+    // gonflait le résultat d'une quinzaine de points.
+    //
+    //   dRows()  / aRows()  → volume, activité, totaux de la concession
+    //   dRowsV() / aRowsV() → objectif, projection, atteinte, classement
+    //                         vendeurs, vendeurs inactifs
+    //
+    // Règle : dès qu'un objectif entre dans un calcul, c'est la version V.
+    const estVendeur = r => Number(r.id_role) === 4;
+    const dRowsV = () => dRows().filter(estVendeur);
+    const aRowsV = () => aRows().filter(estVendeur);
+    // Commandes signées par l'encadrement sur le périmètre courant.
+    // Sert à afficher ce que le classement vendeurs ne montre pas, plutôt
+    // que de le fondre en silence dans un total.
+    function volumeEncadrement() {
+      return dRows().filter(r => Number(r.id_role) === 3)
+        .reduce((n, r) => n + num(r.commandes_realisees), 0);
+    }
+
     function groupBy(rows, keyFn, labelFn, keys) {
       const m = {};
       for (const r of rows) {
@@ -179,7 +205,7 @@ OD.define('dashboard', {
     }
     // Vendeurs SANS aucune activité sur la période (jour null et nulle part actifs)
     function vendeursInactifs() {
-      const rows = aRows();
+      const rows = aRowsV();   // un chef sans activité n'est pas une alerte
       const actifs = {}; for (const r of rows) if (r.jour) actifs[String(r.id_user)] = 1;
       const out = {}; for (const r of rows) if (!r.jour && !actifs[String(r.id_user)]) out[String(r.id_user)] = r;
       return Object.values(out);
@@ -349,7 +375,7 @@ OD.define('dashboard', {
         (sub ? '<span class="d-c-s">' + esc(sub) + '</span>' : '') + '</div>' + corps + '</div>';
     }
     function carteProjection(sub) {
-      const t = sum(dRows(), SUM_D);
+      const t = sum(dRowsV(), SUM_D);   // atteinte : vendeurs des deux côtés
       const p = projection(t.commandes_realisees, t.objectif_commandes);
       if (alerteObjectif(t.objectif_commandes)) {
         return carte('Projection fin de mois', sub,
@@ -420,7 +446,7 @@ OD.define('dashboard', {
     // Calcul PARTAGÉ par le bandeau et la carte : impossible qu'ils se contredisent.
     function sousRythme(keyFn, labelFn) {
       const pr = prorata();
-      const g = groupBy(dRows(), keyFn, labelFn, SUM_D)
+      const g = groupBy(dRowsV(), keyFn, labelFn, SUM_D)
         .filter(x => x.objectif_commandes > 0)
         .map(x => ({ label: x.label, key: x.key, re: x.commandes_realisees, ob: x.objectif_commandes,
                      ecart: Math.round((x.commandes_realisees / x.objectif_commandes - pr) * 100) }))
@@ -437,9 +463,16 @@ OD.define('dashboard', {
           '<span class="d-lst-n">' + esc(x.label) + '</span><span class="d-lst-v">' + x.ecart + ' pts<small>' + fr(x.re) + ' / ' + fr(x.ob) + '</small></span></div>').join('') + '</div>');
     }
     function carteClassement(titre) {
-      const v = parVendeur(dRows(), SUM_D).sort((a, b) => b.commandes_realisees - a.commandes_realisees);
+      const v = parVendeur(dRowsV(), SUM_D).sort((a, b) => b.commandes_realisees - a.commandes_realisees);
       if (v.length < 2) return '';
       const max = Math.max.apply(null, v.map(x => x.commandes_realisees).concat([1]));
+      // L'encadrement n'entre pas dans un classement de vendeurs, mais ses
+      // commandes ne doivent pas disparaître : on les affiche à part, pour
+      // que le total du classement se raccorde au volume de la concession.
+      const enc = volumeEncadrement();
+      const pied = enc > 0
+        ? '<div class="d-rk-more">+ ' + fr(enc) + ' commande' + (enc > 1 ? 's' : '') + ' signée' + (enc > 1 ? 's' : '') + ' par l\'encadrement</div>'
+        : '';
       return carte(titre, 'commandes de la période',
         '<div class="d-rk">' + v.slice(0, 7).map((x, i) => {
           const me = String(x.id_user) === String(viewerId);
@@ -448,7 +481,7 @@ OD.define('dashboard', {
             '<span class="d-rk-n">' + esc(x.nom_complet) + (me ? ' (vous)' : '') + '</span>' +
             '<div class="d-rk-b"><i style="width:' + Math.max(5, Math.round(x.commandes_realisees / max * 100)) + '%;background:' + col + '"></i></div>' +
             '<span class="d-rk-v">' + fr(x.commandes_realisees) + '</span></div>';
-        }).join('') + '</div>');
+        }).join('') + pied + '</div>');
     }
     // rows OBLIGATOIRE : la carte ne choisit jamais son périmètre toute seule.
     function carteJournee(rows) {
@@ -491,7 +524,7 @@ OD.define('dashboard', {
       const mine = dRows().filter(r => String(r.id_user) === String(viewerId));
       const t = sum(mine, SUM_D);   // ← unique source de vérité de cette vue
       const p = projection(t.commandes_realisees, t.objectif_commandes);
-      const cls = parVendeur(dRows(), SUM_D).sort((a, b) => b.commandes_realisees - a.commandes_realisees);
+      const cls = parVendeur(dRowsV(), SUM_D).sort((a, b) => b.commandes_realisees - a.commandes_realisees);
       const pos = cls.findIndex(x => String(x.id_user) === String(viewerId)) + 1;
       const manque = Math.max(0, p.objectif - p.land);
       const phrase = 'Tu es à <b>' + fr(t.commandes_realisees) + ' commandes</b>' +
@@ -611,9 +644,13 @@ OD.define('dashboard', {
     }
 
     function vueChef() {      // « Qui a besoin de moi aujourd'hui ? »
-      const t = sum(dRows(), SUM_D), p = projection(t.commandes_realisees, t.objectif_commandes);
+      // t = VOLUME de la concession (encadrement compris).
+      // tV = base de l'ATTEINTE : vendeurs porteurs d'objectifs seulement.
+      const t = sum(dRows(), SUM_D);
+      const tV = sum(dRowsV(), SUM_D);
+      const p = projection(tV.commandes_realisees, tV.objectif_commandes);
       const inact = vendeursInactifs();
-      const nb = parVendeur(dRows(), SUM_D).length;
+      const nb = parVendeur(dRowsV(), SUM_D).length;
       const phrase = (inact.length ? '<dn>' + inact.length + ' vendeur' + (inact.length > 1 ? 's' : '') + '</dn> sans aucune activité sur la période. ' : 'Toute l\'équipe est active. ') +
         (p.objectif > 0 ? 'L\'équipe atterrit à <b>' + fr(p.land) + '</b> pour un objectif de <b>' + fr(p.objectif) + '</b>.' : '<b>' + fr(t.commandes_realisees) + ' commandes</b> réalisées.') +
         (t.rdv_sans_cr > 0 ? ' <b>' + fr(t.rdv_sans_cr) + '</b> comptes-rendus manquants.' : '');
@@ -624,7 +661,10 @@ OD.define('dashboard', {
         carteEntonnoir() + carteQualite() + carteLeads() + carteStock() + carteCohorte() + '</div>';
     }
     function vueDirecteur(titre) {  // « Le mois est-il tenu, et où ça coince ? »
-      const t = sum(dRows(), SUM_D), p = projection(t.commandes_realisees, t.objectif_commandes);
+      // t = VOLUME du groupe (encadrement compris) ; tV = base de l'ATTEINTE.
+      const t = sum(dRows(), SUM_D);
+      const tV = sum(dRowsV(), SUM_D);
+      const p = projection(tV.commandes_realisees, tV.objectif_commandes);
       const sites = groupBy(dRows(), r => String(r.id_site), r => r.nom_site, SUM_D);
       const pr = prorata();
       const bad = sousRythme(r => String(r.id_site), r => r.nom_site).bad;   // même calcul que la carte
@@ -633,7 +673,7 @@ OD.define('dashboard', {
           : '<b>' + fr(t.commandes_realisees) + ' commandes</b> réalisées.') +
         (bad.length ? ' <dn>' + bad.length + ' site' + (bad.length > 1 ? 's' : '') + '</dn> sous le rythme.' : '');
       return bandeau(titre || 'Le groupe', phrase, [['Périmètre', sites.length + ' sites'],
-        ['Équipe', parVendeur(dRows(), SUM_D).length + ' vendeurs'], ['Prorata mois', Math.round(pr * 100) + ' %']]) +
+        ['Équipe', parVendeur(dRowsV(), SUM_D).length + ' vendeurs'], ['Prorata mois', Math.round(pr * 100) + ' %']]) +
         filtres() + '<div class="d-g">' + carteProjection('groupe') +
         carteRetard('Sites sous le rythme', 'site', r => String(r.id_site), r => r.nom_site) +
         cartePouls() + carteEntonnoir() + carteInactifs('Vendeurs sans activité') + carteQualite() + carteStock() + carteCohorte() + '</div>';
@@ -664,7 +704,7 @@ OD.define('dashboard', {
         '<div class="d-kpi-i"><b style="color:' + (sansCmd.length ? COL.amberDk : COL.greenDk) + '">' + sansCmd.length + '</b><span>sans commande</span></div>' +
         '<div class="d-kpi-i"><b style="color:' + (sansObj.length && moisRef().jour >= 8 ? COL.redDk : COL.grey) + '">' + sansObj.length + '</b><span>sans objectif</span></div>' +
         '<div class="d-kpi-i"><b style="color:' + (inact.length ? COL.amberDk : COL.greenDk) + '">' + inact.length + '</b><span>vendeurs inactifs</span></div>' +
-        '<div class="d-kpi-i"><b>' + parVendeur(dRows(), SUM_D).length + '</b><span>vendeurs suivis</span></div></div>' +
+        '<div class="d-kpi-i"><b>' + parVendeur(dRowsV(), SUM_D).length + '</b><span>vendeurs suivis</span></div></div>' +
         (sansObj.length && moisRef().jour >= 8 ? '<div class="d-warn-s">Objectifs manquants après le 8 du mois : ' + sansObj.slice(0, 5).map(s => esc(s.label)).join(' · ') + (sansObj.length > 5 ? ' …' : '') + '</div>' : ''));
       return vueDirecteur('Plateforme').replace('<div class="d-g">', '<div class="d-g">' + couv);
     }
