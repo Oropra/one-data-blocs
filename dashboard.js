@@ -174,7 +174,11 @@ OD.define('dashboard', {
     //                         vendeurs, vendeurs inactifs
     //
     // Règle : dès qu'un objectif entre dans un calcul, c'est la version V.
-    const estVendeur = r => Number(r.id_role) === 4;
+    // Tolérant au décalage front/base : le CDN sert tous les tenants d'un
+    // coup, alors que le schéma se déploie tenant par tenant. Sur une base
+    // sans la migration 20260821210000, id_role est absent — on retombe
+    // alors sur le comportement d'avant plutôt que de vider l'écran.
+    const estVendeur = r => r.id_role == null || Number(r.id_role) === 4;
     const dRowsV = () => dRows().filter(estVendeur);
     const aRowsV = () => aRows().filter(estVendeur);
     // Commandes signées par l'encadrement sur le périmètre courant.
