@@ -824,6 +824,30 @@ function entonnoirCible() {
   return { id_user: null, sites: null };
 }
 
+// Les sites concernes par la portee courante. Sert a TOUS les blocs de la
+// synthese, pas seulement a l'entonnoir : sans ca, changer de perimetre ne
+// mettait a jour qu'un bloc sur quatre, ce qui est pire que de ne rien
+// filtrer du tout.
+// null quand rien n'est selectionne : le RPC prend alors tout le perimetre.
+function portéeSites() {
+  const sc = state.syntheseScope;
+  return (sc && sc.sites && sc.sites.length) ? sc.sites.map(Number) : null;
+}
+function portéeCle() {
+  const p = portéeSites();
+  return p ? p.join('.') : 'perim';
+}
+
+function scopeSites() {
+  const sc = state.syntheseScope;
+  if (sc && sc.sites && sc.sites.length) return sc.sites.map(Number);
+  return userSiteIds.map(Number);
+}
+function scopeVendeurId() {
+  const sc = state.syntheseScope;
+  return (sc && sc.type === 'vendeur') ? Number(sc.id_user) : null;
+}
+
 function libellePortee() {
   const sc = state.syntheseScope;
   if (!sc) return isVendeur ? 'mes contacts' : 'tout mon perimetre';
@@ -874,7 +898,7 @@ function jolieDateCourte(s) {
 function renderBandeauPortee() {
   const sc = state.syntheseScope;
   let h = '<div class="lm-portee">';
-  h += '<span class="lm-portee-l">Transformation de</span>';
+  h += '<span class="lm-portee-l">' + (sc ? 'Synthese de' : 'Synthese de') + '</span>';
   h += '<span class="lm-portee-v">' + escapeHtml(libellePortee()) + '</span>';
   if (sc) {
     h += '<button type="button" class="lm-portee-x" data-action="portee-reset">&times; tout mon perimetre</button>';
@@ -957,10 +981,24 @@ function computeSyntheseKpi() {
   const { from, to } = getPeriodDates();
   const fromMs = from.getTime();
   const toMs   = to.getTime();
-  const cyclesActifs = dataKpiSiteScope.reduce((s, r) => s + (r.cycles_total || 0), 0);
+  // MODIFIÉ 20/08/2026 — ces compteurs suivent desormais la portee choisie
+  // dans le tableau d'equipe, et non plus systematiquement tout le perimetre.
+  const sites  = scopeSites();
+  const vId    = scopeVendeurId();
+  const dansPortee = function (idSite) { return sites.indexOf(Number(idSite)) !== -1; };
+
+  // Au niveau vendeur, le compteur de cycles vient de SA ligne ; sinon c'est
+  // la somme des sites retenus.
+  const cyclesActifs = (vId != null)
+    ? (function () {
+        const v = dataKpiVend.find(function (x) { return Number(x.id_user) === vId; });
+        return v ? (v.cycles_total || 0) : 0;
+      })()
+    : dataKpiSite.filter(function (r) { return dansPortee(r.id_site); })
+                 .reduce(function (a, r) { return a + (r.cycles_total || 0); }, 0);
   let winCount = 0, abandonCount = 0;
   for (const c of dataClotures) {
-    if (!userSiteIds.includes(c.id_site)) continue;
+    if (!dansPortee(c.id_site)) continue;
     const t = new Date(c.date_cloture).getTime();
     if (t < fromMs || t > toMs) continue;
     if (c.type_cloture === 'win')          winCount++;
@@ -972,7 +1010,7 @@ function computeSyntheseKpi() {
   const delais = [];
   for (const lead of dataLeads) {
     if (!lead.id_cycle_comm) continue;
-    if (!userSiteIds.includes(lead.id_site)) continue;
+    if (!dansPortee(lead.id_site)) continue;
     const t = new Date(lead.date_lead).getTime();
     if (t < fromMs || t > toMs) continue;
     const premierContactAt = premierContactMap[lead.id_cycle_comm];
@@ -1056,8 +1094,9 @@ function loadChartJs() {
 }
 
 async function fetchGraphes() {
-  const key = periodKey();
+  let key = periodKey();
   if (state.graphesLoading) return;
+  key = key + '|' + portéeCle();
   if (state.graphesKey === key && state.evolutionData !== null) return;
 
   const { from, to } = getPeriodDates();
@@ -1067,10 +1106,13 @@ async function fetchGraphes() {
 
   try {
     const supabase = ctx.supabase;
+    // Les graphes suivent la portee choisie dans le tableau d'equipe, comme
+    // l'entonnoir, les compteurs et le classement (20/08/2026).
     const params = {
       p_viewer_id_user: Number(userId),
       p_date_from: ymd(from),
-      p_date_to: ymd(to)
+      p_date_to: ymd(to),
+      p_sites: portéeSites()
     };
     const [evo, src] = await Promise.all([
       supabase.rpc('get_leads_par_jour', params),
@@ -1250,6 +1292,21 @@ function renderRankingBlock(side, ranking) {
   if (state.rankingError) {
     return '<div class="lm-block"><div class="lm-block-title">' + title + '</div>' +
            '<div class="lm-ranking-empty">Erreur de chargement du classement</div></div>';
+  }
+
+  // MODIFIÉ 20/08/2026 — le classement suit la portee. Le RPC rend tout le
+  // perimetre ; on restreint ici via la correspondance vendeur -> site que
+  // dataKpiVend fournit deja. Au niveau vendeur, on ne garde que lui.
+  {
+    const sites = scopeSites();
+    const vId   = scopeVendeurId();
+    const siteDe = {};
+    dataKpiVend.forEach(function (v) { siteDe[Number(v.id_user)] = Number(v.id_site); });
+    ranking = ranking.filter(function (r) {
+      if (vId != null) return Number(r.id_user) === vId;
+      const sv = siteDe[Number(r.id_user)];
+      return sv == null ? false : sites.indexOf(sv) !== -1;
+    });
   }
 
   if (side === 'top') {
@@ -1622,8 +1679,10 @@ function renderViewSynthese() {
   html += renderTeamTable();
   html += renderPeriodBar();
   html += '<div class="lm-synthese">';
-  // L'entonnoir suit la selection faite dans le tableau d'equipe ci-dessus :
-  // le tableau reste visible, c'est lui qui pilote.
+  // Le tableau d'equipe ci-dessus pilote TOUTE la synthese : entonnoir,
+  // compteurs et classement. Seuls les deux graphiques du bas restent au
+  // niveau du perimetre — leurs RPC agregent cote serveur sans detail par
+  // site, il faudra leur ajouter un filtre (note du 20/08/2026).
   html += renderBandeauPortee();
   html += renderEntonnoirCohorte();
   html += '<div class="lm-synth-kpi">';
@@ -1651,7 +1710,7 @@ function renderViewSynthese() {
   html +=   renderRankingBlock('top', [...ranking]);
   html +=   renderRankingBlock('bottom', [...ranking]);
   html += '</div>';
-  if (state.evolutionData === null || state.graphesKey !== periodKey()) {
+  if (state.evolutionData === null || state.graphesKey !== (periodKey() + '|' + portéeCle())) {
     fetchGraphes();
   }
   html += '<div class="lm-synth-2col">';
@@ -2407,8 +2466,12 @@ function bindEvents() {
         const dejaLui = state.syntheseScope && state.syntheseScope.type === 'vendeur' &&
                         Number(state.syntheseScope.id_user) === idUser;
         state.selectedVendeur = { id_user: idUser, id_site: idSite, vendeur_nom: nom };
+        // On garde AUSSI son site : l'entonnoir suit le vendeur, mais les
+        // blocs qui ne savent pas se decouper par vendeur (cycles actifs,
+        // win sur periode, graphes) suivent au moins son site.
         state.syntheseScope   = dejaLui ? null
-          : { type: 'vendeur', label: nom || 'Ce vendeur', sites: null, id_user: idUser };
+          : { type: 'vendeur', label: nom || 'Ce vendeur',
+              sites: (idSite != null ? [Number(idSite)] : null), id_user: idUser };
         renderAll();
         return;
       }
