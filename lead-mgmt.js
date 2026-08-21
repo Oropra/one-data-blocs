@@ -308,7 +308,11 @@ styleEl.textContent = `
 
 #lead-mgmt-root .lm-ranking-list { display:flex; flex-direction:column; gap:6px; }
 #lead-mgmt-root .lm-ranking-item { display:flex; align-items:center; justify-content:space-between; padding:8px 10px; border-radius:6px; background:var(--bg); border:1px solid transparent; transition:all .12s ease; }
-#lead-mgmt-root .lm-ranking-item.is-highlighted { background:var(--blue-bg); border-color:var(--blue-dk); }
+/* Le vendeur sur lequel porte la synthese : encadre ET en gras, pour qu'on
+   le retrouve d'un coup d'oeil dans une liste de cinq. */
+#lead-mgmt-root .lm-ranking-item.is-highlighted { background:var(--blue-bg); border-color:var(--blue-dk); box-shadow:0 0 0 1px var(--blue-dk); }
+#lead-mgmt-root .lm-ranking-item.is-highlighted .lm-ranking-name { font-weight:700; color:var(--blue-dk); }
+#lead-mgmt-root .lm-ranking-item.is-highlighted .lm-ranking-value { font-weight:700; }
 #lead-mgmt-root .lm-ranking-item-left { display:flex; align-items:center; gap:10px; flex:1; min-width:0; }
 #lead-mgmt-root .lm-ranking-rank { display:inline-flex; align-items:center; justify-content:center; width:22px; height:22px; border-radius:50%; background:var(--blue-bg); color:var(--blue-dk); font-size:10px; font-weight:700; flex-shrink:0; }
 #lead-mgmt-root .lm-ranking-rank.rank-1 { background:var(--green); color:#fff; }
@@ -1253,7 +1257,11 @@ async function drawGraphes() {
 }
 
 function renderRankingItem(item, rank, side) {
-  const isHighlighted = state.selectedVendeur && state.selectedVendeur.id_user === item.id_user;
+  // Surligne le vendeur sur lequel porte la synthese.
+  const vSurl = scopeVendeurId();
+  const isHighlighted = (vSurl != null && Number(item.id_user) === vSurl) ||
+                        (vSurl == null && state.selectedVendeur &&
+                         state.selectedVendeur.id_user === item.id_user);
   let rankCls = '';
   let itemCls = '';
   if (side === 'top') {
@@ -1297,13 +1305,16 @@ function renderRankingBlock(side, ranking) {
   // MODIFIÉ 20/08/2026 — le classement suit la portee. Le RPC rend tout le
   // perimetre ; on restreint ici via la correspondance vendeur -> site que
   // dataKpiVend fournit deja. Au niveau vendeur, on ne garde que lui.
+  // CORRIGÉ 20/08/2026 — au niveau vendeur, on garde le classement de SON
+  // SITE et on le surligne dedans. Le restreindre a lui seul le faisait
+  // sortir premier des deux classements a la fois : un classement d'une
+  // personne ne classe rien. Le surlignage et le repechage hors top 5
+  // ci-dessous s'appuient sur state.selectedVendeur, deja positionne.
   {
     const sites = scopeSites();
-    const vId   = scopeVendeurId();
     const siteDe = {};
     dataKpiVend.forEach(function (v) { siteDe[Number(v.id_user)] = Number(v.id_site); });
     ranking = ranking.filter(function (r) {
-      if (vId != null) return Number(r.id_user) === vId;
       const sv = siteDe[Number(r.id_user)];
       return sv == null ? false : sites.indexOf(sv) !== -1;
     });
@@ -1322,13 +1333,16 @@ function renderRankingBlock(side, ranking) {
     html += '<div class="lm-ranking-list">';
     list.forEach((item, idx) => { html += renderRankingItem(item, idx + 1, side); });
     html += '</div>';
-    if (state.selectedVendeur) {
-      const inTop = list.some(it => it.id_user === state.selectedVendeur.id_user);
+    const vRepeche = scopeVendeurId() != null
+      ? { id_user: scopeVendeurId() }
+      : state.selectedVendeur;
+    if (vRepeche) {
+      const inTop = list.some(it => Number(it.id_user) === Number(vRepeche.id_user));
       if (!inTop) {
         const fullSorted = side === 'top'
           ? [...ranking].sort((a, b) => b.taux - a.taux || b.winCount - a.winCount)
           : [...ranking].sort((a, b) => a.taux - b.taux || b.totalClos - a.totalClos);
-        const idx = fullSorted.findIndex(it => it.id_user === state.selectedVendeur.id_user);
+        const idx = fullSorted.findIndex(it => Number(it.id_user) === Number(vRepeche.id_user));
         if (idx >= 0) {
           html += '<div style="margin-top:8px;padding-top:8px;border-top:1px dashed var(--border);font-size:10px;color:var(--text-mut);">';
           html += 'Position du vendeur consulté :</div>';
