@@ -144,7 +144,32 @@ OD.define('performances', {
     { r: 'contrats_service_realises', o: 'objectif_contrat_service', label: 'CS' },
     { r: 'gravages_realises', o: 'objectif_gravage', label: 'Gravage' }
   ];
-  function emptyAgg() { const a = {}; for (const k of KPIS) { a[k.r] = 0; a[k.o] = 0; } a._ids = []; return a; }
+  // --- VOLUME vs ATTEINTE -----------------------------------------------------
+  // Arbitrage du 21/08/2026 : une commande signée par un chef des ventes EST
+  // une commande de la concession, mais un chef n'a quasiment jamais
+  // d'objectif. L'inclure au numérateur d'un taux dont il est absent au
+  // dénominateur gonflait l'atteinte d'une quinzaine de points (63 % au lieu
+  // de 51 % sur août 2026).
+  //
+  // Le taux d'atteinte exclut donc l'encadrement DES DEUX CÔTÉS. En pratique :
+  //   agg[k.r]          → réalisé des VENDEURS, toujours apparié à agg[k.o]
+  //   agg[k.r + '_enc'] → réalisé de l'ENCADREMENT, affiché à part
+  // Tous les rendus existants utilisent le couple (k.r, k.o) : ils deviennent
+  // justes sans modification. Ne PAS remettre l'encadrement dans k.r.
+  //
+  // Tolérant au décalage front/base : sur un tenant sans la migration
+  // 20260821210000, ID_Role peut manquer — on retombe alors sur l'ancien
+  // comportement plutôt que d'afficher des zéros partout.
+  function estVendeurPerf(row) {
+    const r = row && row.ID_Role;
+    return r == null || Number(r) === 4;
+  }
+  function emptyAgg() {
+    const a = {};
+    for (const k of KPIS) { a[k.r] = 0; a[k.o] = 0; a[k.r + '_enc'] = 0; }
+    a._ids = [];
+    return a;
+  }
   function num(v) {
     if (v == null) return 0;
     if (typeof v === 'number') return isNaN(v) ? 0 : v;
@@ -152,9 +177,25 @@ OD.define('performances', {
     return isNaN(n) ? 0 : n;
   }
   function addAgg(t, row) {
+    if (estVendeurPerf(row)) {
+      for (const k of KPIS) { t[k.r] += num(row[k.r]); t[k.o] += num(row[k.o]); }
+    } else {
+      // Encadrement : le volume est conservé et affiché à part, l'objectif
+      // n'entre nulle part — il n'existe pas.
+      for (const k of KPIS) { t[k.r + '_enc'] += num(row[k.r]); }
+    }
+    // Les identifiants restent complets : la popup de détail parle du VOLUME
+    // de la concession, pas du sous-ensemble porteur d'objectifs.
+    if (Array.isArray(row.ids_commandes)) t._ids.push(...row.ids_commandes);
+  }
+  // Variante brute : compte le réalisé quel que soit le rôle. Réservée à la
+  // ligne « Encadrement » de l'arbre, qui doit afficher son propre volume.
+  function addAggRaw(t, row) {
     for (const k of KPIS) { t[k.r] += num(row[k.r]); t[k.o] += num(row[k.o]); }
     if (Array.isArray(row.ids_commandes)) t._ids.push(...row.ids_commandes);
   }
+  // Volume total d'un agrégat : vendeurs + encadrement.
+  function volTotal(agg, k) { return num(agg[k.r]) + num(agg[k.r + '_enc']); }
   function pct(realise, objectif) { const o = num(objectif); return o > 0 ? Math.round(num(realise) / o * 100) : 0; }
 
   // --- PRORATA TEMPS (jours ouvrés lun-sam) ------------------------------------
@@ -283,9 +324,14 @@ OD.define('performances', {
       if (!S.types[tk]) S.types[tk] = { key: tk, label: tk, agg: emptyAgg(), vend: {} };
       addAgg(S.types[tk].agg, r);
       const T = S.types[tk];
-      const vk = String(vendeurId(r)), vl = r.nom_complet_affichage || r.nomComplet || ('Vendeur ' + vk);
-      if (!T.vend[vk]) T.vend[vk] = { key: vk, label: vl, fonction: r.FONCTION || '', agg: emptyAgg() };
-      addAgg(T.vend[vk].agg, r);
+      // L'encadrement ne se mêle pas au classement des vendeurs : tous les
+      // chefs d'un site sont regroupés sur une ligne « Encadrement », qui
+      // affiche son volume réel (addAggRaw) et aucun objectif.
+      const encad = !estVendeurPerf(r);
+      const vk = encad ? '__encadrement' : String(vendeurId(r));
+      const vl = encad ? 'Encadrement' : (r.nom_complet_affichage || r.nomComplet || ('Vendeur ' + vk));
+      if (!T.vend[vk]) T.vend[vk] = { key: vk, label: vl, fonction: encad ? 'Chefs des ventes' : (r.FONCTION || ''), encad: encad, agg: emptyAgg() };
+      (encad ? addAggRaw : addAgg)(T.vend[vk].agg, r);
     }
     const reseaux = Object.values(byR).sort((a, b) => (a.label || '').localeCompare(b.label || ''));
     for (const R of reseaux) {
@@ -294,7 +340,12 @@ OD.define('performances', {
         A.sites = Object.values(A.sites).sort((a, b) => (a.label || '').localeCompare(b.label || ''));
         for (const S of A.sites) {
           S.types = Object.values(S.types).sort((a, b) => (TYPE_ORDER[a.key] ?? 9) - (TYPE_ORDER[b.key] ?? 9));
-          for (const T of S.types) T.vend = Object.values(T.vend).sort(byAtteinteDesc);
+          for (const T of S.types) T.vend = Object.values(T.vend).sort((a, b) => {
+            // L'encadrement est un total, pas un concurrent : toujours en fin
+            // de liste, quel que soit son volume.
+            if (a.encad !== b.encad) return a.encad ? 1 : -1;
+            return byAtteinteDesc(a, b);
+          });
         }
       }
     }
@@ -353,6 +404,7 @@ OD.define('performances', {
 #perf-root .pf-kpi-ro small { font-size:11px; color:var(--text-mut); font-weight:400; }
 #perf-root .pf-kpi-pct { font-size:11px; font-weight:600; padding:2px 7px; border-radius:4px; }
 #perf-root .pf-kpi-track { height:4px; background:#e3edf9; border-radius:3px; overflow:hidden; }
+#perf-root .pf-kpi-enc { margin-top:6px; font-size:10px; color:var(--text-mut); font-style:italic; }
 #perf-root .pf-kpi-fill { height:4px; border-radius:3px; }
 @media (max-width:900px){ #perf-root .pf-kpi-grid{ grid-template-columns:repeat(2,1fr);} }
 
@@ -516,6 +568,8 @@ OD.define('performances', {
           o[k.label + ' réalisé'] = num(x.agg[k.r]);
           o[k.label + ' objectif'] = num(x.agg[k.o]);
           o[k.label + ' %'] = num(x.agg[k.o]) > 0 ? pct(x.agg[k.r], x.agg[k.o]) : null;
+          o[k.label + ' encadrement'] = num(x.agg[k.r + '_enc']);
+          o[k.label + ' total'] = volTotal(x.agg, k);
         }
         return o;
       });
@@ -629,11 +683,19 @@ OD.define('performances', {
       const r = agg[k.r], o = agg[k.o], c = kpiColorPro(r, o);
       const badge = pctLabel(r, o);
       const fillW = fillWidth(r, o);
+      // Le volume de l'encadrement n'entre pas dans le taux, mais il ne doit
+      // pas disparaître de l'écran : un directeur doit pouvoir raccorder le
+      // total de sa concession à ce que montrent les vendeurs.
+      const enc = num(agg[k.r + '_enc']);
+      const encLine = enc > 0
+        ? '<div class="pf-kpi-enc">+ ' + enc + ' encadrement · total ' + (num(r) + enc) + '</div>'
+        : '';
       html += '<div class="pf-kpi">' +
         '<div class="pf-kpi-label">' + esc(k.label) + '</div>' +
         '<div class="pf-kpi-vals"><span class="pf-kpi-ro">' + r + ' <small>/ ' + o + '</small></span>' +
         '<span class="pf-kpi-pct" style="background:' + c.bg + ';color:' + c.text + '">' + badge + '</span></div>' +
         '<div class="pf-kpi-track"><div class="pf-kpi-fill" style="width:' + fillW + '%;background:' + c.bar + '"></div></div>' +
+        encLine +
         '</div>';
     }
     html += '</div></div>';
