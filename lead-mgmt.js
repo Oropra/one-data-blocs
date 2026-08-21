@@ -230,6 +230,35 @@ styleEl.textContent = `
 #lead-mgmt-root .lm-synthese { display:flex; flex-direction:column; gap:18px; }
 #lead-mgmt-root .lm-block { background:var(--card); border:1px solid var(--border); border-radius:8px; padding:14px 16px; }
 #lead-mgmt-root .lm-block-title { font-size:11px; font-weight:600; color:var(--text-soft); text-transform:uppercase; letter-spacing:.5px; margin-bottom:12px; display:flex; align-items:center; justify-content:space-between; }
+/* AJOUT 20/08/2026 — entonnoir de cohorte */
+#lead-mgmt-root .lm-ent { background:var(--card); border:1px solid var(--border); border-radius:8px; padding:16px 18px; margin-bottom:12px; }
+#lead-mgmt-root .lm-ent-h { display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; margin-bottom:14px; }
+#lead-mgmt-root .lm-ent-t { font-size:13px; font-weight:700; color:var(--blue-dk); }
+#lead-mgmt-root .lm-ent-s { font-size:11px; color:var(--text-mut); }
+#lead-mgmt-root .lm-ent-hero { display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
+#lead-mgmt-root .lm-ent-tx { font-size:44px; font-weight:700; line-height:1; letter-spacing:-.03em; font-variant-numeric:tabular-nums; color:var(--blue-dk); }
+#lead-mgmt-root .lm-ent-tx small { font-size:20px; margin-left:2px; font-weight:600; }
+#lead-mgmt-root .lm-ent-tx.bas { color:var(--red-soft); }
+#lead-mgmt-root .lm-ent-tx.moyen { color:#b8851a; }
+#lead-mgmt-root .lm-ent-tx.bon { color:var(--green); }
+#lead-mgmt-root .lm-ent-lib { flex:1; min-width:200px; }
+#lead-mgmt-root .lm-ent-lib b { display:block; font-size:14px; color:var(--blue-dk); font-weight:600; }
+#lead-mgmt-root .lm-ent-lib span { display:block; font-size:11.5px; color:var(--text-mut); margin-top:3px; }
+#lead-mgmt-root .lm-ent-perte { margin-top:14px; }
+#lead-mgmt-root .lm-ent-jauge { height:6px; border-radius:3px; background:var(--red-soft); overflow:hidden; }
+#lead-mgmt-root .lm-ent-jauge span { display:block; height:100%; background:var(--blue-dk); }
+#lead-mgmt-root .lm-ent-pl { font-size:11.5px; color:var(--text-mut); margin-top:6px; }
+#lead-mgmt-root .lm-ent-pl b { color:var(--blue-dk); font-weight:600; }
+#lead-mgmt-root .lm-ent-pl b.alerte { color:var(--red-soft); }
+#lead-mgmt-root .lm-ent-suite { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:16px; padding-top:14px; border-top:1px solid var(--border); }
+#lead-mgmt-root .lm-ent-et { font-size:11px; color:var(--text-mut); }
+#lead-mgmt-root .lm-ent-et b { display:block; font-size:16px; color:var(--blue-dk); font-weight:600; font-variant-numeric:tabular-nums; }
+#lead-mgmt-root .lm-ent-fl { color:var(--border); font-size:16px; }
+#lead-mgmt-root .lm-ent-glob { margin-left:auto; font-size:12px; font-weight:700; color:var(--blue-dk); background:var(--bg-soft,#f5f8fc); padding:5px 11px; border-radius:99px; }
+#lead-mgmt-root .lm-ent-note { margin-top:12px; font-size:10.5px; color:var(--text-mut); line-height:1.5; }
+#lead-mgmt-root .lm-ent-sk { height:56px; border-radius:6px; background:linear-gradient(90deg,#eef2f8 25%,#e2eaf5 50%,#eef2f8 75%); background-size:200% 100%; animation:lmentsk 1.4s infinite; }
+@keyframes lmentsk { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+@media (max-width:640px) { #lead-mgmt-root .lm-ent-tx { font-size:34px; } #lead-mgmt-root .lm-ent-glob { margin-left:0; } }
 #lead-mgmt-root .lm-synth-kpi { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; }
 #lead-mgmt-root .lm-synth-kpi-card { background:var(--card); border:1px solid var(--border); border-radius:8px; padding:14px 16px; display:flex; flex-direction:column; gap:4px; }
 #lead-mgmt-root .lm-synth-kpi-label { font-size:10px; color:var(--text-mut); font-weight:500; text-transform:uppercase; letter-spacing:.5px; }
@@ -477,6 +506,16 @@ if (state.campagnesData === undefined)    state.campagnesData = null;
 if (state.campagnesLoading === undefined) state.campagnesLoading = false;
 if (state.campagnesError === undefined)   state.campagnesError = null;
 if (state.campagnesKey === undefined)     state.campagnesKey = null;
+// AJOUT 20/08/2026 — entonnoir de COHORTE (get_entonnoir).
+// La premiere marche « contact -> proposition » est LE sujet de cette page :
+// c'est la que se joue l'ecart entre 6 % et 30 % de transformation. Le
+// « Taux conversion » existant (win / (win + abandon)) mesure autre chose :
+// il ne parle que des cycles DEJA CLOS, et ignore ceux qui s'eteignent sans
+// que personne ne les solde.
+if (state.entData === undefined)         state.entData = null;
+if (state.entLoading === undefined)      state.entLoading = false;
+if (state.entError === undefined)        state.entError = null;
+if (state.entKey === undefined)          state.entKey = null;
 window.__leadMgmt = state;
 
 if (isVendeur && !state.selectedVendeur && userId != null) {
@@ -721,6 +760,117 @@ function injectDpStyle() {
 }
 
 // --- 7. CALCULS KPI SYNTHÈSE --------------------------------
+// ── AJOUT : entonnoir de cohorte ────────────────────────────────────────
+// La cohorte NE SUIT PAS le selecteur de periode de la page, et c'est
+// volontaire : les contacts de cette semaine n'ont pas eu le temps de se
+// conclure, les compter ecraserait le taux. Fenetre fixe de 3 mois qui
+// s'arrete il y a 30 jours.
+function bornesCohorte() {
+  const fin = new Date(); fin.setDate(fin.getDate() - 30);
+  const deb = new Date(fin); deb.setDate(deb.getDate() - 90);
+  return { from: ymd(deb), to: ymd(fin) };
+}
+
+async function fetchEntonnoir() {
+  const b = bornesCohorte();
+  const key = b.from + '_' + b.to + '_' + (isVendeur ? userId : 'perim');
+  if (state.entLoading) return;
+  if (state.entKey === key && state.entData !== null) return;
+
+  state.entLoading = true;
+  state.entError = null;
+  state.entKey = key;
+
+  try {
+    const { data, error } = await ctx.supabase.rpc('get_entonnoir', {
+      p_viewer_id_user: Number(userId),
+      p_date_from: b.from,
+      p_date_to: b.to,
+      p_id_user: isVendeur ? Number(userId) : null
+    });
+    if (error) throw error;
+    state.entData = (data || []).slice().sort((x, y) => (x.rang || 0) - (y.rang || 0));
+  } catch (e) {
+    console.warn('[lead-mgmt] get_entonnoir', e);
+    state.entData = null;
+    state.entError = (e && e.message) || String(e);
+  }
+  state.entLoading = false;
+  renderAll();
+}
+
+function jolieDateCourte(s) {
+  try { return new Date(s + 'T12:00:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }); }
+  catch (e) { return s; }
+}
+
+// Le bloc affiche la PREMIERE MARCHE en grand — c'est le sujet de la page —
+// et le reste de l'entonnoir en petit, pour situer.
+function renderEntonnoirCohorte() {
+  if (state.entError) return '';
+  const b = bornesCohorte();
+
+  if (state.entData === null) {
+    return '<div class="lm-ent"><div class="lm-ent-h"><span class="lm-ent-t">Transformation reelle</span>' +
+           '<span class="lm-ent-s">chargement…</span></div>' +
+           '<div class="lm-ent-sk"></div></div>';
+  }
+  const e = state.entData;
+  if (!e.length || !(e[0] && e[0].total)) return '';
+
+  const n = function (v) { const x = parseFloat(v); return isNaN(x) ? 0 : x; };
+  const fr = function (v) { return String(Math.round(n(v))).replace(/\B(?=(\d{3})+(?!\d))/g, '\u202f'); };
+
+  const contacts = n(e[0].total);
+  const propales = n(e[0].avance);
+  const tx1      = contacts > 0 ? Math.round(100 * propales / contacts) : 0;
+  const sansSuite = n(e[0].perdu_sans_suite);
+  const declares  = n(e[0].perdu_declare);
+  const dj        = e[0].delai_median_jours;
+  const wins      = n(e[3] && e[3].total);
+  const global    = contacts > 0 ? Math.round(100 * wins / contacts) : 0;
+
+  const cls = tx1 < 15 ? 'bas' : (tx1 < 25 ? 'moyen' : 'bon');
+
+  let h = '<div class="lm-ent">';
+  h += '<div class="lm-ent-h"><span class="lm-ent-t">Transformation reelle</span>' +
+       '<span class="lm-ent-s">contacts d\'il y a 1 a 4 mois, suivis jusqu\'a aujourd\'hui</span></div>';
+
+  h += '<div class="lm-ent-hero">' +
+       '<div class="lm-ent-tx ' + cls + '">' + tx1 + '<small>%</small></div>' +
+       '<div class="lm-ent-lib"><b>des contacts donnent une proposition</b>' +
+       '<span>' + fr(propales) + ' propositions pour ' + fr(contacts) + ' clients contactes' +
+       (dj != null ? ' · ' + (Math.round(n(dj) * 10) / 10).toFixed(1).replace('.', ',') + ' jours en mediane' : '') +
+       '</span></div></div>';
+
+  // Ce que devient le reste — la vraie information de cette page.
+  if (sansSuite > 0 || declares > 0) {
+    const perdus = sansSuite + declares;
+    const pctSans = perdus > 0 ? Math.round(100 * sansSuite / perdus) : 0;
+    h += '<div class="lm-ent-perte">' +
+         '<div class="lm-ent-jauge"><span style="width:' + (100 - pctSans) + '%"></span></div>' +
+         '<div class="lm-ent-pl"><b>' + fr(declares) + '</b> contacts soldes · ' +
+         '<b class="alerte">' + fr(sansSuite) + '</b> eteints sans que personne ne les cloture</div>' +
+         '</div>';
+  }
+
+  // Le reste de l'entonnoir, en petit.
+  h += '<div class="lm-ent-suite">';
+  e.forEach(function (et, i) {
+    h += '<span class="lm-ent-et"><b>' + fr(et.total) + '</b>' + (et.etape || '') + '</span>';
+    if (i < e.length - 1) h += '<span class="lm-ent-fl">&rsaquo;</span>';
+  });
+  h += '<span class="lm-ent-glob">' + global + ' % au bout</span>';
+  h += '</div>';
+
+  h += '<div class="lm-ent-note">Fenetre du ' + jolieDateCourte(b.from) + ' au ' + jolieDateCourte(b.to) +
+       ' : on laisse un mois aux affaires recentes pour se conclure. ' +
+       'Un contact est une action SORTANTE du vendeur — appel emis, message, rapport de visite. ' +
+       'Recevoir un lead n\'en est pas une.</div>';
+
+  return h + '</div>';
+}
+
 function computeSyntheseKpi() {
   const { from, to } = getPeriodDates();
   const fromMs = from.getTime();
@@ -1334,11 +1484,13 @@ function renderViewSynthese() {
   if (state.rankingData === null || state.rankingKey !== periodKey()) {
     fetchClassement();
   }
+  fetchEntonnoir();   // AJOUT : entonnoir de cohorte (non bloquant)
   const ranking = Array.isArray(state.rankingData) ? state.rankingData : [];
   let html = '';
   html += renderTeamTable();
   html += renderPeriodBar();
   html += '<div class="lm-synthese">';
+  html += renderEntonnoirCohorte();   // AJOUT : en tete, c'est le sujet de la page
   html += '<div class="lm-synth-kpi">';
   html += '<div class="lm-synth-kpi-card"><div class="lm-synth-kpi-label">Cycles actifs</div><div class="lm-synth-kpi-value">' + kpi.cyclesActifs + '</div><div class="lm-synth-kpi-sub">Cycles ouverts (instantané)</div></div>';
   const winClass = kpi.winCount > 0 ? 'kpi-good' : '';
