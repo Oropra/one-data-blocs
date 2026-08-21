@@ -227,8 +227,15 @@ async function loadData() {
         nb_propales_tx: Number(r.nb_propales_tx) || 0
       }));
     } else { state.transfo = []; }
-    state.rawData = (data || []).map(r => ({
+    // Depuis 20260821210000, get_activite_equipe remonte aussi les chefs
+    // des ventes (id_role = 3), parce que le dashboard a besoin de leur
+    // volume. Cette page reste un suivi d'activité VENDEURS : on filtre
+    // ici pour ne rien changer à son affichage. Le jour où tu veux une
+    // bascule « inclure l'encadrement », la donnée est déjà là — retire
+    // le filtre et branche-le sur state.
+    state.rawData = (data || []).filter(r => r.id_role == null || Number(r.id_role) === 4).map(r => ({
       id_user: Number(r.id_user),
+      id_role: r.id_role != null ? Number(r.id_role) : null,
       nom_complet: r.nom_complet || ('Vendeur ' + r.id_user),
       id_site: r.id_site != null ? Number(r.id_site) : null,
       nom_site: r.nom_site || ('Site ' + r.id_site),
