@@ -230,35 +230,54 @@ styleEl.textContent = `
 #lead-mgmt-root .lm-synthese { display:flex; flex-direction:column; gap:18px; }
 #lead-mgmt-root .lm-block { background:var(--card); border:1px solid var(--border); border-radius:8px; padding:14px 16px; }
 #lead-mgmt-root .lm-block-title { font-size:11px; font-weight:600; color:var(--text-soft); text-transform:uppercase; letter-spacing:.5px; margin-bottom:12px; display:flex; align-items:center; justify-content:space-between; }
+/* AJOUT 20/08/2026 — synthese focalisee sur un vendeur */
+#lead-mgmt-root .lm-focus { background:var(--card); border:1px solid var(--border); border-radius:8px; padding:14px 18px; margin-bottom:12px; }
+#lead-mgmt-root .lm-focus-h { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:14px; }
+#lead-mgmt-root .lm-focus-back { border:1px solid var(--border); background:var(--card); color:var(--blue-dk); font:inherit; font-size:12px; font-weight:600; padding:6px 13px; border-radius:99px; cursor:pointer; }
+#lead-mgmt-root .lm-focus-back:hover { background:#eaf0f9; }
+#lead-mgmt-root .lm-focus-nom { font-size:17px; font-weight:700; color:var(--blue-dk); letter-spacing:-.01em; }
+#lead-mgmt-root .lm-focus-kpi { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; }
+#lead-mgmt-root .lm-focus-c { background:#f5f8fc; border-radius:8px; padding:11px 13px; }
+#lead-mgmt-root .lm-focus-n { display:block; font-size:23px; font-weight:700; color:var(--blue-dk); line-height:1; letter-spacing:-.03em; font-variant-numeric:tabular-nums; }
+#lead-mgmt-root .lm-focus-l { display:block; font-size:10.5px; color:var(--text-mut); margin-top:5px; }
+#lead-mgmt-root .lm-focus-go { text-align:right; margin-bottom:12px; }
+#lead-mgmt-root .lm-focus-btn { border:1px solid var(--border); background:var(--card); color:var(--blue-dk); font:inherit; font-size:12.5px; font-weight:600; padding:8px 16px; border-radius:99px; cursor:pointer; }
+#lead-mgmt-root .lm-focus-btn:hover { background:#eaf0f9; }
+@media (max-width:640px) { #lead-mgmt-root .lm-focus-kpi { grid-template-columns:repeat(2,1fr); } }
+
 /* AJOUT 20/08/2026 — entonnoir de cohorte */
 #lead-mgmt-root .lm-ent { background:var(--card); border:1px solid var(--border); border-radius:8px; padding:16px 18px; margin-bottom:12px; }
-#lead-mgmt-root .lm-ent-h { display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; margin-bottom:14px; }
+#lead-mgmt-root .lm-ent-h { display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; margin-bottom:16px; }
 #lead-mgmt-root .lm-ent-t { font-size:13px; font-weight:700; color:var(--blue-dk); }
+#lead-mgmt-root .lm-ent-per { font-size:12px; font-weight:600; color:var(--blue-dk); background:#eaf0f9; padding:3px 10px; border-radius:99px; }
 #lead-mgmt-root .lm-ent-s { font-size:11px; color:var(--text-mut); }
-#lead-mgmt-root .lm-ent-hero { display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
-#lead-mgmt-root .lm-ent-tx { font-size:44px; font-weight:700; line-height:1; letter-spacing:-.03em; font-variant-numeric:tabular-nums; color:var(--blue-dk); }
-#lead-mgmt-root .lm-ent-tx small { font-size:20px; margin-left:2px; font-weight:600; }
-#lead-mgmt-root .lm-ent-tx.bas { color:var(--red-soft); }
-#lead-mgmt-root .lm-ent-tx.moyen { color:#b8851a; }
-#lead-mgmt-root .lm-ent-tx.bon { color:var(--green); }
-#lead-mgmt-root .lm-ent-lib { flex:1; min-width:200px; }
-#lead-mgmt-root .lm-ent-lib b { display:block; font-size:14px; color:var(--blue-dk); font-weight:600; }
-#lead-mgmt-root .lm-ent-lib span { display:block; font-size:11.5px; color:var(--text-mut); margin-top:3px; }
-#lead-mgmt-root .lm-ent-perte { margin-top:14px; }
-#lead-mgmt-root .lm-ent-jauge { height:6px; border-radius:3px; background:var(--red-soft); overflow:hidden; }
-#lead-mgmt-root .lm-ent-jauge span { display:block; height:100%; background:var(--blue-dk); }
-#lead-mgmt-root .lm-ent-pl { font-size:11.5px; color:var(--text-mut); margin-top:6px; }
-#lead-mgmt-root .lm-ent-pl b { color:var(--blue-dk); font-weight:600; }
-#lead-mgmt-root .lm-ent-pl b.alerte { color:var(--red-soft); }
-#lead-mgmt-root .lm-ent-suite { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:16px; padding-top:14px; border-top:1px solid var(--border); }
-#lead-mgmt-root .lm-ent-et { font-size:11px; color:var(--text-mut); }
-#lead-mgmt-root .lm-ent-et b { display:block; font-size:16px; color:var(--blue-dk); font-weight:600; font-variant-numeric:tabular-nums; }
-#lead-mgmt-root .lm-ent-fl { color:var(--border); font-size:16px; }
-#lead-mgmt-root .lm-ent-glob { margin-left:auto; font-size:12px; font-weight:700; color:var(--blue-dk); background:var(--bg-soft,#f5f8fc); padding:5px 11px; border-radius:99px; }
-#lead-mgmt-root .lm-ent-note { margin-top:12px; font-size:10.5px; color:var(--text-mut); line-height:1.5; }
-#lead-mgmt-root .lm-ent-sk { height:56px; border-radius:6px; background:linear-gradient(90deg,#eef2f8 25%,#e2eaf5 50%,#eef2f8 75%); background-size:200% 100%; animation:lmentsk 1.4s infinite; }
+#lead-mgmt-root .lm-ent-chaine { display:flex; align-items:stretch; gap:0; flex-wrap:wrap; }
+#lead-mgmt-root .lm-ent-pas { flex:1 1 110px; min-width:96px; padding:12px 10px; border-radius:8px; background:#f5f8fc; text-align:center; }
+#lead-mgmt-root .lm-ent-pas.fin { background:#e1f5ee; }
+#lead-mgmt-root .lm-ent-nb { font-size:27px; font-weight:700; line-height:1; letter-spacing:-.03em; color:var(--blue-dk); font-variant-numeric:tabular-nums; }
+#lead-mgmt-root .lm-ent-pas.fin .lm-ent-nb { color:#085041; }
+#lead-mgmt-root .lm-ent-lb { font-size:10.5px; color:var(--text-mut); margin-top:5px; line-height:1.3; }
+#lead-mgmt-root .lm-ent-fle { flex:0 0 62px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; color:#9bb3d1; }
+#lead-mgmt-root .lm-ent-fle svg { width:40px; height:8px; display:block; }
+#lead-mgmt-root .lm-ent-tx { font-size:13px; font-weight:700; color:var(--blue-dk); font-variant-numeric:tabular-nums; }
+#lead-mgmt-root .lm-ent-fle.bas { color:var(--red-soft); }
+#lead-mgmt-root .lm-ent-fle.bas .lm-ent-tx { color:var(--red-soft); }
+#lead-mgmt-root .lm-ent-bas { margin-top:16px; padding-top:13px; border-top:1px solid var(--border); display:flex; flex-direction:column; gap:6px; }
+#lead-mgmt-root .lm-ent-glob { font-size:12.5px; color:var(--text-mut); }
+#lead-mgmt-root .lm-ent-glob b { color:var(--blue-dk); font-weight:700; font-size:14px; }
+#lead-mgmt-root .lm-ent-et { font-size:12.5px; color:var(--text-mut); }
+#lead-mgmt-root .lm-ent-et b { color:var(--red-soft); font-weight:700; font-size:14px; }
+#lead-mgmt-root .lm-ent-et i { font-style:normal; color:var(--red-soft); font-weight:600; }
+#lead-mgmt-root .lm-ent-note { margin-top:10px; font-size:10.5px; color:var(--text-mut); line-height:1.5; }
+#lead-mgmt-root .lm-ent-sk { height:74px; border-radius:8px; background:linear-gradient(90deg,#eef2f8 25%,#e2eaf5 50%,#eef2f8 75%); background-size:200% 100%; animation:lmentsk 1.4s infinite; }
 @keyframes lmentsk { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
-@media (max-width:640px) { #lead-mgmt-root .lm-ent-tx { font-size:34px; } #lead-mgmt-root .lm-ent-glob { margin-left:0; } }
+@media (max-width:700px) {
+  #lead-mgmt-root .lm-ent-chaine { flex-direction:column; }
+  #lead-mgmt-root .lm-ent-pas { flex:none; width:100%; display:flex; align-items:baseline; gap:10px; text-align:left; }
+  #lead-mgmt-root .lm-ent-lb { margin-top:0; }
+  #lead-mgmt-root .lm-ent-fle { flex:none; width:100%; flex-direction:row; gap:8px; padding:4px 0; }
+  #lead-mgmt-root .lm-ent-fle svg { transform:rotate(90deg); width:22px; }
+}
 #lead-mgmt-root .lm-synth-kpi { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; }
 #lead-mgmt-root .lm-synth-kpi-card { background:var(--card); border:1px solid var(--border); border-radius:8px; padding:14px 16px; display:flex; flex-direction:column; gap:4px; }
 #lead-mgmt-root .lm-synth-kpi-label { font-size:10px; color:var(--text-mut); font-weight:500; text-transform:uppercase; letter-spacing:.5px; }
@@ -516,6 +535,12 @@ if (state.entData === undefined)         state.entData = null;
 if (state.entLoading === undefined)      state.entLoading = false;
 if (state.entError === undefined)        state.entError = null;
 if (state.entKey === undefined)          state.entKey = null;
+// AJOUT 20/08/2026 — synthese focalisee sur UN vendeur.
+// null = tout le perimetre du viewer. Quand le chef clique sur un vendeur
+// dans le tableau d'equipe, on reste dans la synthese et on la recalcule
+// pour lui, au lieu de basculer vers le suivi des leads : le chef veut
+// COMPRENDRE ce vendeur avant d'aller voir ses cycles un par un.
+if (state.syntheseVendeur === undefined) state.syntheseVendeur = null;
 window.__leadMgmt = state;
 
 if (isVendeur && !state.selectedVendeur && userId != null) {
@@ -771,9 +796,18 @@ function bornesCohorte() {
   return { from: ymd(deb), to: ymd(fin) };
 }
 
+// Sur QUI porte l'entonnoir : le vendeur focalise, sinon le vendeur connecte
+// s'il en est un, sinon tout son perimetre.
+function entonnoirCible() {
+  if (state.syntheseVendeur) return Number(state.syntheseVendeur.id_user);
+  if (isVendeur) return Number(userId);
+  return null;
+}
+
 async function fetchEntonnoir() {
   const b = bornesCohorte();
-  const key = b.from + '_' + b.to + '_' + (isVendeur ? userId : 'perim');
+  const cible = entonnoirCible();
+  const key = b.from + '_' + b.to + '_' + (cible == null ? 'perim' : cible);
   if (state.entLoading) return;
   if (state.entKey === key && state.entData !== null) return;
 
@@ -786,7 +820,7 @@ async function fetchEntonnoir() {
       p_viewer_id_user: Number(userId),
       p_date_from: b.from,
       p_date_to: b.to,
-      p_id_user: isVendeur ? Number(userId) : null
+      p_id_user: cible
     });
     if (error) throw error;
     state.entData = (data || []).slice().sort((x, y) => (x.rang || 0) - (y.rang || 0));
@@ -811,62 +845,65 @@ function renderEntonnoirCohorte() {
   const b = bornesCohorte();
 
   if (state.entData === null) {
-    return '<div class="lm-ent"><div class="lm-ent-h"><span class="lm-ent-t">Transformation reelle</span>' +
-           '<span class="lm-ent-s">chargement…</span></div>' +
+    return '<div class="lm-ent"><div class="lm-ent-h"><span class="lm-ent-t">Transformation reelle</span></div>' +
            '<div class="lm-ent-sk"></div></div>';
   }
   const e = state.entData;
   if (!e.length || !(e[0] && e[0].total)) return '';
 
-  const n = function (v) { const x = parseFloat(v); return isNaN(x) ? 0 : x; };
+  const n  = function (v) { const x = parseFloat(v); return isNaN(x) ? 0 : x; };
   const fr = function (v) { return String(Math.round(n(v))).replace(/\B(?=(\d{3})+(?!\d))/g, '\u202f'); };
 
   const contacts = n(e[0].total);
-  const propales = n(e[0].avance);
-  const tx1      = contacts > 0 ? Math.round(100 * propales / contacts) : 0;
-  const sansSuite = n(e[0].perdu_sans_suite);
-  const declares  = n(e[0].perdu_declare);
-  const dj        = e[0].delai_median_jours;
-  const wins      = n(e[3] && e[3].total);
-  const global    = contacts > 0 ? Math.round(100 * wins / contacts) : 0;
+  const wins     = n(e[3] && e[3].total);
+  const global   = contacts > 0 ? Math.round(100 * wins / contacts) : 0;
+  const eteints  = n(e[0].perdu_sans_suite);
+  const pctEt    = contacts > 0 ? Math.round(100 * eteints / contacts) : 0;
+  const dj       = e[0].delai_median_jours;
 
-  const cls = tx1 < 15 ? 'bas' : (tx1 < 25 ? 'moyen' : 'bon');
-
+  // ── La chaine : 4 nombres, 3 taux entre eux. C'est de la que se deduit
+  //    le 7 % global (408 / 5 801), et c'est ce que l'utilisateur lit en
+  //    premier. Tout le reste est secondaire.
   let h = '<div class="lm-ent">';
-  h += '<div class="lm-ent-h"><span class="lm-ent-t">Transformation reelle</span>' +
-       '<span class="lm-ent-s">contacts d\'il y a 1 a 4 mois, suivis jusqu\'a aujourd\'hui</span></div>';
+  h += '<div class="lm-ent-h">' +
+       '<span class="lm-ent-t">Transformation reelle</span>' +
+       '<span class="lm-ent-per">' + jolieDateCourte(b.from) + ' &rarr; ' + jolieDateCourte(b.to) + '</span>' +
+       '<span class="lm-ent-s">on laisse un mois aux affaires recentes pour se conclure</span>' +
+       '</div>';
 
-  h += '<div class="lm-ent-hero">' +
-       '<div class="lm-ent-tx ' + cls + '">' + tx1 + '<small>%</small></div>' +
-       '<div class="lm-ent-lib"><b>des contacts donnent une proposition</b>' +
-       '<span>' + fr(propales) + ' propositions pour ' + fr(contacts) + ' clients contactes' +
-       (dj != null ? ' · ' + (Math.round(n(dj) * 10) / 10).toFixed(1).replace('.', ',') + ' jours en mediane' : '') +
-       '</span></div></div>';
-
-  // Ce que devient le reste — la vraie information de cette page.
-  if (sansSuite > 0 || declares > 0) {
-    const perdus = sansSuite + declares;
-    const pctSans = perdus > 0 ? Math.round(100 * sansSuite / perdus) : 0;
-    h += '<div class="lm-ent-perte">' +
-         '<div class="lm-ent-jauge"><span style="width:' + (100 - pctSans) + '%"></span></div>' +
-         '<div class="lm-ent-pl"><b>' + fr(declares) + '</b> contacts soldes · ' +
-         '<b class="alerte">' + fr(sansSuite) + '</b> eteints sans que personne ne les cloture</div>' +
-         '</div>';
-  }
-
-  // Le reste de l'entonnoir, en petit.
-  h += '<div class="lm-ent-suite">';
+  h += '<div class="lm-ent-chaine">';
   e.forEach(function (et, i) {
-    h += '<span class="lm-ent-et"><b>' + fr(et.total) + '</b>' + (et.etape || '') + '</span>';
-    if (i < e.length - 1) h += '<span class="lm-ent-fl">&rsaquo;</span>';
+    const tot = n(et.total);
+    const der = (i === e.length - 1);
+    h += '<div class="lm-ent-pas' + (der ? ' fin' : '') + '">' +
+         '<div class="lm-ent-nb">' + fr(tot) + '</div>' +
+         '<div class="lm-ent-lb">' + (et.etape || '') + '</div>' +
+         '</div>';
+    if (!der) {
+      const tx = tot > 0 ? Math.round(100 * n(et.avance) / tot) : 0;
+      const bas = tx < 25;
+      h += '<div class="lm-ent-fle' + (bas ? ' bas' : '') + '">' +
+           '<span class="lm-ent-tx">' + tx + '\u202f%</span>' +
+           '<svg viewBox="0 0 40 8" preserveAspectRatio="none" aria-hidden="true">' +
+           '<path d="M0 4 H32 M28 1 L33 4 L28 7" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>' +
+           '</div>';
+    }
   });
-  h += '<span class="lm-ent-glob">' + global + ' % au bout</span>';
   h += '</div>';
 
-  h += '<div class="lm-ent-note">Fenetre du ' + jolieDateCourte(b.from) + ' au ' + jolieDateCourte(b.to) +
-       ' : on laisse un mois aux affaires recentes pour se conclure. ' +
-       'Un contact est une action SORTANTE du vendeur — appel emis, message, rapport de visite. ' +
-       'Recevoir un lead n\'en est pas une.</div>';
+  // ── Le bilan et le seul segment sur lequel on peut agir aujourd'hui.
+  h += '<div class="lm-ent-bas">' +
+       '<span class="lm-ent-glob"><b>' + global + '\u202f%</b> de transformation, du premier contact a la commande' +
+       (dj != null ? ' · <b>' + (Math.round(n(dj) * 10) / 10).toFixed(1).replace('.', ',') + ' jours</b> avant la premiere proposition' : '') +
+       '</span>';
+  if (eteints > 0) {
+    h += '<span class="lm-ent-et"><b>' + fr(eteints) + '</b> cycles eteints <i>(' + pctEt + '\u202f%)</i>' +
+         ' — plus aucun contact depuis 3 mois, et aucun cycle cloture</span>';
+  }
+  h += '</div>';
+
+  h += '<div class="lm-ent-note">Un contact est une action SORTANTE du vendeur : appel emis, message, ' +
+       'rapport de visite. Recevoir un lead n\'en est pas une.</div>';
 
   return h + '</div>';
 }
@@ -1479,7 +1516,48 @@ function renderTeamTable() {
 }
 
 // --- 10. Vue Synthèse ---------------------------------------
+// ── AJOUT : synthese d'UN vendeur ─────────────────────────────────────
+// Sert deux cas : le chef qui clique sur un vendeur, et le vendeur qui
+// consulte sa propre synthese. Meme rendu, seul l'en-tete change.
+function renderSyntheseVendeur(idUser, nom, avecRetour) {
+  fetchEntonnoir();
+
+  const v = dataKpiVend.find(function (x) { return Number(x.id_user) === Number(idUser); }) || {};
+  const n = function (x) { const y = parseFloat(x); return isNaN(y) ? 0 : y; };
+
+  let html = '';
+  html += '<div class="lm-focus">';
+  html += '<div class="lm-focus-h">';
+  if (avecRetour) {
+    html += '<button type="button" class="lm-focus-back" data-action="synthese-retour">&larr; L\'equipe</button>';
+  }
+  html += '<span class="lm-focus-nom">' + escapeHtml(nom || 'Ce vendeur') + '</span>';
+  html += '</div>';
+
+  html += '<div class="lm-focus-kpi">' +
+    '<div class="lm-focus-c"><span class="lm-focus-n">' + n(v.cycles_total) + '</span><span class="lm-focus-l">cycles ouverts</span></div>' +
+    '<div class="lm-focus-c"><span class="lm-focus-n">' + n(v.a_traiter) + '</span><span class="lm-focus-l">a traiter</span></div>' +
+    '<div class="lm-focus-c"><span class="lm-focus-n">' + n(v.pipeline) + '</span><span class="lm-focus-l">en pipeline</span></div>' +
+    '<div class="lm-focus-c"><span class="lm-focus-n">' + n(v.clos_recent) + '</span><span class="lm-focus-l">clos recemment</span></div>' +
+    '</div>';
+  html += '</div>';
+
+  html += renderEntonnoirCohorte();
+
+  if (avecRetour) {
+    html += '<div class="lm-focus-go">' +
+            '<button type="button" class="lm-focus-btn" data-action="synthese-voir-cycles">' +
+            'Voir ses cycles un par un &rarr;</button></div>';
+  }
+  return html;
+}
+
 function renderViewSynthese() {
+  // Mode focalise : le chef a clique sur un vendeur.
+  if (state.syntheseVendeur) {
+    return renderSyntheseVendeur(state.syntheseVendeur.id_user,
+                                 state.syntheseVendeur.vendeur_nom, true);
+  }
   const kpi = computeSyntheseKpi();
   if (state.rankingData === null || state.rankingKey !== periodKey()) {
     fetchClassement();
@@ -2102,13 +2180,19 @@ function renderAll() {
     html += '<div class="lm-toggle">';
     html += '<button type="button" class="lm-toggle-btn' + (state.view === 'a_traiter' ? ' active' : '') + '" data-view="a_traiter">Cycles actifs</button>';
     html += '<button type="button" class="lm-toggle-btn' + (state.view === 'pipeline'  ? ' active' : '') + '" data-view="pipeline">Pipeline</button>';
+    // AJOUT : le vendeur a droit a sa synthese, lui aussi. Il voyait
+    // jusqu'ici ses cycles sans jamais savoir ce qu'il en faisait.
+    html += '<button type="button" class="lm-toggle-btn' + (state.view === 'synthese'  ? ' active' : '') + '" data-view="synthese">Ma synthese</button>';
     html += '</div>';
-    if (state.view === 'pipeline') html += renderViewKanban();
-    else                            html += renderViewActifs();
+    if (state.view === 'pipeline')      html += renderViewKanban();
+    else if (state.view === 'synthese') html += renderSyntheseVendeur(userId, 'Ma synthese', false);
+    else                                html += renderViewActifs();
   }
   root.innerHTML = html;
   bindEvents();
-  if (state.section === 'synthese') {
+  // Les graphes n'existent que dans la synthese d'equipe : ne pas les
+  // dessiner en mode focalise, leur canvas n'est pas rendu.
+  if (state.section === 'synthese' && !state.syntheseVendeur) {
     setTimeout(() => { drawGraphes(); }, 0);
   }
 }
@@ -2244,9 +2328,12 @@ function bindEvents() {
       const nom = el.getAttribute('data-vendeur-nom') || '';
 
       if (state.section === 'synthese') {
-        state.selectedVendeur = { id_user: idUser, id_site: idSite, vendeur_nom: nom };
-        state.section = 'suivi_leads';
-        selectVendeurCible(idUser);
+        // MODIFIÉ 20/08/2026 — on ne bascule plus vers le suivi des leads.
+        // Le chef reste dans la synthese, recalculee pour ce vendeur ; un
+        // bouton explicite l'emmene vers ses cycles s'il veut aller plus loin.
+        state.selectedVendeur   = { id_user: idUser, id_site: idSite, vendeur_nom: nom };
+        state.syntheseVendeur   = { id_user: idUser, id_site: idSite, vendeur_nom: nom };
+        renderAll();
         return;
       }
 
@@ -2258,6 +2345,23 @@ function bindEvents() {
         state.selectedVendeur = { id_user: idUser, id_site: idSite, vendeur_nom: nom };
         selectVendeurCible(idUser);
       }
+    });
+  });
+
+  root.querySelectorAll('[data-action="synthese-retour"]').forEach(el => {
+    el.addEventListener('click', () => {
+      state.syntheseVendeur = null;
+      state.selectedVendeur = null;
+      renderAll();
+    });
+  });
+
+  root.querySelectorAll('[data-action="synthese-voir-cycles"]').forEach(el => {
+    el.addEventListener('click', () => {
+      const v = state.syntheseVendeur;
+      state.syntheseVendeur = null;
+      state.section = 'suivi_leads';
+      if (v) selectVendeurCible(v.id_user); else renderAll();
     });
   });
 
