@@ -158,23 +158,47 @@ OD.define('agenda', {
   }
   const sortNom = (a, b) => String(a.nom).localeCompare(String(b.nom), 'fr');
 
+  // Personnes visibles selon la RPC de périmètre : le viewer et TOUS ses
+  // subordonnés descendants. C'est la seule source de vérité — window.__dash
+  // ne porte aucune notion de hiérarchie, et depuis dashboard.js v18 il
+  // contient aussi l'encadrement, donc les collègues de même niveau.
+  // Renvoie null tant que le périmètre n'est pas chargé.
+  function collaborateursVisibles() {
+    const perim = perimRows();
+    if (perim === null) { loadPerim(); return null; }
+    const vus = {}, out = [];
+    for (const r of perim) {
+      const k = String(r.id_user);
+      if (vus[k]) continue;
+      vus[k] = 1;
+      out.push({ id: Number(r.id_user), id_user: Number(r.id_user), nom: r.nom,
+                 vn_vo: r.vn_vo, id_role: r.id_role, role_nom: r.role_nom,
+                 niveau: r.niveau, est_moi: !!r.est_moi });
+    }
+    return out;
+  }
+
   // null = pas encore prêt ; {mode:'none'} = pas de sélecteur (vendeur)
   function buildCollaborators() {
     const role = viewerRole();
     if (role === 4) return { mode: 'none' };
-    const rows = dashRows();
-    if (rows == null) return null;
+    // Plus aucune dépendance à window.__dash ici : les deux modes (chef et
+    // cascade) s'alimentent désormais à la RPC de périmètre. Le sélecteur
+    // n'attend donc plus le chargement du module dashboard.
     const vid = Number(CACHED_UID); const vname = viewerName();
     const allById = {}; const groups = [];
 
     if (role === 3) {
-      // Même regroupement que la cascade : par fonction, avec le suffixe VN/VO
-      // sur les vendeurs et les chefs, et tri alphabétique dans chaque groupe.
-      const vd = uniqVendeurs(rows)
-        .filter(v => v.id !== vid)
-        .map(v => ({ id: v.id, id_user: v.id, nom: v.nom, vn_vo: v.vnvo, id_role: v.id_role != null ? v.id_role : 4 }));
-      groups.push({ label: 'Chef des ventes', items: [{ id: vid, nom: vname }] });
-      for (const g of groupeParFonction(vd, vid)) {
+      // Corrigé le 21/08/2026 : cette branche lisait window.__dash.rawData,
+      // qui liste tout le monde sur le site. Un chef des ventes y voyait
+      // donc les autres chefs — deux personnes de même niveau ne doivent
+      // pas pouvoir se consulter. On passe par la RPC, qui ne descend que
+      // la hiérarchie (N-1, N-2, N-3...).
+      const vus = collaborateursVisibles();
+      if (vus === null) return null;
+      const moi = vus.find(v => v.est_moi);
+      groups.push({ label: (moi && moi.role_nom) || 'Chef des ventes', items: [{ id: vid, nom: vname }] });
+      for (const g of groupeParFonction(vus, vid)) {
         groups.push({ label: g.label, items: g.items });
       }
     } else {
@@ -191,7 +215,11 @@ OD.define('agenda', {
 
   let collabMenuOpen = false;
   let collabSig = null;
-  function collabSignature() { const r = dashRows(); return JSON.stringify([viewerRole(), siteValRaw(), r ? r.length : -1, currentCollabId()]); }
+  function collabSignature() {
+    const r = dashRows();
+    const p = perimRows();   // le mode chef dépend désormais du périmètre
+    return JSON.stringify([viewerRole(), siteValRaw(), r ? r.length : -1, p ? p.length : -1, currentCollabId()]);
+  }
 
   // ---- Cascade directeur : Réseau → Affaire → Site → Vendeur ----------------
   function perimRows() { try { return frontWin().__agendaPerim || window.__agendaPerim || null; } catch (e) { return (typeof window !== 'undefined' ? window.__agendaPerim : null) || null; } }
@@ -1080,18 +1108,19 @@ OD.define('agenda', {
     d.getElementById('clp-close').addEventListener('click', closePicker);
     render();
   }
-  function bilatVendeurs() { const r = dashRows(); return r ? uniqVendeurs(r).map(v => ({ id: v.id, nom: v.nom })).sort(sortNom) : []; }
+  // Une bilatérale se tient avec un SUBORDONNÉ : même source de vérité que
+  // le sélecteur d'agenda. Lire window.__dash ici proposait d'évaluer un
+  // collègue de même niveau (corrigé le 21/08/2026).
+  function bilatVendeurs() {
+    const v = collaborateursVisibles();
+    return v ? v.filter(x => !x.est_moi).map(x => ({ id: x.id, nom: x.nom })).sort(sortNom) : [];
+  }
   function bilatVendeurGroups() {
-    const r = dashRows(); if (!r) return [];
-    const vn = [], vo = [], vnvo = [], autre = [];
-    for (const v of uniqVendeurs(r)) { const sgn = v.vnvo || ''; if (sgn.includes('VN') && sgn.includes('VO')) vnvo.push(v); else if (sgn.includes('VN')) vn.push(v); else if (sgn.includes('VO')) vo.push(v); else autre.push(v); }
-    [vn, vo, vnvo, autre].forEach(a => a.sort(sortNom));
-    const g = [];
-    if (vn.length) g.push({ label: 'VN', items: vn });
-    if (vo.length) g.push({ label: 'VO', items: vo });
-    if (vnvo.length) g.push({ label: 'VN / VO', items: vnvo });
-    if (autre.length) g.push({ label: 'Autres', items: autre });
-    return g;
+    const v = collaborateursVisibles();
+    if (!v) return [];
+    const moi = v.find(x => x.est_moi);
+    return groupeParFonction(v, moi ? moi.id_user : null)
+      .map(g => ({ label: g.label, items: g.items }));
   }
   const pad2 = (n) => String(n).padStart(2, '0');
   function endStrFrom(date, time, mins) { const [Y, Mo, D] = date.split('-').map(Number); const [h, mi] = time.split(':').map(Number); const dt = new Date(Y, Mo - 1, D, h, mi); dt.setMinutes(dt.getMinutes() + Number(mins)); return dt.getFullYear() + '-' + pad2(dt.getMonth() + 1) + '-' + pad2(dt.getDate()) + ' ' + pad2(dt.getHours()) + ':' + pad2(dt.getMinutes()) + ':00'; }
