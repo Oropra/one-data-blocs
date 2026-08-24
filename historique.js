@@ -81,13 +81,27 @@ OD.define('historique', {
   function cycleCard(item) {
     var chip = resultChip[item.resultat] || { bg:'#f3f4f6', color:'#374151', border:'#d1d5db' };
     var accent = accentByResult[item.resultat] || '#9E9E9E';
-    var canaux = [ {k:'VOIP',n:item.nb_voip},{k:'WHATSAPP',n:item.nb_wa},{k:'EMAIL',n:item.nb_email},{k:'SMS',n:item.nb_sms},{k:'RAPPORT_VENDEUR',n:item.nb_rpv} ];
+    // LEAD_EXTERNE était absent de cette liste alors que la vue expose
+    // nb_lead_externe et que mediaColors/mediaLabels le définissent : la barre
+    // totalisait donc moins que le badge « N contacts ». Corrigé le 23/08/2026.
+    var canaux = [ {k:'VOIP',n:item.nb_voip},{k:'WHATSAPP',n:item.nb_wa},{k:'EMAIL',n:item.nb_email},{k:'SMS',n:item.nb_sms},{k:'RAPPORT_VENDEUR',n:item.nb_rpv},{k:'LEAD_EXTERNE',n:item.nb_lead_externe} ];
     var total = canaux.reduce(function(s,c){return s+(c.n||0);},0);
+    // Filet : si le badge et la somme des canaux divergent, on le dit plutôt que
+    // de laisser l'utilisateur faire l'addition et douter. Un écart signifie
+    // qu'un canal manque dans cette liste, ou que la RLS masque des contacts au
+    // lecteur courant (les emails ne sont visibles que du propriétaire de la
+    // boîte, contrairement aux SMS, appels et RPV qui suivent le périmètre).
+    var declare = (item.total_contacts == null) ? total : Number(item.total_contacts);
+    var ecart = declare - total;
+    var mentionEcart = (ecart > 0)
+      ? '<span style="font-size:11px;color:#9ca3af;font-weight:500;" title="Contacts non détaillés ici : canal non couvert, ou messages non visibles avec vos droits.">+ ' + ecart + ' non détaillé' + (ecart > 1 ? 's' : '') + '</span>'
+      : '';
     var barre = total > 0
       ? '<div style="display:flex;gap:2px;height:6px;border-radius:4px;overflow:hidden;margin-top:10px;">' +
           canaux.filter(function(c){return c.n>0;}).map(function(c){return '<div title="'+mediaLabels[c.k]+' : '+c.n+'" style="flex:'+c.n+';background:'+mediaColors[c.k]+';min-width:4px;"></div>';}).join('') +
         '</div><div style="display:flex;gap:8px;margin-top:5px;flex-wrap:wrap;">' +
           canaux.filter(function(c){return c.n>0;}).map(function(c){return '<span style="font-size:11px;color:'+mediaColors[c.k]+';font-weight:600;">'+mediaLabels[c.k]+' '+c.n+'</span>';}).join('') +
+          mentionEcart +
         '</div>'
       : '<div style="font-size:11px;color:#d1d5db;margin-top:8px;">Aucun contact enregistré</div>';
     var score = (item.score_ia_moyen != null && item.nb_rpv > 0) ? (function(){ var sc=parseFloat(item.score_ia_moyen); if(sc===0)return ''; var g=sc>=7; return '<div style="display:flex;flex-direction:column;align-items:center;gap:1px;flex-shrink:0;"><span style="font-size:12px;font-weight:700;color:'+(g?'#4CAF7D':'#E05252')+';background:'+(g?'#D1FAE5':'#FEE2E2')+';border:1.5px solid '+(g?'#4CAF7D':'#E05252')+';border-radius:50%;width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;">'+sc+'</span><span style="font-size:9px;color:#9ca3af;">IA</span></div>'; })() : '';
