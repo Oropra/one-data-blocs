@@ -3,7 +3,7 @@
 //  FICHE CLIENT — Onglet CONTACTS (v2, aligné sur le rendu natif)
 //  root: #oropra-contacts-root
 //  Timeline v_contacts_client du cycle en cours (CYCLE_COM ~ "Ouvert").
-//  Filtre média : (VOIP && voip_recording_url non vide) || media<>VOIP.
+//  Filtre appels : sortant conservé si abouti ; entrant toujours conservé.
 //  Médias : WHATSAPP · VOIP · EMAIL · SMS · RAPPORT_VENDEUR · LEAD_EXTERNE.
 // ============================================================================
 OD.define('contacts', {
@@ -252,11 +252,26 @@ OD.define('contacts', {
 
   // expose le rendu d'une carte + le filtre média pour la modale Historique
   window.__oropraContactCard = renderItem;
+  // Copie JavaScript de public.appel_retenu(direction, status) — voir la
+  // migration 20260823120000. Toute évolution de la règle doit être faite
+  // des DEUX côtés ; c'est la seule duplication assumée du dispositif.
+  //
+  // Corrigé le 23/08/2026 : ce filtre exigeait un enregistrement et une durée
+  // >= 2 s. Or 92 % des appels ABOUTIS n'ont aucun enregistrement — la règle
+  // masquait donc les vraies conversations, pas les appels ratés. L'absence
+  // d'enregistrement est un problème de rendu (pas de lecteur audio à
+  // afficher), jamais une raison de cacher l'événement.
+  //
+  // Règle retenue, volontairement ASYMÉTRIQUE :
+  //   sortant  -> conservé seulement s'il a abouti (status = 'completed')
+  //   entrant  -> toujours conservé, même manqué : c'est le CLIENT qui a
+  //               tenté de nous joindre, et c'est un signal à ne pas perdre.
   window.__oropraContactFilter = function (rows) {
     return (rows || []).filter(function (r) {
       if ((r.media || '').toUpperCase() !== 'VOIP') return true;
-      var hasRec = r.voip_recording_url && String(r.voip_recording_url).trim() !== '';
-      return hasRec && Number(r.voip_duration_seconds) >= 2;
+      var sens = String(r.sens || '').toLowerCase();
+      if (sens !== 'out' && sens !== 'outbound') return true;
+      return String(r.statut || '').toLowerCase() === 'completed';
     });
   };
 
@@ -276,13 +291,11 @@ OD.define('contacts', {
         .eq('id_cycle_com', idCycle).order('date_contact', { ascending: false });
       if (res.error) throw res.error;
       await window.__odSignRows(sb, res.data || []);
-      state.rows = (res.data || []).filter(function (r) {
-        if ((r.media || '').toUpperCase() !== 'VOIP') return true;
-        // VOIP conservé seulement s'il a un enregistrement ET dure >= 2 s
-        // (exclut les appels très courts/silencieux -> transcriptions hallucinées).
-        var hasRec = r.voip_recording_url && String(r.voip_recording_url).trim() !== '';
-        return hasRec && Number(r.voip_duration_seconds) >= 2;
-      });
+      // Une seule définition du filtre dans ce module : celle exposée plus
+      // haut, que la modale de l'Historique utilise aussi. Il en existait
+      // une seconde copie ici jusqu'au 23/08/2026, ce qui garantissait à
+      // terme une divergence entre l'onglet et la modale.
+      state.rows = window.__oropraContactFilter(res.data || []);
       state.loading = false;
     } catch (e) { console.error('[contacts]', e); state.err = e.message || String(e); state.loading = false; }
   }
