@@ -672,6 +672,34 @@ await (async function () {
     });
   }
 
+  // Site sélectionné dans la topnav, avec son NOM : sans le nom, Delco ne
+  // peut pas relier « Lyon Part-Dieu » à un identifiant, et sans
+  // l'identifiant il ne peut pas filtrer. Il faut les deux.
+  // Renvoie null si aucun site n'est sélectionné (ou plusieurs) : dans ce
+  // cas Delco doit répondre sur tout le périmètre, ce qui est légitime.
+  function contexteSite() {
+    let id = null;
+    try {
+      const v = window.wwLib && window.wwLib.wwVariable.getValue('39fecccf-9296-43b7-b5b6-eadaa928290d');
+      if (v == null || v === '') return null;
+      if (Array.isArray(v)) { if (v.length !== 1) return null; id = Number(v[0]); }
+      else id = Number(v);
+    } catch (e) { return null; }
+    if (!Number.isFinite(id)) return null;
+    // Le nom vient du site-bus s'il est présent, sinon on n'envoie que l'id :
+    // un identifiant seul reste exploitable, un nom seul ne l'est pas.
+    let nom = null;
+    try {
+      const bus = window.__oropraSiteBus;
+      if (bus && typeof bus.getSiteName === 'function') nom = bus.getSiteName(id);
+      if (!nom && window.__dash && Array.isArray(window.__dash.rawData)) {
+        const r = window.__dash.rawData.find(x => String(x.id_site) === String(id));
+        if (r) nom = r.nom_site;
+      }
+    } catch (e) {}
+    return nom ? { id_site: id, nom_site: nom } : { id_site: id };
+  }
+
   async function sendPrompt(prompt) {
     if (!prompt || !prompt.trim() || isSending) return;
     isSending = true;
@@ -687,6 +715,24 @@ await (async function () {
       const { data: { session: s2 } } = await sb.auth.getSession();
       const body = { prompt };
       if (currentThreadId) body.thread_id = currentThreadId;
+
+      // ── CONTEXTE D'ÉCRAN (ajouté le 25/08/2026) ────────────────────────
+      // Jusqu'ici le front n'envoyait QUE le texte de la question. Delco
+      // n'avait donc aucun moyen de savoir quel site était sélectionné en
+      // topnav, ni que « Lyon Part-Dieu » désigne le site 2009 : il devinait,
+      // et répondait sur TOUT le périmètre du viewer.
+      //
+      // Cas mesuré le 25/08 : « synthèse VO sur Lyon Part-Dieu » a renvoyé
+      // 46 ventes, soit le total des DEUX sites du chef — la vérité pour ce
+      // seul site est 28. L'écart ne venait pas du calcul mais du périmètre.
+      //
+      // On transmet donc le site courant ET la date du jour, pour que
+      // « depuis le début du mois » ne dépende plus de l'horloge du modèle.
+      try {
+        const site = contexteSite();
+        if (site) body.contexte_site = site;
+        body.date_du_jour = new Date().toISOString().slice(0, 10);
+      } catch (e) { console.warn('[delco] contexte ecran', e); }
 
       const r = await fetch(FN_URL, {
         method: "POST",
