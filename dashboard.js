@@ -142,9 +142,34 @@ OD.define('dashboard', {
       if (s.level === 'site'    && String(r.id_site) !== String(s.key)) return false;
       if (s.level === 'vendeur' && String(r.id_user) !== String(s.key)) return false;
       if (s.level === 'reseau'  && r.reseau !== s.key) return false;
-      if (state.vnvo === 'vn' && !(r.vn_vo || '').includes('VN')) return false;
-      if (state.vnvo === 'vo' && !(r.vn_vo || '').includes('VO')) return false;
+      // ⚠️ PLUS de filtre sur r.vn_vo ici. `vn_vo` est la SPÉCIALITÉ DU
+      // VENDEUR, pas le type du véhicule vendu : douze vendeurs du site 2009
+      // vendent les deux. Filtrer les lignes là-dessus revenait à compter
+      // « les commandes des vendeurs VO », pas « les VO vendus » — 23 au lieu
+      // de 28, plus 8 commandes perdues dans une catégorie « VNVO » sans
+      // bouton. Arbitrage d'Antoine du 25/08/2026 : le VN/VO porte sur le
+      // VÉHICULE. Le filtre est désormais une PROJECTION de colonnes, faite
+      // dans projeterVnVo() ci-dessous.
       return true;
+    }
+    // Applique le filtre VN/VO en changeant de COLONNE plutôt qu'en écartant
+    // des lignes. La RPC expose depuis 20260825180000 le réalisé et
+    // l'objectif ventilés par type de véhicule.
+    //
+    // Limite connue et assumée : seules les COMMANDES sont ventilées. Les
+    // financements, contrats, gravages et waxoyls restent tous types
+    // confondus — leur ventilation demanderait autant de colonnes, et ces
+    // options ne sont pas l'enjeu du filtre VN/VO.
+    function projeterVnVo(r) {
+      if (state.vnvo !== 'vn' && state.vnvo !== 'vo') return r;
+      const suf = state.vnvo === 'vn' ? '_vn' : '_vo';
+      // Tenant non migré : les colonnes n'existent pas. On rend la ligne
+      // telle quelle plutôt que d'afficher des zéros partout.
+      if (r['commandes' + suf] == null && r['objectif_commandes' + suf] == null) return r;
+      return Object.assign({}, r, {
+        commandes_realisees: num(r['commandes' + suf]),
+        objectif_commandes:  num(r['objectif_commandes' + suf]),
+      });
     }
     // Auto-réparation : une sélection qui ne désigne plus rien (donnée rechargée,
     // période changée, identifiant erroné) est annulée au lieu de vider l'écran.
@@ -158,8 +183,17 @@ OD.define('dashboard', {
       return false;
     }
     function resetSelection() { state.selection = { level: 'all', key: null, label: 'Tout le périmètre' }; }
-    const dRows = () => (state.rawData || []).filter(inScope);
-    const aRows = () => (state.act || []).filter(inScope);
+    const dRows = () => (state.rawData || []).filter(inScope).map(projeterVnVo);
+    // L'ACTIVITÉ (contacts, appels, relances) n'est pas typée VN/VO — aucune
+    // colonne ne le permet. On conserve donc le filtre par spécialité du
+    // vendeur, faute de mieux : c'est une approximation, mais elle ne porte
+    // sur aucun compteur de vente.
+    const aRows = () => (state.act || []).filter(r => {
+      if (!inScope(r)) return false;
+      if (state.vnvo === 'vn' && !(r.vn_vo || '').includes('VN')) return false;
+      if (state.vnvo === 'vo' && !(r.vn_vo || '').includes('VO')) return false;
+      return true;
+    });
 
     // ── VOLUME vs ATTEINTE ───────────────────────────────────────────────
     // Depuis 20260821210000, les deux RPC remontent aussi les chefs des
@@ -422,7 +456,10 @@ OD.define('dashboard', {
         (sub ? '<span class="d-c-s">' + esc(sub) + '</span>' : '') + '</div>' + corps + '</div>';
     }
     function carteProjection(sub) {
-      const t = sum(dRowsV(), SUM_D);   // atteinte : vendeurs des deux côtés
+      // Volume RÉEL du périmètre, encadrement compris (25/08/2026). L'objectif
+      // est pris sur le même ensemble : l'encadrement n'en porte pas, il
+      // n'ajoute donc rien au dénominateur.
+      const t = sum(dRows(), SUM_D);
       const p = projection(t.commandes_realisees, t.objectif_commandes);
       if (alerteObjectif(t.objectif_commandes)) {
         return carte('Projection fin de mois', sub,
@@ -761,7 +798,12 @@ OD.define('dashboard', {
       // tV = base de l'ATTEINTE : vendeurs porteurs d'objectifs seulement.
       const t = sum(dRows(), SUM_D);
       const tV = sum(dRowsV(), SUM_D);
-      const p = projection(tV.commandes_realisees, tV.objectif_commandes);
+      // Réalisé sur TOUT le périmètre (encadrement inclus), objectif sur le
+      // même ensemble — un chef n'a pas d'objectif, sa contribution y vaut 0,
+      // donc le dénominateur ne bouge pas. Demande d'Antoine du 25/08/2026 :
+      // « l'équipe atterrit à 28 pour un objectif de 24 », et non 21 pour 24.
+      // Une commande signée par un chef EST une commande de la concession.
+      const p = projection(t.commandes_realisees, t.objectif_commandes);
       const inact = vendeursInactifs();
       const nb = parVendeur(dRowsV(), SUM_D).length;
       const phrase = (inact.length ? '<dn>' + inact.length + ' vendeur' + (inact.length > 1 ? 's' : '') + '</dn> sans aucune activité sur la période. ' : 'Toute l\'équipe est active. ') +
