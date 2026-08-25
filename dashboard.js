@@ -228,7 +228,12 @@ OD.define('dashboard', {
     async function load(force) {
       const key = viewerId + '|' + state.period.from + '|' + state.period.to;
       if (!force && state.key === key && state.rawData) return;
-      state.key = key; state.loading = true; state.err = null; render();
+      // Rafraîchissement SILENCIEUX quand on a déjà des données à l'écran :
+      // on ne repasse pas en état « chargement », sinon un simple retour sur
+      // l'accueil ferait clignoter la page alors qu'elle a déjà tout à
+      // afficher. Les chiffres se mettent à jour quand la RPC répond.
+      const dejaAffiche = !!state.rawData;
+      state.key = key; state.loading = !dejaAffiche; state.err = null; render();
 
       const pD = sb.rpc('get_dashboard',        { p_viewer_id_user: Number(viewerId), p_date_from: state.period.from, p_date_to: state.period.to });
       const pA = sb.rpc('get_activite_equipe',  { p_viewer_id_user: Number(viewerId), p_date_from: state.period.from, p_date_to: state.period.to });
@@ -1054,7 +1059,15 @@ OD.define('dashboard', {
     // ══ DÉMARRAGE ════════════════════════════════════════════════════════
     bindBus();
     render();          // rendu immédiat au (re)montage — ne pas attendre le réseau
-    load(false);
+    // load(TRUE) et non false : l'état vit sur window.__dash et survit aux
+    // navigations SPA, or la clé de cache ne dépend que du viewer et de la
+    // période — toutes deux inchangées d'une visite à l'autre. Avec
+    // load(false), revenir sur l'accueil après avoir signé une commande dans
+    // le kanban réaffichait le cache et le chiffre ne bougeait pas jusqu'à un
+    // F5. Constaté le 25/08/2026 sur le bloc « Vendeurs sous le rythme ».
+    // Le rendu ci-dessus a déjà affiché les données connues : la revalidation
+    // est silencieuse (cf. load()), l'utilisateur ne voit aucun clignotement.
+    load(true);
     [300, 900, 2000].forEach(d => setTimeout(() => { const r = getRoot(); if (r && !r.querySelector('.dash')) render(); }, d));
   }
 });
