@@ -255,6 +255,7 @@ OD.define('dashboard', {
 
       const f = famille();
       if (f === 'vendeur' || f === 'chef' || f === 'marketing') loadLeads();
+      if (f === 'vendeur') loadClassement();
       if (f === 'chef' || f === 'directeur' || f === 'admin')   loadStock();
       loadEntonnoir();
     }
@@ -299,6 +300,39 @@ OD.define('dashboard', {
         for (const row of (state.rawData || [])) row.leads_a_traiter = idx[row.id_user + '_' + row.id_site] || 0;
         state.leads = true; render();
       } catch (e) { console.warn('[dash] get_dashboard_leads', e); state.leads = true; }
+    }
+    // Classement d'équipe — vue VENDEUR uniquement.
+    //
+    // Pourquoi une RPC dédiée et non dRowsV() : la RLS de PROPALE_BDC limite
+    // un vendeur à SES PROPRES dossiers (propale_visible_user_ids : « vendeur :
+    // lui-même uniquement »). get_dashboard étant en SECURITY INVOKER, il
+    // rendait bien les lignes des collègues mais toutes à zéro — le bloc
+    // n'était pas vide, il MENTAIT : un vendeur 12e sur 13 se voyait 1er.
+    //
+    // get_classement_equipe est en SECURITY DEFINER et ne rend QUE des volumes
+    // agrégés : nom et nombre de commandes, aucun dossier. Arbitrage du
+    // 25/08/2026 — « ouvrir les compteurs sans ouvrir les dossiers ».
+    async function loadClassement() {
+      const key = viewerId + '|' + state.period.from + '|' + state.period.to;
+      if (state.clsKey === key && state.classement) return;
+      try {
+        const r = await sb.rpc('get_classement_equipe', {
+          p_viewer_id_user: Number(viewerId),
+          p_date_from: state.period.from,
+          p_date_to: state.period.to
+        });
+        if (r.error) throw r.error;
+        state.classement = (r.data || []).map(x => ({
+          rang: Number(x.rang), id_user: Number(x.id_user),
+          nom: x.nom_complet || ('Vendeur ' + x.id_user),
+          commandes: num(x.commandes), est_moi: !!x.est_moi
+        }));
+        state.clsKey = key; render();
+      } catch (e) {
+        // Tenant pas encore migré : on n'affiche pas un classement faux.
+        console.warn('[dash] get_classement_equipe', e);
+        state.classement = []; state.clsKey = key; render();
+      }
     }
     async function loadStock() {
       if (state.stock) return;
@@ -533,8 +567,13 @@ OD.define('dashboard', {
       const mine = dRows().filter(r => String(r.id_user) === String(viewerId));
       const t = sum(mine, SUM_D);   // ← unique source de vérité de cette vue
       const p = projection(t.commandes_realisees, t.objectif_commandes);
-      const cls = parVendeur(dRowsV(), SUM_D).sort((a, b) => b.commandes_realisees - a.commandes_realisees);
-      const pos = cls.findIndex(x => String(x.id_user) === String(viewerId)) + 1;
+      // Position lue dans le classement d'équipe (RPC dédiée), et NON dans
+      // dRowsV() : sous RLS, un vendeur ne voit que SES propres commandes,
+      // donc tous ses collègues ressortaient à 0 et il se croyait 1er.
+      // Constaté le 25/08/2026 : une vendeuse 12e sur 13 s'affichait 1re.
+      const cls = (state.classement || []);
+      const moiCls = cls.find(x => x.est_moi);
+      const pos = moiCls ? moiCls.rang : 0;
       const manque = Math.max(0, p.objectif - p.land);
       const phrase = 'Tu es à <b>' + fr(t.commandes_realisees) + ' commandes</b>' +
         (p.objectif > 0 ? ', tu atterris à <b>' + fr(p.land) + '</b> pour un objectif de <b>' + fr(p.objectif) + '</b>' +
@@ -542,7 +581,28 @@ OD.define('dashboard', {
         (t.rdv_aujourdhui > 0 ? ' <b>' + fr(t.rdv_aujourdhui) + ' RDV</b> aujourd\'hui.' : '');
       return bandeau('Ma journée', phrase, [['Ma position', pos > 0 ? pos + (pos === 1 ? 'er' : 'e') + ' / ' + cls.length : '—'],
         ['Pipeline', fr(t.cycles_ouverts) + ' cycles'], ['Prorata mois', Math.round(p.prorata * 100) + ' %']]) +
-        filtres() + '<div class="d-g">' + carteProjectionPerso(mine) + carteJournee(mine) + carteEntonnoirPerso(mine) + carteClassement('Ma position dans l\'équipe') + carteCohorte() + '</div>';
+        filtres() + '<div class="d-g">' + carteProjectionPerso(mine) + carteJournee(mine) + carteEntonnoirPerso(mine) + carteClassementPerso() + carteCohorte() + '</div>';
+    }
+    // Classement du vendeur : alimenté par get_classement_equipe (SECURITY
+    // DEFINER), jamais par dRowsV(). Tant que la RPC n'a pas répondu, ou si le
+    // tenant n'est pas migré, on n'affiche RIEN — une carte absente vaut mieux
+    // qu'un classement faux, qui est ce qu'on vient de corriger.
+    function carteClassementPerso() {
+      const cls = (state.classement || []);
+      if (cls.length < 2) return '';
+      const max = Math.max.apply(null, cls.map(x => x.commandes).concat([1]));
+      const ligne = x => '<div class="d-rk-r' + (x.est_moi ? ' me' : '') + '">' +
+        '<span class="d-rk-n">' + x.rang + '. ' + esc(x.nom) + (x.est_moi ? ' (vous)' : '') + '</span>' +
+        '<span class="d-rk-b"><i style="width:' + Math.round((x.commandes / max) * 100) + '%;background:' + (x.est_moi ? COL.blue : '#9bb3d1') + '"></i></span>' +
+        '<span class="d-rk-v">' + fr(x.commandes) + '</span></div>';
+      const moi = cls.find(x => x.est_moi);
+      // Repêchage : hors du top 10, on ajoute le viewer sous un séparateur avec
+      // son rang réel. Se voir 12e sur 13 est plus utile que ne pas se voir.
+      const pied = (moi && moi.rang > 10)
+        ? '<div class="d-rk-more">…</div>' + ligne(moi)
+        : '';
+      return carte('Ma position dans l\'équipe', 'commandes de la période',
+        '<div class="d-rk">' + cls.slice(0, 10).map(ligne).join('') + pied + '</div>');
     }
     function carteProjectionPerso(mine) {
       const t = sum(mine, SUM_D), p = projection(t.commandes_realisees, t.objectif_commandes);
@@ -884,7 +944,9 @@ OD.define('dashboard', {
             if (!pk.a || pk.b) { pk.a = ds; pk.b = null; pk.h = null; paint(); return; }
             pk.b = ds; let x = pk.a, z = pk.b; if (z < x) { const t = x; x = z; z = t; }
             closePicker(); state.period.from = x; state.period.to = z;
-            state.rawData = state.act = null; state.leads = state.stock = null; load(true); });
+            state.rawData = state.act = null; state.leads = state.stock = null;
+            state.classement = null; state.clsKey = null;   // le classement depend de la periode
+            load(true); });
           c.addEventListener('mouseenter', () => { if (pk.a && !pk.b && pk.h !== c.getAttribute('data-d')) { pk.h = c.getAttribute('data-d'); paint(); } });
         });
       }
@@ -1015,6 +1077,7 @@ OD.define('dashboard', {
     '#dash-root .d-rk-n{flex:1;font-size:12.5px;font-weight:700;color:#2a5ea9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}' +
     '#dash-root .d-rk-b{width:84px;height:12px;background:#eef2f8;border-radius:4px;overflow:hidden}#dash-root .d-rk-b i{display:block;height:100%;border-radius:4px}' +
     '#dash-root .d-rk-v{width:34px;text-align:right;font-size:12px;font-weight:800;color:#54678a}' +
+    '#dash-root .d-rk-more{font-size:11px;color:#9ca3af;font-weight:600;text-align:center;padding:2px 0}' +
     '#dash-root .d-kpi{display:grid;grid-template-columns:repeat(auto-fit,minmax(88px,1fr));gap:10px}' +
     '#dash-root .d-kpi-i{background:#f7f9fc;border:1px solid #e8eef7;border-radius:12px;padding:12px 8px;text-align:center}' +
     '#dash-root .d-kpi-i b{display:block;font-size:22px;font-weight:900;line-height:1;color:#1F4A85}' +
