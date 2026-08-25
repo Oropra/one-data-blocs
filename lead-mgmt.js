@@ -1759,12 +1759,29 @@ const SECTIONS = [
   { key:'a_relancer',   titre:'Cycles à relancer',                cls:'' },
   { key:'suivi_normal', titre:'Suivi normal',                     cls:'' }
 ];
+// Filtre « cycles de CE vendeur ».
+//
+// ⚠️ Deux notions de « vendeur » coexistent dans v_cycles_actifs :
+//   id_vendeur       = le PROPRIÉTAIRE du cycle — c'est lui que compte
+//                      v_lead_kpi_vendeur, donc le tableau d'équipe.
+//   user_ids_actifs  = TOUS ceux qui ont eu une activité sur le cycle
+//                      (un appel, un message, un rapport).
+//
+// Le filtre s'appuyait sur user_ids_actifs : on affichait donc les cycles
+// où le vendeur était simplement INTERVENU. Mesuré le 26/08/2026 sur
+// Benjamin Adam (1009) : 42 cycles où il est actif, dont 18 seulement lui
+// appartiennent — et « à traiter aujourd'hui » affichait 8 quand le
+// tableau annonçait 6. Le même écran donnait deux chiffres pour le même mot.
+//
+// On s'aligne sur le TABLEAU : le détail montre les cycles du vendeur.
+// Le repli sur user_ids_actifs ne sert plus que si id_vendeur est absent
+// (cycle sans propriétaire), pour ne pas faire disparaître la ligne.
 function matchVendeurFilter(c) {
   if (!state.selectedVendeur) return true;
+  const cible = state.selectedVendeur.id_user;
+  if (c.id_vendeur != null) return Number(c.id_vendeur) === Number(cible);
   const arr = c.user_ids_actifs;
-  if (Array.isArray(arr) && arr.length > 0) {
-    return arr.includes(state.selectedVendeur.id_user);
-  }
+  if (Array.isArray(arr) && arr.length > 0) return arr.includes(cible);
   return true;
 }
 function filteredActifs() {
