@@ -116,6 +116,12 @@ OD.define('annuaire', {
 .an-chip.an-more:hover{background:#e2ecf9}
 .an-chip.an-tag svg{color:var(--dk)}
 .an-vnvo{font-size:10px;font-weight:800;letter-spacing:.5px;color:var(--md);border:1px solid #cfe0f4;border-radius:6px;padding:2px 6px}
+.an-contact{display:flex;flex-direction:column;gap:5px;padding-top:2px}
+.an-ct{display:inline-flex;align-items:center;gap:7px;font:inherit;font-size:12px;font-weight:600;color:var(--md);text-decoration:none;min-width:0;max-width:100%;background:none;border:0;padding:0;margin:0;text-align:left;cursor:pointer;transition:color .15s}
+.an-ct:hover{color:var(--dk);text-decoration:underline}
+.an-ct svg{width:13px;height:13px;flex:0 0 auto;color:var(--mut)}
+.an-ct span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.an-ct.na{color:var(--mut);opacity:.6;pointer-events:none;font-weight:500}
 .an-actions{display:flex;gap:8px;margin-top:2px}
 .an-act{flex:1;display:inline-flex;align-items:center;justify-content:center;gap:6px;border:1px solid var(--bd);background:var(--bg);border-radius:9px;padding:8px;cursor:pointer;font:inherit;font-size:12px;font-weight:700;color:var(--md);transition:.15s}
 .an-act:hover{background:var(--hov);border-color:#acc5e4}
@@ -361,6 +367,32 @@ OD.define('annuaire', {
     if (sc.vnvo) h += '<span class="an-vnvo">' + esc(sc.vnvo) + '</span>';
     return h;
   }
+  // Téléphone affiché en clair : 06 27 27 75 07 plutôt que +33627277507.
+  // normPhone() reste utilisée pour tel:/softphone, qui veulent le format E.164.
+  function prettyPhone(num) {
+    const t = (num || '').replace(/[^\d+]/g, '');
+    if (!t) return '';
+    let n = t;
+    if (n.startsWith('+33')) n = '0' + n.slice(3);
+    else if (n.startsWith('0033')) n = '0' + n.slice(4);
+    if (/^0\d{9}$/.test(n)) return n.replace(/(\d{2})(?=\d)/g, '$1 ').trim();
+    return num || '';
+  }
+  // Lignes téléphone et email de la carte. Ce sont des boutons data-act et
+  // non des liens tel:/mailto:, pour réutiliser callUser() — qui pilote le
+  // softphone — et emailUser(), et parce qu'un href tel: reste piégé dans
+  // l'iframe WeWeb.
+  function contactLines(u) {
+    const tel = normPhone(u.N_de_telephone), aff = prettyPhone(u.N_de_telephone);
+    const mail = (u.email || '').trim();
+    const lTel = tel
+      ? '<button class="an-ct" data-act="call" data-id="' + u.ID_User + '" title="Appeler ' + esc(aff) + '">' + I.phone + '<span>' + esc(aff) + '</span></button>'
+      : '<span class="an-ct na">' + I.phone + '<span>Pas de téléphone</span></span>';
+    const lMail = mail
+      ? '<button class="an-ct" data-act="email" data-id="' + u.ID_User + '" title="Écrire à ' + esc(mail) + '">' + I.mail + '<span>' + esc(mail) + '</span></button>'
+      : '<span class="an-ct na">' + I.mail + '<span>Pas d\'email</span></span>';
+    return '<div class="an-contact">' + lTel + lMail + '</div>';
+  }
   function actBtns(u) {
     const tel = normPhone(u.N_de_telephone);
     return '<div class="an-actions">' +
@@ -387,6 +419,7 @@ OD.define('annuaire', {
           '<div class="an-idn"><div class="an-nm">' + esc(fullName(u)) + '</div>' +
           '<div class="an-fn">' + esc(rm.label) + '</div></div></div>' +
         '<div class="an-meta">' + scopeChips(u) + '</div>' +
+        contactLines(u) +
         actBtns(u) + '</div>';
     }).join('') + '</div>';
   }
