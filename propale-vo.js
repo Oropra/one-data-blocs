@@ -156,7 +156,16 @@ OD.define('propale-vo', {
       ST.P = {
         id_propale_bdc: null, id_client_vu: num(idClient) || null,
         VIN: vin || null, id_site: num(idSite) || null,
-        VN_VO: 'VO', status: 'draft', HT: false, Archived: false
+        VN_VO: 'VO', status: 'draft', HT: false, Archived: false,
+        // Frais et options cochés par défaut (demande du 25/08/2026) : ils
+        // sont facturés dans la quasi-totalité des dossiers, le vendeur les
+        // décoche à la marge plutôt que de les cocher à chaque fois.
+        // Uniquement en CRÉATION : sur une propale rouverte, on respecte ce
+        // qui a été enregistré.
+        Carburant: true, GravageSimple: true, KitSecuriteVO: true,
+        Waxoyl: true, FraisDeDossier: true,
+        // Règlement comptant par défaut : c'est le cas majoritaire en VO.
+        TypePaiement: 'Comptant'
       };
     }
 
@@ -180,6 +189,10 @@ OD.define('propale-vo', {
     // STOCKVO porte CV_DMS et CARBURANT_DMS (demande du 25/08/2026).
     // On ne remplit QUE si le champ est vide : une valeur déjà saisie par le
     // vendeur, ou héritée d'une propale rouverte, n'est jamais écrasée.
+    // Règlement : comptant par défaut, y compris sur un dossier ancien qui
+    // n'en portait aucun — sinon le bloc s'ouvre sans mode de règlement et
+    // les champs de crédit restent visibles pour rien.
+    if (!P.TypePaiement) P.TypePaiement = 'Comptant';
     if (ST.vehicule) {
       const cv = num(ST.vehicule.CV_DMS);
       if (cv > 0 && !num(P.PuissanceFiscale)) P.PuissanceFiscale = cv;
@@ -245,18 +258,31 @@ OD.define('propale-vo', {
       const { data: sts } = await sb.from('SITE').select('ID_SITE,SITE').order('SITE');
       ST.sites = (sts || []).filter(s => s && s.SITE);
     } catch (e) { console.warn('[propaleVO] liste des sites', e); }
-    // Véhicules connus du client : alimentent le sélecteur de reprise.
-    // CLIENT_STOCK porte marque, modèle, version, immat, VIN et PMEC — soit
-    // presque tous les champs de reprise, d'où le pré-remplissage.
+    // Véhicules POSSÉDÉS par le client : alimentent le sélecteur de reprise.
+    //
+    // ⚠️ Le filtre sur Status est INDISPENSABLE. CLIENT_STOCK mélange quatre
+    // états, relevés le 25/08/2026 :
+    //   A          2 218 lignes / 908 clients  -> véhicule réellement possédé
+    //   interested 43 259 / 9 844              -> simple marque d'intérêt (like)
+    //   I            562 / 542                 -> inactif
+    //   archived     307 / 302                 -> archivé
+    // Sans filtre, on proposait à la reprise des véhicules que le client
+    // n'a jamais eus — juste ceux qu'il avait regardés.
+    //
+    // Second garde-fou : sur les 2 218 lignes 'A', seules 760 portent une
+    // marque et 756 une immatriculation. Une ligne réduite à un VIN nu est
+    // inexploitable — le vendeur ne peut pas reconnaître le véhicule dans la
+    // liste. On exige donc au moins un élément identifiant.
     ST.vehiculesClient = [];
     if (P.id_client_vu) {
       try {
         const { data: vcs } = await sb.from('CLIENT_STOCK')
           .select('id_client_stock,VIN,MARQUE,NomModele,VERSION,IMMAT,DT_PMEC,Status')
           .eq('ID_CLIENT', P.id_client_vu)
-          .order('DT_PMEC', { ascending: false })
+          .eq('Status', 'A')
+          .order('DT_PMEC', { ascending: false, nullsFirst: false })
           .limit(30);
-        ST.vehiculesClient = vcs || [];
+        ST.vehiculesClient = (vcs || []).filter(v => v && (v.MARQUE || v.IMMAT));
       } catch (e) { console.warn('[propaleVO] vehicules du client', e); }
     }
     // Contremarque active sur le VIN : bloque la propale si elle vise un autre client
@@ -393,6 +419,11 @@ OD.define('propale-vo', {
   .pv-veh-ph img{width:100%;height:100%;object-fit:cover;display:block}
   .pv-veh-tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
   .pv-vcli{margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid #eef3fa}
+  /* Emplacements FIXES : lieu de commande, lieu et date de livraison restent
+     à gauche quoi qu'il arrive aux champs de crédit au-dessus. */
+  .pv-fixes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 16px;margin-top:14px;padding-top:14px;border-top:1px solid #eef3fa}
+  .pv-fixes .pv-f{margin:0}
+  @media(max-width:560px){.pv-fixes{grid-template-columns:1fr}}
   .pv-vcli-hint{font-size:10.5px;color:#7a98c5;margin-top:5px}
   .pv-veh-tag{font-size:10.5px;font-weight:700;color:#2a5ea9;background:#eef3fa;border-radius:6px;padding:3px 8px}
   @media(max-width:560px){.pv-veh-ph{width:100%;height:150px}}
@@ -658,7 +689,7 @@ OD.define('propale-vo', {
       return `<option value="${esc(v.id_client_stock)}">${esc(lbl)}${suf ? ' — ' + esc(suf) : ''}</option>`;
     }).join('');
     return `<div class="pv-f full pv-vcli">
-      <label>Reprendre un véhicule du client</label>
+      <label>Reprendre un véhicule possédé par le client</label>
       <select class="pv-in" data-act="pick-veh">
         <option value="">— Saisie manuelle —</option>${opts}
       </select>
@@ -740,21 +771,33 @@ OD.define('propale-vo', {
   function buildFinancement() {
     const P = ST.P;
     const finOpts = (FINANCEMENTS[P.TypePaiement] || []);
+    // Le libellé du second champ suit le mode de règlement : « Paiement »
+    // (virement, CB) en comptant, « Financement » (crédit, LOA…) sinon.
+    // Demande du 25/08/2026 : parler de « financement » pour un virement
+    // comptant était trompeur.
+    const compt = (P.TypePaiement === 'Comptant');
+    const lblFin = compt ? 'Paiement' : 'Financement';
     return mkCard('Infos financement & BDC', `<div class="pv-row" id="pv-fin-rows">
       ${fld('Règlement','TypePaiement',{select:REGLEMENTS})}
-      <div class="pv-f" id="pv-fin-f">${fld('Financement','TypeFinancement',{select:finOpts}).replace(/^<div[^>]*>|<\/div>$/g,'')}</div>
+      <div class="pv-f" id="pv-fin-f">${fld(lblFin,'TypeFinancement',{select:finOpts}).replace(/^<div[^>]*>|<\/div>$/g,'')}</div>
       <div class="pv-f" id="pv-org-f">${fld('Organisme','OrganismeFinancement',{select:ORGANISMES}).replace(/^<div[^>]*>|<\/div>$/g,'')}</div>
       ${fld('Contrat de service','Contrat_Service',{select:CONTRATS})}
-      ${fld('Montant financé TTC','MontantFinance',{type:'number'})}
-      ${fld('Nb de mensualités','NombreMensualites',{type:'number'})}
-      ${fld('Mensualité TTC','MontantMensualitesTTC',{type:'number'})}
+      <div class="pv-f pv-credit">${fld('Montant financé TTC','MontantFinance',{type:'number'}).replace(/^<div[^>]*>|<\/div>$/g,'')}</div>
+      <div class="pv-f pv-credit">${fld('Nb de mensualités','NombreMensualites',{type:'number'}).replace(/^<div[^>]*>|<\/div>$/g,'')}</div>
+      <div class="pv-f pv-credit">${fld('Mensualité TTC','MontantMensualitesTTC',{type:'number'}).replace(/^<div[^>]*>|<\/div>$/g,'')}</div>
       <div class="pv-f pv-loa">${fld('Engagement reprise TTC','MontantTTCEngagement',{type:'number'}).replace(/^<div[^>]*>|<\/div>$/g,'')}</div>
       <div class="pv-f pv-loa">${fld('Kilométrage annuel ER','KM_ANNUEL',{type:'number'}).replace(/^<div[^>]*>|<\/div>$/g,'')}</div>
       ${fld('Apport TTC','Apport',{type:'number'})}
+      ${fld('Commentaires','Commentaire',{textarea:true,full:true})}
+    </div>
+    <!-- Lieu de commande, lieu et date de livraison sont sortis de la grille
+         fluide : ils doivent occuper une position FIXE à gauche (demande du
+         25/08/2026), sinon ils se déplacent au gré des champs de crédit qui
+         apparaissent ou disparaissent selon le mode de règlement. -->
+    <div class="pv-fixes">
       ${fldSites('Lieu de commande','LieuCommande')}
       ${fld('Lieu de livraison','LieuLivraison')}
       ${fld('Date de livraison','DateLivraison',{type:'date'})}
-      ${fld('Commentaires','Commentaire',{textarea:true,full:true})}
     </div>`);
   }
 
@@ -855,6 +898,23 @@ OD.define('propale-vo', {
     // Financement : masque organisme si comptant, champs LOA
     const isCompt = ST.P.TypePaiement === 'Comptant';
     const orgF = root.querySelector('#pv-org-f'); if(orgF) orgF.style.display = isCompt?'none':'';
+    // Comptant : ni montant financé, ni mensualités — ces champs n'ont aucun
+    // sens et leur présence invitait à les remplir à tort. Ils sont VIDÉS en
+    // plus d'être masqués, sinon une valeur saisie avant bascule resterait
+    // enregistrée et fausserait la soulte.
+    root.querySelectorAll('.pv-credit').forEach(x => x.style.display = isCompt ? 'none' : '');
+    if (isCompt) {
+      ['MontantFinance','NombreMensualites','MontantMensualitesTTC'].forEach(k => {
+        if (ST.P[k] != null && ST.P[k] !== '') {
+          ST.P[k] = null;
+          const el = root.querySelector('input[data-key="' + k + '"]');
+          if (el) el.value = '';
+        }
+      });
+    }
+    // Libellé « Paiement » / « Financement » selon le règlement.
+    const finLbl = root.querySelector('#pv-fin-f label');
+    if (finLbl) finLbl.textContent = isCompt ? 'Paiement' : 'Financement';
     const isLOA = ST.P.TypeFinancement === 'LOA';
     root.querySelectorAll('.pv-loa').forEach(x => x.style.display = isLOA?'':'none');
     refreshTotals(root);
@@ -898,7 +958,10 @@ OD.define('propale-vo', {
     const reprise = P.RepriseVehicule ? (num(P.ValeurReprise) || 0) : 0;
     const finance = num(P.MontantFinance) || 0;
     const deduit  = apport + reprise + finance;
-    if (!deduit) return '';
+    // Affichée MÊME sans déduction (demande du 25/08/2026) : la soulte est le
+    // chiffre que le client retient, elle doit être lisible dès l'ouverture.
+    // Sans déduction elle vaut le total — c'est redondant mais jamais faux,
+    // et la masquer donnait l'impression qu'elle n'existait pas.
     const soulte = num(r.totalBDC) - deduit;
     const lignes = [
       apport  ? `<div class="pv-sl minus"><span>Apport</span><b>− ${eur(apport)}</b></div>` : '',
