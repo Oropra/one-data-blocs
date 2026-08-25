@@ -120,7 +120,7 @@ OD.define('annuaire', {
 .an-ct{display:inline-flex;align-items:center;gap:7px;font:inherit;font-size:12px;font-weight:600;color:var(--md);text-decoration:none;min-width:0;max-width:100%;background:none;border:0;padding:0;margin:0;text-align:left;cursor:pointer;transition:color .15s}
 .an-ct:hover{color:var(--dk);text-decoration:underline}
 .an-ct svg{width:13px;height:13px;flex:0 0 auto;color:var(--mut)}
-.an-ct span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.an-ct span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;user-select:text;-webkit-user-select:text;cursor:text}
 .an-ct.na{color:var(--mut);opacity:.6;pointer-events:none;font-weight:500}
 .an-actions{display:flex;gap:8px;margin-top:2px}
 .an-act{flex:1;display:inline-flex;align-items:center;justify-content:center;gap:6px;border:1px solid var(--bd);background:var(--bg);border-radius:9px;padding:8px;cursor:pointer;font:inherit;font-size:12px;font-weight:700;color:var(--md);transition:.15s}
@@ -246,8 +246,29 @@ OD.define('annuaire', {
   }
   function emailUser(u) {
     if (!u.email) { toast('Aucun email pour ' + fullName(u)); return; }
-    try { (wwLib.getFrontWindow ? wwLib.getFrontWindow() : window).location.href = 'mailto:' + u.email; }
-    catch (e) { window.location.href = 'mailto:' + u.email; }
+    // Corrigé le 25/08/2026 : location.href remplaçait l'onglet courant, donc
+    // un webmail (Gmail, Outlook web) faisait QUITTER One Data. On passe par
+    // une ancre target="_blank" plutôt que window.open : sur un mailto, les
+    // navigateurs délèguent au gestionnaire de messagerie sans laisser
+    // d'onglet vide derrière, ce que window.open ne garantit pas.
+    const doc = (function () {
+      try { return (wwLib.getFrontWindow ? wwLib.getFrontWindow() : window).document; }
+      catch (e) { return document; }
+    })();
+    try {
+      const a = doc.createElement('a');
+      a.href = 'mailto:' + u.email;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      a.style.display = 'none';
+      doc.body.appendChild(a);
+      a.click();
+      setTimeout(() => { try { doc.body.removeChild(a); } catch (e) {} }, 0);
+    } catch (e) {
+      // Dernier recours : comportement d'avant, plutôt que rien.
+      try { window.open('mailto:' + u.email, '_blank', 'noopener'); }
+      catch (e2) { window.location.href = 'mailto:' + u.email; }
+    }
   }
   function copyUser(u) {
     const lines = [fullName(u), u.FONCTION, u.N_de_telephone, u.email].filter(Boolean).join('\n');
@@ -554,6 +575,21 @@ OD.define('annuaire', {
     root.querySelectorAll('[data-act]').forEach(b => b.addEventListener('click', ev => {
       ev.stopPropagation(); const u = DATA.byId[b.getAttribute('data-id')]; if (!u) return;
       const a = b.getAttribute('data-act');
+      // Ajouté le 25/08/2026 : le téléphone et l'email sont rendus DANS un
+      // <button>, ce qui interdisait toute sélection au glisser — impossible
+      // de copier une adresse à la main. Le texte est désormais sélectionnable
+      // (cf. .an-ct span), mais le relâchement de la souris déclencherait
+      // encore l'appel ou l'email. On ignore donc le clic si une sélection
+      // vient d'être faite À L'INTÉRIEUR de ce bouton.
+      // Ne concerne QUE call et email : le bouton « copier » n'affiche aucun
+      // texte sélectionnable et doit rester cliquable en toutes circonstances.
+      if (a === 'call' || a === 'email') {
+        try {
+          const sel = (b.ownerDocument.defaultView || window).getSelection();
+          if (sel && !sel.isCollapsed && String(sel).trim() !== ''
+              && b.contains(sel.anchorNode) && b.contains(sel.focusNode)) return;
+        } catch (e) {}
+      }
       if (a === 'call') callUser(u); else if (a === 'email') emailUser(u); else if (a === 'copy') copyUser(u);
     }));
   }
