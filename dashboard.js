@@ -434,11 +434,17 @@ OD.define('dashboard', {
       const c = couleurs(p), tr = svgTraj(p, serieJours());
       const vd = p.verdict === 'bad' ? [COL.redDk, '#fff', '⚠ retard'] : p.verdict === 'warn' ? [COL.amber, COL.amberDk, 'à surveiller']
                : p.verdict === 'good' ? [COL.green, '#fff', '✓ dans les temps'] : ['#eef2f8', COL.grey, '—'];
+      // Le grand chiffre est un ATTERRISSAGE (realise / prorata), pas un
+      // compteur. Sans le realise a cote, un chef lit 24 et croit avoir
+      // vendu 24 — releve par Antoine le 25/08/2026. On affiche donc les
+      // deux, en distinguant clairement la prevision du fait acquis.
+      const aCeJour = '<div class="d-pj-real">' + fr(p.realise) + ' à ce jour · ' +
+        Math.round(p.prorata * 100) + ' % du mois écoulé</div>';
       return carte('Projection fin de mois', sub,
         '<div class="d-pj"><div class="d-pj-n" style="color:' + c.real + '">' + fr(p.land) + '</div>' +
-        '<div class="d-pj-o">commandes prévues' + (p.objectif > 0 ? '<br>objectif <b>' + fr(p.objectif) + '</b>' : '') + '</div>' +
+        '<div class="d-pj-o">commandes <b>prévues</b>' + (p.objectif > 0 ? '<br>objectif <b>' + fr(p.objectif) + '</b>' : '') + '</div>' +
         '<div class="d-pj-v" style="background:' + vd[0] + ';color:' + vd[1] + '">' + vd[2] + '</div></div>' +
-        tr.svg + legende(p, tr.approx));
+        aCeJour + tr.svg + legende(p, tr.approx));
     }
     function cartePouls() {
       if (!state.act) return carte('Le pouls', null, '<div class="d-empty">Chargement de l\'activité…</div>');
@@ -484,7 +490,12 @@ OD.define('dashboard', {
     function carteInactifs(titre) {
       const inact = vendeursInactifs();
       if (!state.act) return carte(titre, null, '<div class="d-empty">Chargement…</div>');
-      if (!inact.length) return carte(titre, null, '<div class="d-ok">✓ Tous les vendeurs ont eu de l\'activité sur la période</div>');
+      // Personne d'inactif : la carte n'a rien a dire. Elle DISPARAIT au lieu
+      // d'occuper une demi-largeur d'ecran a cote d'une carte bien plus haute
+      // — demande d'Antoine du 25/08/2026 : « si vide, le reste remonte ».
+      // L'information « tout le monde est actif » reste portee par le bandeau
+      // du haut, qui l'annonce deja en toutes lettres.
+      if (!inact.length) return '';
       return carte(titre, inact.length + ' sans aucune activité',
         '<div class="d-lst">' + inact.slice(0, 6).map(v => '<div class="d-lst-r alert" data-detail="vendeur:' + esc(v.id_user) + '"><span class="d-lst-n">' + esc(v.nom_complet) + '</span>' +
           '<span class="d-lst-v">0 contact<small>' + esc(v.nom_site || '') + '</small></span></div>').join('') +
@@ -1065,6 +1076,9 @@ OD.define('dashboard', {
     '#dash-root .d-tg button.on{background:#fff;color:#2a5ea9;box-shadow:0 1px 4px rgba(42,94,169,.15)}' +
     '#dash-root .d-g{display:grid;grid-template-columns:1.3fr 1fr;gap:16px;margin-top:16px;align-items:start}' +
     '#dash-root .d-full{grid-column:1 / -1}' +
+    /* Réalisé à ce jour, sous l'atterrissage. Volontairement discret : c'est
+       un repère, le chiffre qui pilote reste la projection. */
+    '#dash-root .d-pj-real{margin-top:-4px;margin-bottom:10px;font-size:11.5px;font-weight:700;color:#54678a}' +
     '#dash-root .d-c{background:#fff;border:1px solid #e8eef7;border-radius:16px;padding:18px 19px}' +
     '#dash-root .d-c.d-alert{border-color:#f6cfcc;background:#fffaf9}' +
     '#dash-root .d-c-h{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:14px}' +
