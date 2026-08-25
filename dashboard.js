@@ -585,7 +585,16 @@ OD.define('dashboard', {
         (t.rdv_aujourdhui > 0 ? ' <b>' + fr(t.rdv_aujourdhui) + ' RDV</b> aujourd\'hui.' : '');
       return bandeau('Ma journée', phrase, [['Ma position', pos > 0 ? pos + (pos === 1 ? 'er' : 'e') + ' / ' + cls.length : '—'],
         ['Pipeline', fr(t.cycles_ouverts) + ' cycles'], ['Prorata mois', Math.round(p.prorata * 100) + ' %']]) +
-        filtres() + '<div class="d-g">' + carteProjectionPerso(mine) + carteJournee(mine) + carteEntonnoirPerso(mine) + carteClassementPerso() + carteCohorte() + '</div>';
+        filtres() +
+        // Mise en page demandée le 25/08/2026 : « Ma journée » sur une seule
+        // ligne pleine largeur en haut, puis deux paires. La grille .d-g est
+        // en deux colonnes et se remplit ligne par ligne, donc l'ORDRE ici
+        // détermine la position : projection|entonnoir, puis transfo|classement.
+        '<div class="d-g">' +
+          '<div class="d-full">' + carteJournee(mine) + '</div>' +
+          carteProjectionPerso(mine) + carteEntonnoirPerso(mine) +
+          carteCohorte('') + carteClassementPerso() +
+        '</div>';
     }
     // Classement du vendeur : alimenté par get_classement_equipe (SECURITY
     // DEFINER), jamais par dRowsV(). Tant que la RPC n'a pas répondu, ou si le
@@ -611,9 +620,13 @@ OD.define('dashboard', {
       // site du DOSSIER — arbitrage du 25/08/2026 — donc son total par site
       // ne vaut pas son total global.
       const nomSite = (state.rawData || []).find(r => String(r.id_site) === String(state.siteBus));
-      const soustitre = nomSite && nomSite.nom_site
-        ? 'commandes de la période — ' + nomSite.nom_site
-        : 'commandes de la période';
+      // La liste est tronquée aux 10 premiers (+ repêchage du viewer s'il est
+      // au-delà). Ajouté le 25/08/2026 : l'effectif RÉEL est annoncé, sinon
+      // rien ne distingue « les 10 premiers sur 13 » de « toute l'équipe » —
+      // trois vendeurs manquaient à l'écran sans que personne ne le sache.
+      const tronquee = cls.length > 10;
+      const soustitre = (nomSite && nomSite.nom_site ? nomSite.nom_site + ' — ' : '') +
+        (tronquee ? '10 premiers sur ' + cls.length : cls.length + ' vendeurs');
       return carte('Ma position dans l\'équipe', soustitre,
         '<div class="d-rk">' + cls.slice(0, 10).map(ligne).join('') + pied + '</div>');
     }
@@ -652,7 +665,14 @@ OD.define('dashboard', {
     // propales >= BDC >= wins est inversée de bout en bout.
     // Ici on suit une COHORTE : les cycles touchés pendant la fenêtre, et ce
     // qu'ils sont devenus depuis, quelle que soit la date.
-    function carteCohorte() {
+    // cls : largeur de la carte. Par défaut 'd-full' (pleine largeur), ce qui
+    // est le comportement attendu par les vues chef, directeur et marketing.
+    // La vue VENDEUR l'appelle avec '' pour la placer à gauche du classement
+    // — demande du 25/08/2026. Sans ce paramètre, le d-full écrit en dur
+    // faisait passer la carte sur toute la ligne et rejetait le classement
+    // en dessous.
+    function carteCohorte(cls) {
+      cls = (cls === undefined) ? 'd-full' : cls;
       const b = bornesCohorte();
       // Le sous-titre dit la RÈGLE, pas les bornes : « 22 avr. → 21 juil. »
       // n'explique pas pourquoi la fenêtre s'arrête un mois avant
@@ -661,16 +681,16 @@ OD.define('dashboard', {
 
       if (state.entErr) {
         return carte('Transformation réelle', sub,
-          '<div class="d-empty">Entonnoir indisponible.</div>', 'd-full');
+          '<div class="d-empty">Entonnoir indisponible.</div>', cls);
       }
       if (!state.ent) {
         return carte('Transformation réelle', sub,
-          '<div class="d-sk"></div><div class="d-sk"></div><div class="d-sk"></div>', 'd-full');
+          '<div class="d-sk"></div><div class="d-sk"></div><div class="d-sk"></div>', cls);
       }
       const e = state.ent;
       if (!e.length || !num(e[0].total)) {
         return carte('Transformation réelle', sub,
-          '<div class="d-empty">Aucun contact sortant sur cette période.</div>', 'd-full');
+          '<div class="d-empty">Aucun contact sortant sur cette période.</div>', cls);
       }
 
       const base = num(e[0].total);
@@ -718,7 +738,7 @@ OD.define('dashboard', {
              ? ' Un client peut être travaillé par plusieurs vendeurs du même site : les entonnoirs ' +
                'individuels ne s\'additionnent pas pour donner celui du périmètre.'
              : '') + '</div>';
-      return carte('Transformation réelle', sub, h + '</div>', 'd-full');
+      return carte('Transformation réelle', sub, h + '</div>', cls);
     }
     function jolieDate(s) {
       try { return new Date(s + 'T12:00:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }); }
@@ -1044,6 +1064,7 @@ OD.define('dashboard', {
     '#dash-root .d-chip button:hover{background:#e24b4a;color:#fff}' +
     '#dash-root .d-tg button.on{background:#fff;color:#2a5ea9;box-shadow:0 1px 4px rgba(42,94,169,.15)}' +
     '#dash-root .d-g{display:grid;grid-template-columns:1.3fr 1fr;gap:16px;margin-top:16px;align-items:start}' +
+    '#dash-root .d-full{grid-column:1 / -1}' +
     '#dash-root .d-c{background:#fff;border:1px solid #e8eef7;border-radius:16px;padding:18px 19px}' +
     '#dash-root .d-c.d-alert{border-color:#f6cfcc;background:#fffaf9}' +
     '#dash-root .d-c-h{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:14px}' +
