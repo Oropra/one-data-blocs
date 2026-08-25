@@ -313,13 +313,17 @@ OD.define('dashboard', {
     // agrégés : nom et nombre de commandes, aucun dossier. Arbitrage du
     // 25/08/2026 — « ouvrir les compteurs sans ouvrir les dossiers ».
     async function loadClassement() {
-      const key = viewerId + '|' + state.period.from + '|' + state.period.to;
+      // Le site entre dans la CLÉ : sans lui, changer de site en topnav
+      // ressortait le classement en cache et rien ne bougeait.
+      const site = state.siteBus != null ? Number(state.siteBus) : null;
+      const key = viewerId + '|' + state.period.from + '|' + state.period.to + '|' + (site == null ? 'tous' : site);
       if (state.clsKey === key && state.classement) return;
       try {
         const r = await sb.rpc('get_classement_equipe', {
           p_viewer_id_user: Number(viewerId),
           p_date_from: state.period.from,
-          p_date_to: state.period.to
+          p_date_to: state.period.to,
+          p_id_site: site
         });
         if (r.error) throw r.error;
         state.classement = (r.data || []).map(x => ({
@@ -601,7 +605,16 @@ OD.define('dashboard', {
       const pied = (moi && moi.rang > 10)
         ? '<div class="d-rk-more">…</div>' + ligne(moi)
         : '';
-      return carte('Ma position dans l\'équipe', 'commandes de la période',
+      // Le sous-titre nomme le SITE : un vendeur multi-site voit son rang
+      // changer d'un site à l'autre (1er sur 13 ici, 10e sur 10 là), il doit
+      // savoir de quel plateau on parle. Ses commandes sont comptées sur le
+      // site du DOSSIER — arbitrage du 25/08/2026 — donc son total par site
+      // ne vaut pas son total global.
+      const nomSite = (state.rawData || []).find(r => String(r.id_site) === String(state.siteBus));
+      const soustitre = nomSite && nomSite.nom_site
+        ? 'commandes de la période — ' + nomSite.nom_site
+        : 'commandes de la période';
+      return carte('Ma position dans l\'équipe', soustitre,
         '<div class="d-rk">' + cls.slice(0, 10).map(ligne).join('') + pied + '</div>');
     }
     function carteProjectionPerso(mine) {
@@ -989,8 +1002,20 @@ OD.define('dashboard', {
       try { const id = b.getSiteId(); if (id != null) applyBus(id); } catch (e) {}
     }
     function applyBus(siteId) {
-      if (siteId == null || !state.rawData) return;
+      if (siteId == null) return;
       const id = String(siteId);
+      // Ajouté le 25/08/2026 : le site du bus est désormais MÉMORISÉ, car le
+      // classement d'équipe doit le suivre. Un vendeur multi-site voyait
+      // jusqu'ici le même classement quel que soit le site choisi en topnav —
+      // les 22 vendeurs de ses deux sites fusionnés en une seule liste, alors
+      // qu'il est 1er sur 13 d'un côté et 10e sur 10 de l'autre.
+      const change = state.siteBus !== id;
+      state.siteBus = id;
+      if (change && famille() === 'vendeur') {
+        state.classement = null; state.clsKey = null;
+        loadClassement();
+      }
+      if (!state.rawData) return;
       const row = (state.rawData || []).find(r => String(r.id_site) === id);
       if (row) { state.selection = { level: 'site', key: id, label: row.nom_site }; render(); }
     }
