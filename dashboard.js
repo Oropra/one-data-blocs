@@ -497,13 +497,23 @@ OD.define('dashboard', {
       // compteur. Sans le realise a cote, un chef lit 24 et croit avoir
       // vendu 24 — releve par Antoine le 25/08/2026. On affiche donc les
       // deux, en distinguant clairement la prevision du fait acquis.
-      const aCeJour = '<div class="d-pj-real">' + fr(p.realise) + ' à ce jour · ' +
-        Math.round(p.prorata * 100) + ' % du mois écoulé</div>';
+      // HIÉRARCHIE INVERSÉE le 26/08/2026, à la demande d'Antoine : « on doit
+      // voir très très nettement le résultat à la date du jour ». Le grand
+      // chiffre est désormais le RÉALISÉ sur objectif (28 / 24), fait acquis
+      // et vérifiable ; l'atterrissage, qui n'est qu'une extrapolation,
+      // passe au second plan sous forme de ligne.
+      const pctA = p.objectif > 0 ? Math.round(p.realise / p.objectif * 100) : null;
       return carte('Projection fin de mois', sub,
-        '<div class="d-pj"><div class="d-pj-n" style="color:' + c.real + '">' + fr(p.land) + '</div>' +
-        '<div class="d-pj-o">commandes <b>prévues</b>' + (p.objectif > 0 ? '<br>objectif <b>' + fr(p.objectif) + '</b>' : '') + '</div>' +
-        '<div class="d-pj-v" style="background:' + vd[0] + ';color:' + vd[1] + '">' + vd[2] + '</div></div>' +
-        aCeJour + tr.svg + legende(p, tr.approx));
+        '<div class="d-pj">' +
+          '<div class="d-pj-n" style="color:' + c.real + '">' + fr(p.realise) +
+            (p.objectif > 0 ? '<span class="d-pj-sur">/ ' + fr(p.objectif) + '</span>' : '') + '</div>' +
+          '<div class="d-pj-o">commandes <b>à ce jour</b><br>' +
+            Math.round(p.prorata * 100) + ' % du mois écoulé</div>' +
+          (pctA != null ? '<div class="d-pj-v" style="background:' + vd[0] + ';color:' + vd[1] + '">' + pctA + ' %</div>' : '') +
+        '</div>' +
+        '<div class="d-pj-land">Atterrissage prévu <b>' + fr(p.land) + '</b>' +
+          (p.objectif > 0 ? ' pour un objectif de <b>' + fr(p.objectif) + '</b> · ' + vd[2] : '') + '</div>' +
+        tr.svg + legende(p, tr.approx));
     }
     function cartePouls() {
       if (!state.act) return carte('Le pouls', null, '<div class="d-empty">Chargement de l\'activité…</div>');
@@ -829,7 +839,9 @@ OD.define('dashboard', {
       const inact = vendeursInactifs();
       const nb = parVendeur(dRowsV(), SUM_D).length;
       const phrase = (inact.length ? '<dn>' + inact.length + ' vendeur' + (inact.length > 1 ? 's' : '') + '</dn> sans aucune activité sur la période. ' : 'Toute l\'équipe est active. ') +
-        (p.objectif > 0 ? 'L\'équipe atterrit à <b>' + fr(p.land) + '</b> pour un objectif de <b>' + fr(p.objectif) + '</b>.' : '<b>' + fr(t.commandes_realisees) + ' commandes</b> réalisées.') +
+        (p.objectif > 0
+          ? '<b>' + fr(p.realise) + ' commandes sur un objectif de ' + fr(p.objectif) + '</b> à ce jour. Atterrissage prévu <dn>' + fr(p.land) + '</dn>.'
+          : '<b>' + fr(t.commandes_realisees) + ' commandes</b> réalisées.') +
         (t.rdv_sans_cr > 0 ? ' <b>' + fr(t.rdv_sans_cr) + '</b> comptes-rendus manquants.' : '');
       return bandeau('Mon équipe', phrase, [['Périmètre', state.selection.level === 'site' ? state.selection.label : 'Tous mes sites'],
         ['Équipe', nb + ' vendeurs'], ['Prorata mois', Math.round(p.prorata * 100) + ' %']]) +
@@ -1138,11 +1150,21 @@ OD.define('dashboard', {
     '#dash-root .d-chip button{border:0;background:#fff;color:#54678a;width:18px;height:18px;line-height:16px;border-radius:50%;cursor:pointer;font-size:13px;font-family:inherit;font-weight:800;padding:0}' +
     '#dash-root .d-chip button:hover{background:#e24b4a;color:#fff}' +
     '#dash-root .d-tg button.on{background:#fff;color:#2a5ea9;box-shadow:0 1px 4px rgba(42,94,169,.15)}' +
-    '#dash-root .d-g{display:grid;grid-template-columns:1.3fr 1fr;gap:16px;margin-top:16px;align-items:start}' +
-    '#dash-root .d-full{grid-column:1 / -1}' +
-    /* Réalisé à ce jour, sous l'atterrissage. Volontairement discret : c'est
-       un repère, le chiffre qui pilote reste la projection. */
-    '#dash-root .d-pj-real{margin-top:-4px;margin-bottom:10px;font-size:11.5px;font-weight:700;color:#54678a}' +
+    /* MULTI-COLONNES et non grid (26/08/2026). En CSS grid, chaque RANGÉE
+       prend la hauteur de sa carte la plus haute : une carte « Leads à
+       traiter » de 6 lignes en face d'une carte courte laissait un trou
+       béant, et l'écran devenait chaotique. Le flux multi-colonnes empile
+       les cartes sans laisser d'espace : chacune démarre où la précédente
+       s'arrête. `column-span:all` conserve les cartes pleine largeur. */
+    '#dash-root .d-g{column-count:2;column-gap:16px;margin-top:16px}' +
+    '#dash-root .d-g > *{break-inside:avoid;-webkit-column-break-inside:avoid;page-break-inside:avoid;margin-bottom:16px;display:block;width:100%}' +
+    '#dash-root .d-full{column-span:all;-webkit-column-span:all}' +
+    /* « / 24 » accolé au grand chiffre : l'objectif doit se lire d'un seul
+       coup d'œil avec le réalisé, pas se chercher ailleurs sur la carte. */
+    '#dash-root .d-pj-sur{font-size:26px;font-weight:800;opacity:.45;margin-left:4px;letter-spacing:-.02em}' +
+    /* Atterrissage : information SECONDE depuis le 26/08/2026. Une
+       extrapolation ne doit pas dominer un fait acquis. */
+    '#dash-root .d-pj-land{margin:2px 0 12px;font-size:12px;color:#54678a;padding:7px 10px;background:#f5f8fd;border-radius:8px}' +
     '#dash-root .d-c{background:#fff;border:1px solid #e8eef7;border-radius:16px;padding:18px 19px}' +
     '#dash-root .d-c.d-alert{border-color:#f6cfcc;background:#fffaf9}' +
     '#dash-root .d-c-h{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:14px}' +
@@ -1240,7 +1262,7 @@ OD.define('dashboard', {
     '#dash-root .d-co-bt{font-size:12.5px;color:#54678a;font-weight:600;line-height:1.5;flex:1;min-width:200px}' +
     '#dash-root .d-co-bt b{color:#1F4A85}' +
     '#dash-root .d-co-w{margin-top:12px;background:#f5f8fc;border-left:3px solid #9bb3d1;padding:10px 13px;border-radius:0 8px 8px 0;font-size:12px;color:#54678a;line-height:1.5}' +
-    '@media(max-width:860px){#dash-root .d-g{grid-template-columns:1fr}#dash-root .d-hero-l{font-size:16px}#dash-root .d-pj-n{font-size:40px}#dash-root .d-st{grid-template-columns:1fr}#dash-root .d-q{grid-template-columns:1fr}}' +
+    '@media(max-width:860px){#dash-root .d-g{column-count:1}#dash-root .d-hero-l{font-size:16px}#dash-root .d-pj-n{font-size:40px}#dash-root .d-st{grid-template-columns:1fr}#dash-root .d-q{grid-template-columns:1fr}}' +
     '</style>';
 
     // ══ DÉMARRAGE ════════════════════════════════════════════════════════
