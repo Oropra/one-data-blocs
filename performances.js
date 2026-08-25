@@ -440,6 +440,10 @@ OD.define('performances', {
 #perf-root .pf-cell-ro { font-size:11px; color:var(--blue-dk); font-weight:500; font-variant-numeric:tabular-nums; }
 #perf-root .pf-cell-pct { font-size:9px; font-weight:600; padding:1px 5px; border-radius:3px; }
 #perf-root .pf-cell-track { height:3px; background:#eaf0f9; border-radius:2px; overflow:hidden; }
+/* Volume de l'encadrement dans l'ARBRE. Même intention que .pf-kpi-enc pour
+   les cartes du haut, en plus compact : une ligne de tableau ne peut pas
+   s'offrir 10px de plus par cellule. */
+#perf-root .pf-cell-enc { margin-top:3px; font-size:9.5px; line-height:1.2; color:var(--text-mut); font-style:italic; white-space:nowrap; }
 #perf-root .pf-cell-fill { height:3px; border-radius:2px; }
 #perf-root .pf-empty { text-align:center; padding:30px; color:var(--text-mut); font-size:12px; font-style:italic; }
 #perf-root .pf-ico-btn { border:1px solid var(--border); background:#fff; border-radius:6px; padding:4px 7px; cursor:pointer; display:inline-flex; align-items:center; line-height:0; }
@@ -484,23 +488,39 @@ OD.define('performances', {
   }
 
   // --- Cellule KPI dans l'arbre (réalisé/objectif + % + barre) -----------------
-  function kpiCell(realise, objectif, kpiLabel, ids) {
+  // `enc` : volume de l'ENCADREMENT sur ce KPI, affiché à part.
+  //
+  // Ajouté le 25/08/2026. Les cartes KPI du haut montraient déjà « + N
+  // encadrement · total X » (cf. pf-kpi-enc), mais PAS l'arbre : une ligne
+  // de site affichait 21 alors qu'elle portait une ligne fille
+  // « Encadrement » à 7. Le parent ne sommait pas ses enfants, et rien à
+  // l'écran n'expliquait l'écart — c'est ce qu'Antoine a relevé.
+  //
+  // Le taux reste calculé sur les seuls vendeurs (arbitrage du 21/08 : un
+  // chef n'a pas d'objectif, l'inclure au numérateur gonflait l'atteinte
+  // d'une quinzaine de points). Seul le VOLUME est complété.
+  function kpiCell(realise, objectif, kpiLabel, ids, enc) {
     const c = kpiColorPro(realise, objectif);
     const badge = pctLabel(realise, objectif);
     const fillW = fillWidth(realise, objectif);
     const clickable = Array.isArray(ids) && ids.length > 0;
     const idsAttr = clickable ? ' data-kpi-ids="' + esc(ids.join(',')) + '" data-kpi-label="' + esc(kpiLabel) + '"' : '';
+    const e = num(enc);
+    const encLine = e > 0
+      ? '<div class="pf-cell-enc">+' + e + ' enc. · total ' + (num(realise) + e) + '</div>'
+      : '';
     return '<div class="pf-cell"' + (clickable ? ' data-kpi-click="1"' : '') + idsAttr + '>' +
       '<div class="pf-cell-top">' +
       '<span class="pf-cell-ro">' + realise + ' / ' + objectif + '</span>' +
       '<span class="pf-cell-pct" style="background:' + c.bg + ';color:' + c.text + '">' + badge + '</span>' +
       '</div>' +
       '<div class="pf-cell-track"><div class="pf-cell-fill" style="width:' + fillW + '%;background:' + c.bar + '"></div></div>' +
+      encLine +
       '</div>';
   }
   function kpiCellsTree(agg, label) {
     let h = '';
-    for (const k of KPIS) h += '<td>' + kpiCell(agg[k.r], agg[k.o], (label ? label + ' · ' : '') + k.label, agg._ids) + '</td>';
+    for (const k of KPIS) h += '<td>' + kpiCell(agg[k.r], agg[k.o], (label ? label + ' · ' : '') + k.label, agg._ids, agg[k.r + '_enc']) + '</td>';
     return h;
   }
   function expIcon(open) { return '<span class="pf-exp">' + (open ? '▼' : '▶') + '</span>'; }
