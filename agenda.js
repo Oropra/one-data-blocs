@@ -171,6 +171,16 @@ OD.define('agenda', {
       const k = String(r.id_user);
       if (vus[k]) continue;
       vus[k] = 1;
+      // Le rôle 9 (secrétaire commerciale) n'apparaît dans AUCUN sélecteur de
+      // collaborateurs — arbitrage d'Antoine du 25/08/2026. Elle est rattachée
+      // hiérarchiquement au chef des ventes de chacun de ses sites, donc la
+      // RPC de périmètre la remonte légitimement ; c'est ICI qu'on l'écarte,
+      // et nulle part ailleurs : collaborateursVisibles() est la source unique
+      // du menu chef, de la cascade directeur et du sélecteur « vendeur
+      // évalué » de la bilatérale.
+      // Elle reste visible d'elle-même (est_moi) : sans quoi son propre agenda
+      // n'aurait plus de sélecteur du tout.
+      if (Number(r.id_role) === 9 && !r.est_moi) continue;
       out.push({ id: Number(r.id_user), id_user: Number(r.id_user), nom: r.nom,
                  vn_vo: r.vn_vo, id_role: r.id_role, role_nom: r.role_nom,
                  niveau: r.niveau, est_moi: !!r.est_moi });
@@ -369,6 +379,112 @@ OD.define('agenda', {
     const si = g('agc-site'); if (si) si.addEventListener('change', () => { sel.idSite = Number(si.value); renderCollab(true); });
     const ve = g('agc-vendeur'); if (ve) ve.addEventListener('change', () => { setAgendaUser(ve.value); renderCollab(true); refetch(); });
   }
+  /* ===== PLANNING DES LIVRAISONS =========================================
+     Une bascule sur l'agenda, pas un module à part : le chef des ventes et
+     la secrétaire commerciale y accèdent depuis leur propre agenda
+     (arbitrage d'Antoine du 25/08/2026).
+
+     Les RDV de livraison appartiennent au VENDEUR — ils sont dans SON
+     agenda. Ce planning ne fait que les LIRE, à l'échelle du site : un
+     rendez-vous n'a qu'un propriétaire mais peut avoir plusieurs lecteurs.
+     D'où une RPC dédiée, get_planning_livraisons, plutôt qu'un filtre sur
+     l'agenda — qui aurait exigé de s'approprier les RDV.
+  ======================================================================== */
+  let planningOuvert = false, planningRows = null, planningChargement = false;
+
+  // Qui voit la bascule : la secrétaire commerciale (9), le chef des ventes
+  // (3) et l'encadrement au-dessus. Pas les vendeurs (4), qui ont déjà leurs
+  // livraisons dans leur agenda.
+  function peutVoirPlanning() {
+    const r = Number(viewerRole());
+    return r === 9 || r === 3 || r === 2 || r === 6 || r === 7 || r === 8 || r === 1;
+  }
+
+  function renderBasculePlanning() {
+    const host = document.getElementById('agenda-livr');
+    if (!host) return;
+    if (!peutVoirPlanning()) { host.style.display = 'none'; host.innerHTML = ''; return; }
+    host.style.display = '';
+    host.innerHTML = '<button type="button" class="agl-btn' + (planningOuvert ? ' is-on' : '') +
+      '" id="agl-toggle">' + (planningOuvert ? '← Revenir à l\'agenda' : '🚚 Planning des livraisons') + '</button>';
+    const b = document.getElementById('agl-toggle');
+    if (b) b.addEventListener('click', () => {
+      planningOuvert = !planningOuvert;
+      // Le planning ne se superpose pas au calendrier : on masque l'un ou
+      // l'autre, sinon l'agenda continue de capter les clics en dessous.
+      const fc = document.getElementById('agenda-fc');
+      if (fc) fc.style.display = planningOuvert ? 'none' : '';
+      renderBasculePlanning();
+      if (planningOuvert) chargerPlanning(); else {
+        const h = document.getElementById('agenda-planning');
+        if (h) { h.style.display = 'none'; h.innerHTML = ''; }
+      }
+    });
+  }
+
+  async function chargerPlanning() {
+    const host = document.getElementById('agenda-planning');
+    if (!host) return;
+    host.style.display = '';
+    if (planningChargement) return;
+    planningChargement = true;
+    host.innerHTML = '<div class="agl-msg">Chargement du planning…</div>';
+    try {
+      // Fenêtre : du lundi de la semaine en cours à 8 semaines plus tard.
+      // Une livraison se prépare, elle ne se consulte pas au jour le jour.
+      const d0 = new Date(); d0.setDate(d0.getDate() - ((d0.getDay() + 6) % 7));
+      const d1 = new Date(d0); d1.setDate(d1.getDate() + 56);
+      const iso = (d) => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+      const sites = siteIds();
+      const { data, error } = await sb().rpc('get_planning_livraisons', {
+        p_date_from: iso(d0),
+        p_date_to: iso(d1),
+        // Un seul site sélectionné en topnav : on s'y limite. Plusieurs ou
+        // aucun : on laisse la RPC rendre tout le périmètre du viewer.
+        p_id_site: (sites && sites.length === 1) ? Number(sites[0]) : null
+      });
+      if (error) throw error;
+      planningRows = data || [];
+      dessinerPlanning(host);
+    } catch (e) {
+      console.warn('[agenda] planning des livraisons', e);
+      host.innerHTML = '<div class="agl-msg agl-err">Planning indisponible.</div>';
+    } finally { planningChargement = false; }
+  }
+
+  function dessinerPlanning(host) {
+    const rows = planningRows || [];
+    if (!rows.length) {
+      host.innerHTML = '<div class="agl-msg">Aucune livraison programmée sur les 8 prochaines semaines.</div>';
+      return;
+    }
+    // Regroupement par JOUR : c'est la maille d'organisation d'une livraison.
+    const parJour = {};
+    for (const r of rows) {
+      const j = String(r.date_debut || '').slice(0, 10);
+      (parJour[j] = parJour[j] || []).push(r);
+    }
+    const jours = Object.keys(parJour).sort();
+    let h = '<div class="agl-wrap"><div class="agl-head">Planning des livraisons — ' +
+      rows.length + ' livraison' + (rows.length > 1 ? 's' : '') + '</div>';
+    for (const j of jours) {
+      const d = new Date(j + 'T00:00:00');
+      const lbl = d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+      h += '<div class="agl-jour">' + esc(lbl) + '<span>' + parJour[j].length + '</span></div>';
+      for (const r of parJour[j]) {
+        const heure = String(r.date_debut || '').slice(11, 16);
+        h += '<div class="agl-l' + (r.traite ? ' is-fait' : '') + '">' +
+          '<span class="agl-h">' + esc(heure) + '</span>' +
+          '<span class="agl-c">' + esc(r.nom_client || '') + '</span>' +
+          '<span class="agl-v">' + esc(r.vin || '—') + '</span>' +
+          '<span class="agl-s">' + esc(r.nom_vendeur || '') + '</span>' +
+          '<span class="agl-t">' + esc(r.nom_site || '') + '</span>' +
+        '</div>';
+      }
+    }
+    host.innerHTML = h + '</div>';
+  }
+
   function renderCollab(force) {
     const host = document.getElementById('agenda-collab'); if (!host) return;
     const sig = collabSignature();
@@ -383,6 +499,7 @@ OD.define('agenda', {
     // menu.style.display directement.
     if (!force && sig === collabSig) return;
     collabSig = sig;
+    renderBasculePlanning();   // même cycle de rendu que le sélecteur
     const model = buildCollaborators();
     if (!model) { return; }                              // pas prêt : on retentera au poll
     if (model.mode === 'cascade') { renderCascade(host, model); return; }
@@ -427,6 +544,27 @@ OD.define('agenda', {
 #agenda-root .agenda-top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}
 #agenda-root .agenda-title{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:#9bb3d1}
 #agenda-root #agenda-collab{position:relative}
+#agenda-root #agenda-livr{margin-right:10px}
+#agenda-root .agl-btn{border:1.5px solid #e8eef7;background:#fff;color:#2a5ea9;font-weight:800;font-size:12.5px;padding:7px 13px;border-radius:10px;cursor:pointer;font-family:inherit;white-space:nowrap}
+#agenda-root .agl-btn:hover{border-color:#2a5ea9}
+#agenda-root .agl-btn.is-on{background:#2a5ea9;color:#fff;border-color:#2a5ea9}
+#agenda-planning{margin-top:14px}
+#agenda-planning .agl-wrap{border:1px solid #e8eef7;border-radius:14px;overflow:hidden;background:#fff}
+#agenda-planning .agl-head{padding:12px 16px;font-weight:800;font-size:13px;color:#1F4A85;background:#f5f8fd;border-bottom:1px solid #e8eef7}
+#agenda-planning .agl-jour{display:flex;align-items:center;justify-content:space-between;padding:8px 16px;background:#fafcff;font-weight:800;font-size:12px;color:#2a5ea9;text-transform:capitalize;border-bottom:1px solid #eef3fa}
+#agenda-planning .agl-jour span{font-size:11px;color:#7a98c5;font-weight:700}
+#agenda-planning .agl-l{display:grid;grid-template-columns:56px 1fr 150px 140px 130px;gap:10px;align-items:center;padding:9px 16px;border-bottom:1px solid #f2f6fc;font-size:12.5px}
+#agenda-planning .agl-l:last-child{border-bottom:none}
+/* Une livraison déjà traitée reste visible mais s'efface : le planning sert à
+   préparer ce qui vient, pas à masquer ce qui est fait. */
+#agenda-planning .agl-l.is-fait{opacity:.5}
+#agenda-planning .agl-h{font-weight:800;color:#1F4A85}
+#agenda-planning .agl-c{font-weight:700;color:#2c2c2a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#agenda-planning .agl-v{font-family:ui-monospace,monospace;font-size:11px;color:#7a98c5;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#agenda-planning .agl-s,#agenda-planning .agl-t{font-size:11.5px;color:#54678a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#agenda-planning .agl-msg{padding:22px 16px;text-align:center;color:#7a98c5;font-size:13px}
+#agenda-planning .agl-msg.agl-err{color:#e24b4a}
+@media(max-width:860px){#agenda-planning .agl-l{grid-template-columns:50px 1fr;row-gap:2px}#agenda-planning .agl-v,#agenda-planning .agl-s,#agenda-planning .agl-t{grid-column:2}}
 #agenda-root .agc-trigger{display:inline-flex;align-items:center;gap:9px;background:#fff;border:1.5px solid #e2eaf5;border-radius:10px;padding:5px 11px 5px 6px;cursor:pointer;font-family:inherit;color:#1F4A85;font-weight:700;font-size:13px;transition:border-color .15s}
 #agenda-root .agc-cascade{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end}
 #agenda-root .agc-lvl{display:flex;flex-direction:column;gap:3px}
@@ -584,7 +722,7 @@ OD.define('agenda', {
     if (!root) { console.warn('[agenda] #' + CFG.rootId + ' absent'); return; }
     if (!window.FullCalendar) { console.error('[agenda] FullCalendar non chargé'); return; }
     injectCss();
-    root.innerHTML = '<div class="agenda-card"><div class="agenda-top"><span class="agenda-title">Agenda</span><div id="agenda-collab" style="display:none"></div></div><div id="agenda-fc"></div></div>';
+    root.innerHTML = '<div class="agenda-card"><div class="agenda-top"><span class="agenda-title">Agenda</span><div id="agenda-livr" style="display:none"></div><div id="agenda-collab" style="display:none"></div></div><div id="agenda-fc"></div></div><div id="agenda-planning" style="display:none"></div>';
     const mount = root.querySelector('#agenda-fc');
 
     calendar = new window.FullCalendar.Calendar(mount, {
