@@ -423,6 +423,10 @@ OD.define('propale-vo', {
      à gauche quoi qu'il arrive aux champs de crédit au-dessus. */
   .pv-fixes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 16px;margin-top:14px;padding-top:14px;border-top:1px solid #eef3fa}
   .pv-fixes .pv-f{margin:0}
+  /* Champ obligatoire non renseigné : bordure rouge, retirée dès la
+     tentative suivante. Pas de message sous chaque champ — le toast liste
+     déjà tout, deux canaux pour la même information alourdissent l'écran. */
+  .pv-in.pv-req{border-color:#e24b4a;background:#fff7f7}
   @media(max-width:560px){.pv-fixes{grid-template-columns:1fr}}
   .pv-vcli-hint{font-size:10.5px;color:#7a98c5;margin-top:5px}
   .pv-veh-tag{font-size:10.5px;font-weight:700;color:#2a5ea9;background:#eef3fa;border-radius:6px;padding:3px 8px}
@@ -1054,29 +1058,68 @@ OD.define('propale-vo', {
     } catch(e) { return null; }
   }
 
-  // La date de livraison est OBLIGATOIRE pour une proposition, pas pour un
+  // ── VALIDATION D'UNE PROPOSITION ────────────────────────────────────────
+  //
+  // Tout ce qui est obligatoire l'est pour une PROPOSITION, jamais pour un
   // brouillon (arbitrage d'Antoine du 25/08/2026). Un brouillon sert
   // justement à travailler un dossier avant d'avoir tous les éléments ;
   // l'exiger dès l'enregistrement empêcherait de sauvegarder une discussion
   // en cours.
   //
-  // Les intentions qui produisent une PROPOSITION : 'save-propale' (nouveau
-  // bouton) et 'promote' depuis un brouillon.
-  function manqueDateLivraison(intent) {
-    const versPropale = (intent === 'save-propale')
+  // Les intentions qui produisent une proposition : 'save-propale' et
+  // 'promote' depuis un brouillon.
+  function versPropale(intent) {
+    return (intent === 'save-propale')
       || (intent === 'promote' && ST.P.status === 'draft');
-    if (!versPropale) return false;
-    return !ST.P.DateLivraison;
+  }
+
+  // Rend la LISTE des champs manquants, pas un booléen : le vendeur doit
+  // savoir tout ce qui bloque d'un coup, pas les découvrir un par un.
+  function champsManquants(intent) {
+    if (!versPropale(intent)) return [];
+    const P = ST.P;
+    const vide = v => v == null || v === '' || (typeof v === 'number' && !isFinite(v));
+    const manque = [];
+
+    if (vide(P.DateLivraison)) manque.push({ key: 'DateLivraison', label: 'Date de livraison' });
+
+    // Financement : le dossier n'a de sens que complet. Un BDC transmis à
+    // l'organisme sans montant ni durée est renvoyé, et le vendeur perd des
+    // jours. Demande du 25/08/2026.
+    if (P.TypePaiement === 'Financement') {
+      if (vide(P.TypeFinancement))          manque.push({ key: 'TypeFinancement', label: 'Type de financement' });
+      if (vide(P.OrganismeFinancement))     manque.push({ key: 'OrganismeFinancement', label: 'Organisme' });
+      if (!num(P.MontantFinance))           manque.push({ key: 'MontantFinance', label: 'Montant financé TTC' });
+      if (!num(P.NombreMensualites))        manque.push({ key: 'NombreMensualites', label: 'Nb de mensualités' });
+      if (!num(P.MontantMensualitesTTC))    manque.push({ key: 'MontantMensualitesTTC', label: 'Mensualité TTC' });
+
+      // LOA : deux champs de plus, qui définissent le contrat lui-même.
+      if (P.TypeFinancement === 'LOA') {
+        if (!num(P.MontantTTCEngagement))   manque.push({ key: 'MontantTTCEngagement', label: 'Engagement reprise TTC' });
+        if (!num(P.KM_ANNUEL))              manque.push({ key: 'KM_ANNUEL', label: 'Kilométrage annuel ER' });
+      }
+    }
+    return manque;
   }
 
   async function doSave(root, intent) {
     if (ST.saving) return;
-    if (manqueDateLivraison(intent)) {
-      toast(root, 'Date de livraison obligatoire pour une proposition');
-      const champ = root.querySelector('input[data-key="DateLivraison"]');
-      if (champ) { try { champ.focus(); champ.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (e) {} }
+    const manque = champsManquants(intent);
+    if (manque.length) {
+      // On nomme TOUS les champs manquants, et on marque visuellement chacun
+      // d'eux — un message générique « champs obligatoires » oblige à chercher.
+      root.querySelectorAll('.pv-in.pv-req').forEach(x => x.classList.remove('pv-req'));
+      manque.forEach(m => {
+        const el = root.querySelector('[data-key="' + m.key + '"]');
+        if (el) el.classList.add('pv-req');
+      });
+      const noms = manque.map(m => m.label).join(', ');
+      toast(root, (manque.length === 1 ? 'Champ obligatoire : ' : 'Champs obligatoires : ') + noms);
+      const premier = root.querySelector('[data-key="' + manque[0].key + '"]');
+      if (premier) { try { premier.focus(); premier.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (e) {} }
       return;
     }
+    root.querySelectorAll('.pv-in.pv-req').forEach(x => x.classList.remove('pv-req'));
     ST.saving = true; refreshTotals(root);
     const sb = supa();
     try {
