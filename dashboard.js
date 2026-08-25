@@ -104,6 +104,10 @@ OD.define('dashboard', {
     function alerteObjectif(obj) { return num(obj) <= 0 && moisRef().jour >= 8; }
 
     // ══ MAPPING ══════════════════════════════════════════════════════════
+    // Colonnes ventilées par TYPE DE VÉHICULE (migration 20260825180000).
+    // Volontairement HORS de SUM_D : elles ne doivent pas être sommées deux
+    // fois par les agrégats, seulement servir de source à projeterVnVo.
+    const VNVO_D = ['commandes_vn','commandes_vo','objectif_commandes_vn','objectif_commandes_vo'];
     const SUM_D = ['commandes_realisees','objectif_commandes','financements_realises','objectif_financements',
       'contrats_service_realises','objectif_contrat_service','gravages_realises','objectif_gravage',
       'waxoyls_realises','objectif_waxoyl','cycles_ouverts','leads_a_traiter','nb_contacts','nb_entrants',
@@ -120,6 +124,14 @@ OD.define('dashboard', {
         id_affaire: r.id_affaire != null ? Number(r.id_affaire) : null,
         id_role: r.id_role != null ? Number(r.id_role) : null };
       for (const k of SUM_D) o[k] = num(r[k]);
+      // ⚠️ mapD ne recopie QUE les clés de SUM_D : toute colonne ajoutée à la
+      // RPC est silencieusement jetée ici. Les quatre colonnes ventilées par
+      // TYPE DE VÉHICULE (migration 20260825180000) doivent donc être
+      // recopiées explicitement, sinon projeterVnVo ne trouve rien et le
+      // filtre VN/VO reste sans effet — bug constaté le 26/08/2026.
+      // On distingue « colonne absente » (tenant non migré) de « valeur
+      // nulle » : undefined reste undefined, il sert de signal.
+      for (const k of VNVO_D) if (r[k] !== undefined && r[k] !== null) o[k] = num(r[k]);
       return o;
     }
     function mapA(r) {
@@ -163,9 +175,19 @@ OD.define('dashboard', {
     function projeterVnVo(r) {
       if (state.vnvo !== 'vn' && state.vnvo !== 'vo') return r;
       const suf = state.vnvo === 'vn' ? '_vn' : '_vo';
-      // Tenant non migré : les colonnes n'existent pas. On rend la ligne
-      // telle quelle plutôt que d'afficher des zéros partout.
-      if (r['commandes' + suf] == null && r['objectif_commandes' + suf] == null) return r;
+      // Tenant non migré : la colonne est ABSENTE (undefined). On rend la
+      // ligne telle quelle plutôt que d'afficher des zéros partout — mais on
+      // le SIGNALE, une fois. Ce repli silencieux avait masqué le fait que
+      // mapD jetait les colonnes : le filtre semblait simplement « ne rien
+      // faire », sans la moindre trace en console (26/08/2026).
+      if (r['commandes' + suf] === undefined) {
+        if (!projeterVnVo.__prevenu) {
+          projeterVnVo.__prevenu = 1;
+          console.warn('[dash] filtre VN/VO inactif : colonne commandes' + suf +
+            ' absente. Tenant non migré (20260825180000) ou colonne perdue au mapping.');
+        }
+        return r;
+      }
       return Object.assign({}, r, {
         commandes_realisees: num(r['commandes' + suf]),
         objectif_commandes:  num(r['objectif_commandes' + suf]),
