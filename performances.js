@@ -505,9 +505,11 @@ OD.define('performances', {
     const fillW = fillWidth(realise, objectif);
     const clickable = Array.isArray(ids) && ids.length > 0;
     const idsAttr = clickable ? ' data-kpi-ids="' + esc(ids.join(',')) + '" data-kpi-label="' + esc(kpiLabel) + '"' : '';
+    // `realise` porte DEJA le total (vendeurs + encadrement) : la mention
+    // ne repete donc pas le total, elle en isole la part de l'encadrement.
     const e = num(enc);
     const encLine = e > 0
-      ? '<div class="pf-cell-enc">+' + e + ' enc. · total ' + (num(realise) + e) + '</div>'
+      ? '<div class="pf-cell-enc">dont ' + e + ' encadrement</div>'
       : '';
     return '<div class="pf-cell"' + (clickable ? ' data-kpi-click="1"' : '') + idsAttr + '>' +
       '<div class="pf-cell-top">' +
@@ -520,7 +522,15 @@ OD.define('performances', {
   }
   function kpiCellsTree(agg, label) {
     let h = '';
-    for (const k of KPIS) h += '<td>' + kpiCell(agg[k.r], agg[k.o], (label ? label + ' · ' : '') + k.label, agg._ids, agg[k.r + '_enc']) + '</td>';
+    // Le réalisé affiché est le VOLUME TOTAL de la concession : vendeurs +
+    // encadrement. Demande d'Antoine du 25/08/2026 — « je veux total Lyon
+    // Part-Dieu = 28 sur objectif 24 ». Une commande signée par un chef des
+    // ventes EST une commande du site ; l'afficher 21 avec un « +7 » en
+    // dessous obligeait à faire l'addition de tête.
+    // L'objectif reste celui des VENDEURS : un chef n'en porte pas, il
+    // n'ajoute donc rien au dénominateur. Le taux peut dépasser 100 %, c'est
+    // assumé et c'est la réalité du site.
+    for (const k of KPIS) h += '<td>' + kpiCell(volTotal(agg, k), agg[k.o], (label ? label + ' · ' : '') + k.label, agg._ids, agg[k.r + '_enc']) + '</td>';
     return h;
   }
   function expIcon(open) { return '<span class="pf-exp">' + (open ? '▼' : '▶') + '</span>'; }
@@ -700,7 +710,8 @@ OD.define('performances', {
     html += shead('var(--blue-dk)', 'Performance — ' + scopeLabel, periodResume(curDeb, curFin) + ' · vs ' + Math.round(__prorata * 100) + '% du mois');
     html += '<div class="pf-kpi-grid">';
     for (const k of KPIS) {
-      const r = agg[k.r], o = agg[k.o], c = kpiColorPro(r, o);
+      // Meme regle que l'arbre : le realise est le VOLUME TOTAL du perimetre.
+      const r = volTotal(agg, k), o = agg[k.o], c = kpiColorPro(r, o);
       const badge = pctLabel(r, o);
       const fillW = fillWidth(r, o);
       // Le volume de l'encadrement n'entre pas dans le taux, mais il ne doit
@@ -708,7 +719,7 @@ OD.define('performances', {
       // total de sa concession à ce que montrent les vendeurs.
       const enc = num(agg[k.r + '_enc']);
       const encLine = enc > 0
-        ? '<div class="pf-kpi-enc">+ ' + enc + ' encadrement · total ' + (num(r) + enc) + '</div>'
+        ? '<div class="pf-kpi-enc">dont ' + enc + ' réalisées par l\'encadrement</div>'
         : '';
       html += '<div class="pf-kpi">' +
         '<div class="pf-kpi-label">' + esc(k.label) + '</div>' +
