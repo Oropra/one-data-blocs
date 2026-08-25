@@ -175,6 +175,24 @@ OD.define('propale-vo', {
       const { data } = await sb.from('CLIENT').select('*').eq('IDVu', P.id_client_vu).limit(1);
       ST.client = (data && data[0]) || null;
     }
+    // Puissance fiscale et énergie viennent du VÉHICULE : les ressaisir à la
+    // main était une source d'erreur sur le calcul de carte grise, alors que
+    // STOCKVO porte CV_DMS et CARBURANT_DMS (demande du 25/08/2026).
+    // On ne remplit QUE si le champ est vide : une valeur déjà saisie par le
+    // vendeur, ou héritée d'une propale rouverte, n'est jamais écrasée.
+    if (ST.vehicule) {
+      const cv = num(ST.vehicule.CV_DMS);
+      if (cv > 0 && !num(P.PuissanceFiscale)) P.PuissanceFiscale = cv;
+      if (P.Hybride == null || P.Hybride === undefined) {
+        const carb = String(ST.vehicule.CARBURANT_DMS || '').toUpperCase();
+        // Valeurs réellement présentes au 25/08/2026 : Hybride (392),
+        // Essence (368), Diesel (360). Aucun null. Le motif reste large pour
+        // absorber « Électrique » et « Hybride rechargeable » le jour où le
+        // DMS les distinguera, mais on ne devine PAS d'abréviations
+        // hypothétiques : une fausse détection fausse la carte grise.
+        P.Hybride = /ELEC|ÉLEC|HYBRID/.test(carb);
+      }
+    }
     // Repli du site : la variable de contexte est souvent vide (« Site #— »),
     // et un dossier sans id_site fait échouer move_propale
     // (« Affaire hors périmètre de l'utilisateur (site <NULL>) »).
@@ -218,6 +236,28 @@ OD.define('propale-vo', {
     if (P.id_site) {
       const { data } = await sb.from('SITE').select('*').eq('ID_SITE', P.id_site).limit(1);
       ST.site = (data && data[0]) || null;
+    }
+    // Liste des sites : « Lieu de commande » doit proposer une liste déroulante
+    // avec le site courant par défaut (demande du 25/08/2026). La RLS borne
+    // déjà SITE au périmètre du vendeur, aucun filtre à ajouter ici.
+    ST.sites = [];
+    try {
+      const { data: sts } = await sb.from('SITE').select('ID_SITE,SITE').order('SITE');
+      ST.sites = (sts || []).filter(s => s && s.SITE);
+    } catch (e) { console.warn('[propaleVO] liste des sites', e); }
+    // Véhicules connus du client : alimentent le sélecteur de reprise.
+    // CLIENT_STOCK porte marque, modèle, version, immat, VIN et PMEC — soit
+    // presque tous les champs de reprise, d'où le pré-remplissage.
+    ST.vehiculesClient = [];
+    if (P.id_client_vu) {
+      try {
+        const { data: vcs } = await sb.from('CLIENT_STOCK')
+          .select('id_client_stock,VIN,MARQUE,NomModele,VERSION,IMMAT,DT_PMEC,Status')
+          .eq('ID_CLIENT', P.id_client_vu)
+          .order('DT_PMEC', { ascending: false })
+          .limit(30);
+        ST.vehiculesClient = vcs || [];
+      } catch (e) { console.warn('[propaleVO] vehicules du client', e); }
     }
     // Contremarque active sur le VIN : bloque la propale si elle vise un autre client
     ST.cm = null; ST.cmBloquante = false; ST.cmTexte = '';
@@ -347,6 +387,15 @@ OD.define('propale-vo', {
   .pv-veh{display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap}
   .pv-veh-name{font-size:16px;font-weight:800;flex:1;min-width:0}
   .pv-veh-sub{font-size:11px;color:#7a98c5;margin-top:3px;line-height:1.5}
+  /* Photo de couverture — cadre à ratio fixe : la hauteur ne bouge pas selon
+     que la photo existe ou non, sinon la carte saute au chargement. */
+  .pv-veh-ph{width:132px;height:88px;border-radius:10px;background:#eef3fa;flex-shrink:0;overflow:hidden}
+  .pv-veh-ph img{width:100%;height:100%;object-fit:cover;display:block}
+  .pv-veh-tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+  .pv-vcli{margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid #eef3fa}
+  .pv-vcli-hint{font-size:10.5px;color:#7a98c5;margin-top:5px}
+  .pv-veh-tag{font-size:10.5px;font-weight:700;color:#2a5ea9;background:#eef3fa;border-radius:6px;padding:3px 8px}
+  @media(max-width:560px){.pv-veh-ph{width:100%;height:150px}}
   .pv-veh-price{font-size:20px;font-weight:800;color:#2a5ea9;white-space:nowrap}
   /* Client card */
   .pv-cli{background:#f0f6ff;border:1px solid #d0dff5;border-radius:10px;padding:12px 14px;display:flex;gap:12px;align-items:flex-start}
@@ -436,17 +485,32 @@ OD.define('propale-vo', {
     left.appendChild(buildClientCard(cl, clientName, clientInitials));
 
     // — Véhicule
+    // Bloc véhicule enrichi le 25/08/2026 : photo de couverture, modèle,
+    // première mise en circulation et kilométrage. Le bloc se limitait au nom
+    // et au prix, ce qui ne permettait pas de vérifier qu'on parlait du bon
+    // véhicule.
+    const kmVeh = num(vh.KMCERTIFIE) || num(vh.KMS) || 0;
+    const carac = [
+      vh.MODELE_DMS ? esc(vh.MODELE_DMS) : '',
+      vh.D_1MEC ? 'MEC ' + fmtDate(vh.D_1MEC) : '',
+      kmVeh ? new Intl.NumberFormat('fr-FR').format(kmVeh) + ' km' : '',
+      vh.CARBURANT_DMS ? esc(vh.CARBURANT_DMS) : '',
+      vh.CV_DMS ? num(vh.CV_DMS) + ' CV' : '',
+    ].filter(Boolean).map(x => `<span class="pv-veh-tag">${x}</span>`).join('');
     left.appendChild(mkCard('Véhicule d\'occasion', `
       <div class="pv-veh">
+        <div class="pv-veh-ph" id="pv-veh-photo"></div>
         <div style="flex:1;min-width:0">
           <div class="pv-veh-name">${esc(vehName)}</div>
           <div class="pv-veh-sub">${esc(vehSub)}</div>
+          <div class="pv-veh-tags">${carac}</div>
         </div>
         <div style="text-align:right;flex-shrink:0">
           <div style="font-size:10px;color:#7a98c5;text-transform:uppercase;margin-bottom:2px">Prix de vente</div>
           <div class="pv-veh-price" id="pv-prixv">${eur(num(vh.PVENTE))}</div>
         </div>
       </div>`));
+    chargerPhotoVehicule(root, P.VIN);
 
     // — Reprise
     left.appendChild(buildReprise());
@@ -504,6 +568,68 @@ OD.define('propale-vo', {
       </div>`);
   }
 
+  // PHOTO DE COUVERTURE — source : la table stockvo_photo, PAS une vue.
+  //
+  // Antoine (25/08/2026) : ImageUrls et cover_url vont disparaître de
+  // v_liste_vo le jour où les photos seront définies sur le gold VEHICULES
+  // plutôt que sur STOCKVO. On lit donc la table, qui porte elle-même son
+  // bucket et son chemin — l'URL se construit sans rien supposer.
+  //
+  // Relevé le 25/08 : 1 120 VIN, 1 120 covers, exactement une par véhicule
+  // et aucun doublon. Le repli sur sort_order couvre le cas où is_cover
+  // viendrait à manquer ; sans photo du tout, le cadre reste vide plutôt que
+  // d'afficher une image cassée.
+  async function chargerPhotoVehicule(root, vin) {
+    if (!vin) return;
+    const cadre = root && root.querySelector('#pv-veh-photo');
+    if (!cadre) return;
+    try {
+      const sb = supa();
+      const { data, error } = await sb.from('stockvo_photo')
+        .select('storage_bucket,storage_path,is_cover,sort_order')
+        .eq('VIN', vin)
+        .order('is_cover', { ascending: false })
+        .order('sort_order', { ascending: true })
+        .limit(1);
+      if (error) throw error;
+      const ph = data && data[0];
+      if (!ph || !ph.storage_path) return;
+      const { data: pub } = sb.storage
+        .from(ph.storage_bucket || 'vo-photos')
+        .getPublicUrl(ph.storage_path);
+      if (!pub || !pub.publicUrl) return;
+      const img = fdoc().createElement('img');
+      img.src = pub.publicUrl;
+      img.alt = '';
+      img.loading = 'lazy';
+      // Une URL morte laisse un cadre vide, jamais une icône d'image cassée.
+      img.onerror = () => { try { cadre.innerHTML = ''; } catch (e) {} };
+      cadre.innerHTML = '';
+      cadre.appendChild(img);
+    } catch (e) {
+      console.warn('[propale-vo] photo de couverture', e);
+    }
+  }
+
+  // Liste déroulante des SITES du périmètre. Le site courant est proposé par
+  // défaut (demande du 25/08/2026) mais reste modifiable : une commande peut
+  // être prise sur un site et livrée par un autre.
+  // On stocke le NOM du site, pas son identifiant : LieuCommande est une
+  // colonne texte, et la changer en clé étrangère dépasse le cadre du lot.
+  function fldSites(label, key) {
+    const v = ST.P[key] || (ST.site && ST.site.SITE) || '';
+    if (!ST.sites || !ST.sites.length) return fld(label, key);
+    const opts = ST.sites.map(s =>
+      `<option value="${esc(s.SITE)}"${String(v) === String(s.SITE) ? ' selected' : ''}>${esc(s.SITE)}</option>`
+    ).join('');
+    // Si la valeur enregistrée ne figure plus dans la liste (site fermé,
+    // renommé), on l'ajoute en tête plutôt que de la perdre en silence.
+    const absente = v && !ST.sites.some(s => String(s.SITE) === String(v));
+    const extra = absente ? `<option value="${esc(v)}" selected>${esc(v)} (hors liste)</option>` : '';
+    return `<div class="pv-f"><label>${esc(label)}</label>` +
+      `<select class="pv-in" data-key="${key}"><option value=""></option>${extra}${opts}</select></div>`;
+  }
+
   function fld(label, key, opts) {
     opts = opts || {};
     const v = ST.P[key];
@@ -515,6 +641,48 @@ OD.define('propale-vo', {
     }
     if (opts.textarea) return `<div class="${cls}"><label>${esc(label)}</label><textarea class="pv-in" rows="3" data-key="${key}">${esc(v)}</textarea></div>`;
     return `<div class="${cls}"><label>${esc(label)}</label><input class="pv-in${opts.ro?' ro':''}" type="${opts.type||'text'}" data-key="${key}" value="${esc(val)}"${opts.ro?' disabled':''}></div>`;
+  }
+
+  // Sélecteur des véhicules DÉJÀ connus du client (CLIENT_STOCK) : le
+  // vendeur choisit, les champs de reprise se remplissent seuls. Demande du
+  // 25/08/2026 — ressaisir marque, modèle, VIN et immatriculation d'un
+  // véhicule déjà en base est à la fois pénible et source de fautes de frappe.
+  // Le bloc n'apparaît que si le client a au moins un véhicule ; sinon la
+  // saisie manuelle reste le seul chemin, sans mention inutile.
+  function selecteurVehiculeClient() {
+    const vs = ST.vehiculesClient || [];
+    if (!vs.length) return '';
+    const opts = vs.map(v => {
+      const lbl = [v.MARQUE, v.NomModele, v.VERSION].filter(Boolean).join(' ') || (v.VIN || '—');
+      const suf = [v.IMMAT, v.DT_PMEC ? fmtDate(v.DT_PMEC) : ''].filter(Boolean).join(' · ');
+      return `<option value="${esc(v.id_client_stock)}">${esc(lbl)}${suf ? ' — ' + esc(suf) : ''}</option>`;
+    }).join('');
+    return `<div class="pv-f full pv-vcli">
+      <label>Reprendre un véhicule du client</label>
+      <select class="pv-in" data-act="pick-veh">
+        <option value="">— Saisie manuelle —</option>${opts}
+      </select>
+      <div class="pv-vcli-hint">Le choix remplit les champs ci-dessous ; ils restent modifiables.</div>
+    </div>`;
+  }
+
+  // Report du véhicule choisi vers les champs de reprise. On n'écrase QUE les
+  // champs vides sauf si l'utilisateur change explicitement de véhicule —
+  // auquel cas tout est réécrit, sinon on mélangerait deux véhicules.
+  function appliquerVehiculeClient(idClientStock, root) {
+    const v = (ST.vehiculesClient || []).find(x => String(x.id_client_stock) === String(idClientStock));
+    if (!v) return;
+    const P = ST.P;
+    P.MarqueReprise  = v.MARQUE || '';
+    P.ModeleReprise  = v.NomModele || '';
+    P.VersionReprise = v.VERSION || '';
+    P.VINReprise     = v.VIN || '';
+    P.ImmatReprise   = v.IMMAT || '';
+    P.MECReprise     = v.DT_PMEC ? String(v.DT_PMEC).slice(0, 10) : '';
+    // Le kilométrage et la valeur de reprise ne sont PAS dans CLIENT_STOCK :
+    // ils restent à la main du vendeur, c'est son expertise.
+    refreshUI(root);
+    toast(root, 'Véhicule repris ✓');
   }
 
   function buildReprise() {
@@ -529,6 +697,7 @@ OD.define('propale-vo', {
       </div>
     </div>
     <div class="pv-card-b ${P.RepriseVehicule?'':'pv-hide'}" id="pv-reprise-b">
+      ${selecteurVehiculeClient()}
       <div class="pv-row">
         ${fld('Marque','MarqueReprise')}${fld('Modèle','ModeleReprise')}
         ${fld('Version','VersionReprise')}${fld('Kilométrage','KmReprise',{type:'number'})}
@@ -582,7 +751,7 @@ OD.define('propale-vo', {
       <div class="pv-f pv-loa">${fld('Engagement reprise TTC','MontantTTCEngagement',{type:'number'}).replace(/^<div[^>]*>|<\/div>$/g,'')}</div>
       <div class="pv-f pv-loa">${fld('Kilométrage annuel ER','KM_ANNUEL',{type:'number'}).replace(/^<div[^>]*>|<\/div>$/g,'')}</div>
       ${fld('Apport TTC','Apport',{type:'number'})}
-      ${fld('Lieu de commande','LieuCommande')}
+      ${fldSites('Lieu de commande','LieuCommande')}
       ${fld('Lieu de livraison','LieuLivraison')}
       ${fld('Date de livraison','DateLivraison',{type:'date'})}
       ${fld('Commentaires','Commentaire',{textarea:true,full:true})}
@@ -628,6 +797,13 @@ OD.define('propale-vo', {
       refreshTotals(root);
     });
     root.addEventListener('change', e => {
+      // Sélecteur « Reprendre un véhicule du client » : il porte data-act et
+      // non data-key, puisqu'il ne remplit pas UN champ mais six.
+      const a = e.target.getAttribute && e.target.getAttribute('data-act');
+      if (a === 'pick-veh') {
+        if (e.target.value) appliquerVehiculeClient(e.target.value, root);
+        return;
+      }
       const k = e.target.getAttribute && e.target.getAttribute('data-key');
       if (!k) return;
       ST.P[k] = e.target.value;
@@ -657,6 +833,7 @@ OD.define('propale-vo', {
       else if (act==='frais') { const k = el.getAttribute('data-frais'); if(k) { ST.P[k]=!ST.P[k]; refreshUI(root); } }
       else if (act==='annuler') { goPipe(); }
       else if (act==='save') { doSave(root,'save'); }
+      else if (act==='save-propale') { doSave(root,'save-propale'); }
       else if (act==='promote') { doSave(root,'promote'); }
     });
   }
@@ -705,7 +882,37 @@ OD.define('propale-vo', {
       <div class="pv-sl"><span>Carte grise</span><b>${eur(r.cg.total)}</b></div>
       <div class="pv-sl"><span>Frais &amp; options</span><b>${eur(r.totalFrais)}</b></div>
       <div class="pv-total"><span>Total commande${suf}</span><b>${eur(r.totalBDC)}</b></div>
+      ${soulteHtml(r)}
       <div class="pv-actions">${buildButtons()}</div>`;
+  }
+
+  // SOULTE = ce qui reste à sortir de la poche du client :
+  // total commande − apport − reprise − montant financé.
+  // Demandée le 25/08/2026 : c'est le seul chiffre que le client retient, et
+  // il n'apparaissait nulle part. Les trois déductions sont facultatives ;
+  // tant qu'aucune n'est saisie, la ligne reste masquée plutôt que de répéter
+  // le total juste au-dessus.
+  function soulteHtml(r) {
+    const P = ST.P;
+    const apport  = num(P.Apport) || 0;
+    const reprise = P.RepriseVehicule ? (num(P.ValeurReprise) || 0) : 0;
+    const finance = num(P.MontantFinance) || 0;
+    const deduit  = apport + reprise + finance;
+    if (!deduit) return '';
+    const soulte = num(r.totalBDC) - deduit;
+    const lignes = [
+      apport  ? `<div class="pv-sl minus"><span>Apport</span><b>− ${eur(apport)}</b></div>` : '',
+      reprise ? `<div class="pv-sl minus"><span>Reprise</span><b>− ${eur(reprise)}</b></div>` : '',
+      finance ? `<div class="pv-sl minus"><span>Montant financé</span><b>− ${eur(finance)}</b></div>` : '',
+    ].join('');
+    // Une soulte négative signale une sur-couverture (financement + apport +
+    // reprise dépassent le total) : on l'affiche telle quelle, en rouge. La
+    // masquer laisserait passer une erreur de saisie.
+    const neg = soulte < 0;
+    return lignes +
+      `<div class="pv-total" style="${neg ? 'color:#e24b4a' : ''}">` +
+      `<span>Reste à payer${neg ? ' (négatif — vérifier la saisie)' : ''}</span>` +
+      `<b>${eur(soulte)}</b></div>`;
   }
 
   function buildButtons() {
@@ -718,8 +925,24 @@ OD.define('propale-vo', {
       if (ST.P.status === 'draft') extra = `<button class="pv-btn pv-btn-blue" data-act="promote">Définir comme proposition</button>`;
       else if (ST.P.status === 'propale') extra = `<button class="pv-btn pv-btn-grey" data-act="promote">Nouveau brouillon</button>`;
     }
-    const lbl = ST.mode==='create' ? 'Enregistrer le brouillon' : 'Enregistrer';
+    // CHOIX EXPLICITE BROUILLON / PROPOSITION (demande du 25/08/2026).
+    // Auparavant la création n'offrait qu'« Enregistrer le brouillon », et la
+    // montée en proposition supposait de rouvrir le dossier. Les deux voies
+    // sont désormais offertes dès la création comme à la mise à jour.
+    //
+    // « Enregistrer en proposition » est masqué si le véhicule est
+    // contremarqué pour un autre client : le brouillon reste permis, la
+    // proposition non — c'est la règle posée le 11/08.
+    const lbl = ST.mode === 'create' ? 'Enregistrer le brouillon' : 'Enregistrer';
+    // Uniquement à la CRÉATION : sur un brouillon déjà enregistré, le bouton
+    // « Définir comme proposition » (extra, ci-dessus) fait déjà exactement
+    // cela. Afficher les deux donnerait deux libellés différents pour la même
+    // action — repéré en simulant les combinaisons avant livraison.
+    const btnPropale = (ST.mode === 'create' && !ST.cmBloquante)
+      ? `<button class="pv-btn pv-btn-blue" data-act="save-propale"${ST.saving?' disabled':''}>Enregistrer en proposition</button>`
+      : '';
     return `${warn}<button class="pv-btn pv-btn-primary" data-act="save"${ST.saving?' disabled':''}>${lbl}</button>
+            ${btnPropale}
             ${extra}
             <button class="pv-btn pv-btn-ghost" data-act="annuler">Annuler</button>`;
   }
@@ -768,8 +991,29 @@ OD.define('propale-vo', {
     } catch(e) { return null; }
   }
 
+  // La date de livraison est OBLIGATOIRE pour une proposition, pas pour un
+  // brouillon (arbitrage d'Antoine du 25/08/2026). Un brouillon sert
+  // justement à travailler un dossier avant d'avoir tous les éléments ;
+  // l'exiger dès l'enregistrement empêcherait de sauvegarder une discussion
+  // en cours.
+  //
+  // Les intentions qui produisent une PROPOSITION : 'save-propale' (nouveau
+  // bouton) et 'promote' depuis un brouillon.
+  function manqueDateLivraison(intent) {
+    const versPropale = (intent === 'save-propale')
+      || (intent === 'promote' && ST.P.status === 'draft');
+    if (!versPropale) return false;
+    return !ST.P.DateLivraison;
+  }
+
   async function doSave(root, intent) {
     if (ST.saving) return;
+    if (manqueDateLivraison(intent)) {
+      toast(root, 'Date de livraison obligatoire pour une proposition');
+      const champ = root.querySelector('input[data-key="DateLivraison"]');
+      if (champ) { try { champ.focus(); champ.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (e) {} }
+      return;
+    }
     ST.saving = true; refreshTotals(root);
     const sb = supa();
     try {
@@ -794,7 +1038,18 @@ OD.define('propale-vo', {
         console.log('[propaleVO] INSERT OK, id =', newId);
         ST.P.id_propale_bdc = newId; ST.mode = 'update'; ST.P.status = 'draft';
         setVar(VAR_ID_PROPALE, newId);
-        toast(root, 'Brouillon créé ✓');
+        // Le dossier est TOUJOURS créé en brouillon : c'est move_propale qui
+        // porte la matrice de transitions, les contrôles de périmètre et la
+        // pose de contremarque. On ne fabrique jamais un statut 'propale'
+        // directement par insert — ce serait contourner tous ces garde-fous.
+        if (intent === 'save-propale') {
+          const { error: e2 } = await sb.rpc('move_propale', { p_id: newId, p_target_state: 'propale', p_payload: {} });
+          if (e2) throw e2;
+          ST.P.status = 'propale';
+          toast(root, 'Proposition créée ✓');
+        } else {
+          toast(root, 'Brouillon créé ✓');
+        }
         setTimeout(() => goPipe(), 1200);
 
       } else {
@@ -814,7 +1069,7 @@ OD.define('propale-vo', {
           const { error } = await sb.from('PROPALE_BDC').update(upd).eq('id_propale_bdc', id);
           if (error) { console.error('[propaleVO] UPDATE error', error); throw error; }
           console.log('[propaleVO] UPDATE OK');
-          if (intent === 'promote' && ST.P.status === 'draft') {
+          if ((intent === 'promote' || intent === 'save-propale') && ST.P.status === 'draft') {
             const { error: e2 } = await sb.rpc('move_propale', { p_id: id, p_target_state: 'propale', p_payload: {} });
             if (e2) throw e2;
             ST.P.status = 'propale';
