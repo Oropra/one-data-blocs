@@ -535,7 +535,16 @@ OD.define('admin', {
    *  Un manager n'est proposé que si son rang est STRICTEMENT supérieur au
    *  rôle qu'on attribue : un vendeur n'apparaît donc jamais comme N+1.
    * ==================================================================== */
-  var ROLE_RANK = { 4: 0, 3: 1, 2: 2, 6: 3, 7: 4, 8: 5, 1: 6 };
+  // 9 = secrétaire commerciale, ajouté le 25/08/2026. Même rang qu'un vendeur :
+  // elle est rattachée au chef des ventes de chacun de ses sites et n'encadre
+  // personne, donc elle ne doit jamais apparaître comme N+1 (la sélection des
+  // managers exige un rang STRICTEMENT supérieur).
+  //
+  // ⚠️ Sans cette entrée, roleRank retombait sur RANK_BY_LABEL et le motif
+  // /vendeur|commercial|conseiller/ capturait « Secrétaire COMMERCIALE » — le
+  // bon rang, mais par accident : renommer le rôle aurait tout cassé en
+  // silence. On l'inscrit donc explicitement.
+  var ROLE_RANK = { 4: 0, 9: 0, 3: 1, 2: 2, 6: 3, 7: 4, 8: 5, 1: 6 };
   var RANK_BY_LABEL = [
     [/vendeur|commercial|conseiller/i, 0],
     [/chef\s*(des)?\s*vente/i, 1],
