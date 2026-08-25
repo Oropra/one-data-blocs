@@ -49,7 +49,19 @@ OD.define('agenda', {
     timeZone: 'Europe/Paris',
     initialView: 'timeGridWeek',
     hideLinkedRpv: true,
-    colors: { bilat: '#53bda7', rdvRelance: '#9aa3ad', rdvPhone: '#f0a93b', rdvDefault: '#2a5ea9', rpv: '#7e57c2', livraison: '#e2732a' },
+    // Univers couleur arrêté le 25/08/2026, indexé par FAMILLE d'événement —
+    // et non par type de RDV. C'est ce qui garantit qu'un chip et l'événement
+    // qu'il filtre portent forcément la même teinte : ils lisent la même clé.
+    // Avant, le chip « RDV client » tirait rdvDefault (bleu) alors que les
+    // types 5 et 10 étaient rendus en rdvPhone (orange) — deux sources qui
+    // pouvaient diverger sans que rien ne le signale.
+    colors: {
+      client:    '#e8833a',   // RDV client : orange
+      relance:   '#9aa3ad',   // relances : gris
+      bilat:     '#7e57c2',   // bilatérales : violet
+      livraison: '#53bda7',   // livraisons : vert
+      creneau:   '#2a5ea9',   // créneaux : bleu
+    },
   };
 
   // --- accès WeWeb / Supabase -------------------------------------------------
@@ -96,17 +108,11 @@ OD.define('agenda', {
   }
 
   // --- couleurs / mapping -----------------------------------------------------
+  // La couleur d'un événement découle de sa FAMILLE, exactement comme le chip
+  // qui le filtre. Une seule décision, donc aucune divergence possible entre
+  // la légende et le calendrier.
   function strongColor(e) {
-    if (e.source_type === 'bilat') return CFG.colors.bilat;
-    if (e.source_type === 'rpv')   return CFG.colors.rpv;
-    const t = String(e.id_rdv_type ?? e.extra?.ID_Rdv_Type ?? '');
-    // 4 = Livraison. Couleur propre (25/08/2026) : c'est le seul rendez-vous
-    // qui conclut une vente, il doit se repérer d'un coup d'œil dans la
-    // semaine — et c'est lui que la secrétaire commerciale vient chercher.
-    if (t === '4')               return CFG.colors.livraison;
-    if (t === '6')               return CFG.colors.rdvRelance;
-    if (t === '5' || t === '10') return CFG.colors.rdvPhone;
-    return CFG.colors.rdvDefault;
+    return CFG.colors[familleEvt(e)] || CFG.colors.creneau;
   }
   function tint(hex, a) { const h = hex.replace('#', ''); const n = parseInt(h, 16); return 'rgba(' + ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + a + ')'; }
   const toFc = (ts) => (ts ? String(ts).replace(' ', 'T') : null);
@@ -404,12 +410,16 @@ OD.define('agenda', {
      sans être un rendez-vous client. Si la répartition ne convient pas,
      c'est ICI qu'elle se change — un seul endroit.
   ======================================================================== */
+  // La couleur n'est PAS déclarée ici : elle est lue dans CFG.colors par la
+  // clé de famille, la même que celle qu'utilise strongColor. Redéclarer une
+  // teinte à cet endroit rouvrirait la porte à la divergence qu'on vient de
+  // fermer.
   const TYPES_EVT = [
-    { cle: 'client',    label: 'RDV client',   couleur: () => CFG.colors.rdvDefault },
-    { cle: 'relance',   label: 'Relances',     couleur: () => CFG.colors.rdvRelance },
-    { cle: 'bilat',     label: 'Bilatérales',  couleur: () => CFG.colors.bilat },
-    { cle: 'livraison', label: 'Livraisons',   couleur: () => CFG.colors.livraison },
-    { cle: 'creneau',   label: 'Créneaux',     couleur: () => CFG.colors.rpv },
+    { cle: 'client',    label: 'RDV client'  },
+    { cle: 'relance',   label: 'Relances'    },
+    { cle: 'bilat',     label: 'Bilatérales' },
+    { cle: 'livraison', label: 'Livraisons'  },
+    { cle: 'creneau',   label: 'Créneaux'    },
   ];
   // Tout est affiché par défaut : un filtre qui masque à l'insu de
   // l'utilisateur est pire que pas de filtre du tout.
@@ -430,7 +440,7 @@ OD.define('agenda', {
     if (!host) return;
     host.innerHTML = TYPES_EVT.map(ty => {
       const on = typesActifs.indexOf(ty.cle) >= 0;
-      const c = ty.couleur();
+      const c = CFG.colors[ty.cle];
       return '<button type="button" class="agf-chip' + (on ? ' is-on' : '') + '" data-cle="' + ty.cle + '"' +
         ' style="' + (on ? 'border-color:' + c + ';background:' + tint(c, 0.12) + ';color:' + c : '') + '">' +
         '<i style="background:' + c + '"></i>' + esc(ty.label) + '</button>';
