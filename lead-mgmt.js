@@ -262,6 +262,9 @@ const LM_SLA_CSS = `
 #lead-mgmt-root .lmf-note { font-size:11px; color:var(--text-mut); margin-top:14px; padding-top:10px; border-top:1px solid var(--border); }
 #lead-mgmt-root .lmf-vend { display:flex; justify-content:space-between; align-items:center; padding:10px 14px; border:1px solid var(--border); background:var(--card); margin-bottom:6px; border-radius:6px; }
 #lead-mgmt-root .lmf-vend-n { font-size:16px; font-weight:700; font-variant-numeric:tabular-nums; }
+#lead-mgmt-root .lm-spin { display:inline-block; width:12px; height:12px; margin-right:8px; vertical-align:-1px;
+  border:2px solid #dfe6f0; border-top-color:#2a5ea9; border-radius:50%; animation:lm-spin .7s linear infinite; }
+@keyframes lm-spin { to { transform:rotate(360deg); } }
 `;
 
 // --- 3. Style (injection forcée) ----------------------------
@@ -985,7 +988,11 @@ async function fetchEntonnoir() {
   const key = b.from + '_' + b.to + '_u' + (c.id_user == null ? '-' : c.id_user) +
               '_s' + (c.sites ? c.sites.join('.') : '-');
   if (state.entLoading) return;
-  if (state.entKey === key && state.entData !== null) return;
+  // ⚠️ Tester `entData !== null` NE SUFFIT PAS : apres un echec, entData
+  //    reste null, le cache ne prend JAMAIS et la RPC repart a chaque
+  //    rendu — or fetchEntonnoir se termine par renderAll(), donc chaque
+  //    rendu en declenche un autre. On memorise aussi la cle ECHOUEE.
+  if (state.entKey === key && (state.entData !== null || state.entError)) return;
 
   state.entLoading = true;
   state.entError = null;
@@ -2056,7 +2063,16 @@ function renderActifsByCampagne(rows) {
   return html;
 }
 
+// Un ecran qui dit « aucun cycle » pendant qu'il charge est deroutant :
+// il affirme une absence alors qu'il n'a pas encore la reponse (releve par
+// Antoine le 27/08). Tant que les cycles ne sont pas la, on le DIT.
+function lmAttenteCycles(quoi) {
+  return '<div class="lm-empty" style="padding:34px;font-size:12px;color:var(--text-mut)">'
+       + '<span class="lm-spin"></span>Chargement ' + (quoi || 'des cycles') + '…</div>';
+}
+
 function renderViewActifs() {
+  if (state.cyclesLoading && !dataActifs.length) return lmAttenteCycles('des cycles');
   const rows = filteredActifs();
   const kpi = computeKpi(rows);
   const counts = countBySource(dataActifs, true);
@@ -2136,6 +2152,7 @@ function renderKanbanCard(c) {
   return '<div class="lm-kcard" data-action="open-fiche-cycle" data-client="' + escapeHtml(idClient) + '" data-cycle-id="' + c.id_cycle_com + '" title="Ouvrir le cycle client"><div class="lm-kcard-client">' + escapeHtml(clientFull || 'Prospect') + '</div><div class="lm-kcard-meta">' + meta + '</div>' + (badges ? '<div class="lm-kcard-badges">' + badges + '</div>' : '') + '</div>';
 }
 function renderViewKanban() {
+  if (state.cyclesLoading && !dataKanban.length) return lmAttenteCycles('du pipeline');
   const rows = filteredKanban();
   const counts = countBySource(dataKanban, true);
   let html = '';
@@ -2800,6 +2817,7 @@ function lmAttenteKpi() {
 }
 
 function renderAll() {
+  const __tDebutRender = performance.now();
   let html = '';
   if (isManager) {
     // « Ma file » EN PREMIER, meme pour un manager : un chef vend aussi,
@@ -2845,8 +2863,25 @@ function renderAll() {
     }
     else                                html += renderViewActifs();
   }
+  const __tInject = performance.now();
   root.innerHTML = html;
+  const __tBind = performance.now();
   bindEvents();
+  const __tFin = performance.now();
+
+  // Instrumentation : le reseau etant desormais propre (une requete par
+  // onglet, rien de rejoue), toute lenteur restante vient du RENDU. On la
+  // mesure au lieu de la deviner. Silencieux sous 150 ms.
+  const __total = __tFin - __tDebutRender;
+  if (__total > 150) {
+    console.warn('[leadMgmt] rendu lent : ' + Math.round(__total) + ' ms'
+      + ' — html ' + Math.round(__tInject - __tDebutRender) + ' ms'
+      + ', innerHTML ' + Math.round(__tBind - __tInject) + ' ms'
+      + ', bindEvents ' + Math.round(__tFin - __tBind) + ' ms'
+      + ' | vue=' + (isManager ? state.section : state.view)
+      + ', ' + html.length + ' caracteres');
+  }
+
   // Les graphes n'existent que dans la synthese d'equipe : ne pas les
   // dessiner en mode focalise, leur canvas n'est pas rendu.
   if (state.section === 'synthese') {
