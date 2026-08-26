@@ -355,6 +355,132 @@ const LM_ROLE_CSS = `
   padding:11px 15px; border-radius:0 5px 5px 0; font-size:12px; color:#7a5a12; margin:16px 0 0; }
 `;
 
+const LM_V2_CSS = `
+/* --- Fil de périmètre ------------------------------------- */
+#lead-mgmt-root .v2-fil { display:flex; align-items:center; gap:6px; flex-wrap:wrap;
+  background:var(--card); border:1px solid var(--border); border-radius:10px;
+  padding:8px 12px; margin-bottom:14px; }
+#lead-mgmt-root .v2-fil-l { font-size:10px; text-transform:uppercase; letter-spacing:.07em;
+  color:var(--text-mut); font-weight:700; margin-right:2px; }
+#lead-mgmt-root .v2-fil button { background:none; border:none; color:var(--blue); padding:5px 9px;
+  border-radius:5px; font-size:12px; font-weight:600; font-family:inherit; cursor:pointer; }
+#lead-mgmt-root .v2-fil button:hover { background:var(--blue-bg); }
+#lead-mgmt-root .v2-fil .v2-sep { color:var(--text-mut); font-size:12px; }
+#lead-mgmt-root .v2-fil .v2-ici { background:var(--blue); color:#fff; padding:5px 11px;
+  border-radius:5px; font-size:12px; font-weight:600; }
+#lead-mgmt-root .v2-per { margin-left:auto; display:flex; align-items:center; gap:6px; }
+
+/* --- Bascule ---------------------------------------------- */
+#lead-mgmt-root .v2-vues { display:inline-flex; gap:3px; background:var(--blue-bg);
+  border:1px solid var(--border); border-radius:7px; padding:3px; margin-bottom:14px; }
+#lead-mgmt-root .v2-vues button { background:none; border:none; padding:7px 16px; font-size:12.5px;
+  font-weight:600; color:var(--text-soft); border-radius:5px; font-family:inherit; cursor:pointer; }
+#lead-mgmt-root .v2-vues button:hover { color:var(--blue-dk); }
+#lead-mgmt-root .v2-vues button.on { background:var(--card); color:var(--blue-dk);
+  box-shadow:0 1px 3px rgba(28,43,61,.14); }
+
+/* --- Bandeau : une phrase, pas des cartes ----------------- */
+#lead-mgmt-root .v2-tete { margin:2px 0 20px; font-size:14.5px; line-height:1.65; }
+#lead-mgmt-root .v2-tete b { font-size:28px; font-weight:700; font-variant-numeric:tabular-nums;
+  vertical-align:-3px; letter-spacing:-.02em; }
+#lead-mgmt-root .v2-tete b.ko { color:var(--red-soft); }
+#lead-mgmt-root .v2-tete b.ok { color:var(--green); }
+#lead-mgmt-root .v2-tete .q { color:var(--text-soft); }
+
+/* --- LE MUR : des pastilles, pas des aplats --------------- */
+#lead-mgmt-root .v2-mur { background:var(--card); border:1px solid var(--border);
+  border-radius:12px; padding:4px 0 0; overflow-x:auto; }
+#lead-mgmt-root .v2-mur-h { display:grid; padding:0 6px 8px 0; min-width:620px; }
+#lead-mgmt-root .v2-mur-h div { padding:10px 6px 6px; font-size:9.5px; text-transform:uppercase;
+  letter-spacing:.07em; color:var(--text-mut); font-weight:600; text-align:center; }
+#lead-mgmt-root .v2-mur-h div:first-child { text-align:left; padding-left:18px; }
+#lead-mgmt-root .v2-mur-r { display:grid; align-items:center; padding:0 6px 0 0;
+  position:relative; min-width:620px; }
+#lead-mgmt-root .v2-mur-r::after { content:''; position:absolute; left:18px; right:12px; bottom:0;
+  height:1px; background:#f0f4f9; }
+#lead-mgmt-root .v2-mur-r:last-child::after { display:none; }
+#lead-mgmt-root .v2-mur-n { padding:9px 8px 9px 18px; display:flex; flex-direction:column;
+  justify-content:center; cursor:pointer; min-width:0; }
+#lead-mgmt-root .v2-mur-n b { font-size:13px; font-weight:600; white-space:nowrap;
+  overflow:hidden; text-overflow:ellipsis; }
+#lead-mgmt-root .v2-mur-n:hover b { color:var(--blue); }
+#lead-mgmt-root .v2-mur-n i { font-style:normal; font-size:10.5px; color:var(--text-mut);
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:1px; }
+#lead-mgmt-root .v2-cell { display:flex; align-items:center; justify-content:center;
+  cursor:pointer; min-height:44px; }
+#lead-mgmt-root .v2-pas { border-radius:50%; display:flex; align-items:center;
+  justify-content:center; font-size:12px; font-weight:600; font-variant-numeric:tabular-nums;
+  transition:transform .13s cubic-bezier(.34,1.4,.64,1); line-height:1; }
+#lead-mgmt-root .v2-cell:hover .v2-pas { transform:scale(1.14); }
+#lead-mgmt-root .v2-cell.vide { cursor:default; }
+#lead-mgmt-root .v2-cell.vide::after { content:''; width:3px; height:3px; border-radius:50%;
+  background:#e3eaf3; }
+#lead-mgmt-root .v2-leg { display:flex; align-items:center; gap:16px; flex-wrap:wrap;
+  margin-top:12px; font-size:11px; color:var(--text-mut); }
+#lead-mgmt-root .v2-leg i { display:inline-block; width:9px; height:9px; border-radius:50%;
+  vertical-align:-1px; margin-right:6px; }
+
+/* --- Campagnes : DEUX PAR LIGNE --------------------------- */
+#lead-mgmt-root .v2-grid2 { display:grid; grid-template-columns:1fr 1fr; gap:14px;
+  align-items:start; }
+@media (max-width:900px) { #lead-mgmt-root .v2-grid2 { grid-template-columns:1fr; } }
+#lead-mgmt-root.lm-narrow .v2-grid2 { grid-template-columns:1fr; }
+#lead-mgmt-root .v2-flux { background:var(--card); border:1px solid var(--border);
+  border-radius:12px; padding:16px 18px; }
+#lead-mgmt-root .v2-flux-t { display:flex; justify-content:space-between; align-items:baseline;
+  gap:10px; flex-wrap:wrap; margin-bottom:14px; }
+#lead-mgmt-root .v2-flux-t h3 { font-size:10px; text-transform:uppercase; letter-spacing:.07em;
+  color:var(--text-mut); font-weight:600; margin:0; }
+#lead-mgmt-root .v2-r { display:grid; grid-template-columns:1fr 78px; gap:10px;
+  align-items:center; padding:7px 0; }
+#lead-mgmt-root .v2-r + .v2-r { border-top:1px solid #f4f7fb; }
+#lead-mgmt-root .v2-n b { font-size:12.5px; display:block; letter-spacing:-.01em; }
+#lead-mgmt-root .v2-n i { font-style:normal; font-size:10.5px; color:var(--text-mut);
+  margin-top:1px; display:block; }
+/* Barre PLUS ÉPAISSE : elle porte sa propre légende, donc elle doit
+   pouvoir accueillir un chiffre lisible. 18 px suffisent. */
+#lead-mgmt-root .v2-b { display:flex; align-items:center; height:18px; border-radius:4px;
+  overflow:hidden; background:#f0f4f9; margin-top:5px; }
+#lead-mgmt-root .v2-seg { height:18px; display:flex; align-items:center; justify-content:center;
+  font-size:10px; font-weight:700; color:#fff; overflow:hidden; white-space:nowrap;
+  font-variant-numeric:tabular-nums; }
+#lead-mgmt-root .v2-s1 { background:var(--blue-line); color:var(--blue-dk); }
+#lead-mgmt-root .v2-s2 { background:#53bda7; }
+#lead-mgmt-root .v2-s3 { background:#e8eef6; color:var(--text-soft); }
+#lead-mgmt-root .v2-s4 { background:#8fc9bb; }
+#lead-mgmt-root .v2-sko { background:#eab3b3; color:#7a2020; }
+#lead-mgmt-root .v2-v { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+#lead-mgmt-root .v2-v b { font-size:14px; font-weight:700; }
+#lead-mgmt-root .v2-v i { font-style:normal; font-size:10.5px; color:var(--text-mut);
+  display:block; margin-top:1px; }
+#lead-mgmt-root .v2-tot { display:grid; grid-template-columns:1fr 78px; gap:10px;
+  align-items:center; padding:11px 0 0; margin-top:6px; border-top:1.5px solid var(--blue-line); }
+#lead-mgmt-root .v2-lg { display:flex; gap:12px; flex-wrap:wrap; margin-top:12px; padding-top:10px;
+  border-top:1px solid #f0f4f9; font-size:10.5px; color:var(--text-mut); }
+#lead-mgmt-root .v2-lg i { display:inline-block; width:9px; height:9px; border-radius:3px;
+  vertical-align:-1px; margin-right:5px; }
+
+/* --- Rapport croisé --------------------------------------- */
+#lead-mgmt-root .v2-rep { background:var(--card); border:1px solid var(--border);
+  border-radius:12px; overflow-x:auto; }
+#lead-mgmt-root .v2-rep table { width:100%; border-collapse:collapse; min-width:840px; }
+#lead-mgmt-root .v2-rep th { text-align:right; font-size:10px; text-transform:uppercase;
+  letter-spacing:.05em; color:var(--text-mut); font-weight:700; padding:10px 12px;
+  background:var(--blue-bg); border-bottom:1px solid var(--border); white-space:nowrap; }
+#lead-mgmt-root .v2-rep th:first-child { text-align:left; }
+#lead-mgmt-root .v2-rep td { padding:12px 13px; border-bottom:1px solid #f4f7fb; font-size:13px;
+  text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+#lead-mgmt-root .v2-rep td:first-child { text-align:left; }
+#lead-mgmt-root .v2-rep tbody tr { cursor:pointer; }
+#lead-mgmt-root .v2-rep tbody tr:hover { background:var(--blue-bg); }
+#lead-mgmt-root .v2-rep tfoot td { background:var(--blue-bg); font-weight:700;
+  border-top:2px solid var(--blue-line); }
+#lead-mgmt-root .v2-ok { color:var(--green); font-weight:700; }
+#lead-mgmt-root .v2-warn { color:#b8851a; font-weight:700; }
+#lead-mgmt-root .v2-ko { color:var(--red-soft); font-weight:700; }
+#lead-mgmt-root .v2-sous { font-size:11px; color:var(--text-mut); font-weight:400; }
+`;
+
 // --- 3. Style (injection forcée) ----------------------------
 const STYLE_ID = 'lead-mgmt-style';
 const existing = doc.getElementById(STYLE_ID);
@@ -715,6 +841,7 @@ styleEl.textContent = `
 
 ${LM_SLA_CSS}
 ${LM_ROLE_CSS}
+${LM_V2_CSS}
 `;
 doc.head.appendChild(styleEl);
 
@@ -929,6 +1056,8 @@ function applyPeriod(from, to) {
   if (!from || !to) return;
   if (from === state.period.from && to === state.period.to) return;
   state.period = { from, to };
+  // Les campagnes sont bornées par la période : on invalide leur cache.
+  campKey = null; dataCampagnes = null;
   reloadClassement();
   reloadGraphes();
   reloadCampagnes();
@@ -3150,6 +3279,480 @@ function renderVueSites() {
   return h;
 }
 
+// ============================================================
+//  REFONTE PAR RÔLE — le mur du temps, le fil de périmètre,
+//  la bascule et l'écran campagnes.        (27/08/2026)
+//
+//  UNE SEULE SURFACE, PAS D'ONGLETS DE PREMIER NIVEAU.
+//  Le périmètre est un FIL — marque › affaire › site › vendeur — repris
+//  de performances.js. Il ne filtre pas seulement : il change CE QUE LES
+//  LIGNES REPRÉSENTENT. Un directeur voit des marques, un chef des
+//  vendeurs, un vendeur ses sources. Même objet, plusieurs échelles.
+//
+//  Trois lectures d'un même périmètre, en bascule :
+//    « Où ça coince »      -> le mur du temps
+//    « Ce que ça produit » -> le rapport croisé
+//    « Campagnes »         -> avancement, résultat, classement
+//  Libellés IDENTIQUES pour tous les rôles : ce sont les mêmes trois
+//  questions, à des échelles différentes.
+// ============================================================
+
+
+
+// --- Tranches d'âge : l'axe du mur --------------------------
+// Le premier seuil est le SLA le plus court (15 min) ; au-delà de 4 h,
+// un lead de portail est mort.
+const V2_TRANCHES = [
+  { k:'t0', l:'< 15 min', max:15 },
+  { k:'t1', l:'15 – 30',  max:30 },
+  { k:'t2', l:'30 – 60',  max:60 },
+  { k:'t3', l:'1 – 4 h',  max:240 },
+  { k:'t4', l:'+ de 4 h', max:1e9 }
+];
+function v2Tranche(l) {
+  const a = Number(l.attente_min) || 0;
+  for (const t of V2_TRANCHES) if (a < t.max) return t.k;
+  return 't4';
+}
+
+/* La couleur dit l'URGENCE, jamais le volume — celui-ci est porté par le
+   diamètre. Un aplat saturé écrase la lecture : teinte claire, anneau fin. */
+function v2Couleur(lst) {
+  if (!lst.length) return null;
+  const ko = lst.filter(l => lmfNiveau(l) === 'ko').length / lst.length;
+  const wa = lst.filter(l => lmfNiveau(l) === 'warn').length / lst.length;
+  if (ko > .5)          return { bg:'#f7dcdc', fg:'#8f2222', ring:'#e0a3a3' };
+  if (ko > 0 || wa > .3) return { bg:'#fbeecd', fg:'#8a6412', ring:'#e0c98a' };
+  return { bg:'#daf0e9', fg:'#14614f', ring:'#9ed6c7' };
+}
+
+// --- Périmètre : l'état de navigation -----------------------
+// v2.niveau : groupe | marque | affaire | site | vendeur
+function v2Init() {
+  if (state.v2) return;
+  const p = PROFIL;
+  state.v2 = { vue:'mur', niveau:'groupe', cle:'', sel:null, lead:null };
+  if (p === 'vendeur')      { state.v2.niveau = 'vendeur'; state.v2.cle = userId; }
+  else if (p === 'chef')    {
+    const s = userSiteIds[0];
+    if (s != null) { state.v2.niveau = 'site'; state.v2.cle = Number(s); }
+  }
+}
+
+// Le référentiel des entités, construit depuis le périmètre réel.
+let v2Ref = null;
+function v2Referentiel() {
+  if (v2Ref) return v2Ref;
+  const sites = (dataSites || []).map(s => ({
+    id: Number(s.id_site), l: s.nom_site,
+    marque: s.reseau || '(Sans marque)', affaire: s.affaire || '(Sans affaire)',
+    vendeurs: s.vendeurs, obj: Number(s.objectif_commandes) || 0,
+    fait: Number(s.commandes_realisees) || 0, cycles: Number(s.cycles_ouverts) || 0,
+    incomplet: !!s.objectifs_incomplets, retard: Number(s.leads_en_retard) || 0,
+    delai: s.delai_moyen_min == null ? null : Number(s.delai_moyen_min),
+    cj: s.contacts_par_jour_ouvre == null ? null : Number(s.contacts_par_jour_ouvre)
+  }));
+  const marques = [], affaires = [];
+  sites.forEach(s => {
+    if (!marques.some(m => m.k === s.marque)) marques.push({ k:s.marque, l:s.marque });
+    if (!affaires.some(a => a.k === s.affaire)) affaires.push({ k:s.affaire, l:s.affaire, marque:s.marque });
+  });
+  v2Ref = { sites, marques, affaires };
+  return v2Ref;
+}
+
+function v2Sites() {
+  const R = v2Referentiel(), v = state.v2;
+  if (v.niveau === 'vendeur') {
+    const e = (dataEquipe || []).find(x => Number(x.id_user) === Number(v.cle));
+    return R.sites.filter(s => e && Number(s.id) === Number(e.id_site));
+  }
+  if (v.niveau === 'site')    return R.sites.filter(s => s.id === Number(v.cle));
+  if (v.niveau === 'affaire') return R.sites.filter(s => s.affaire === v.cle);
+  if (v.niveau === 'marque')  return R.sites.filter(s => s.marque === v.cle);
+  return R.sites;
+}
+
+function v2Leads() {
+  const v = state.v2, rows = state.mafileData || [];
+  if (v.niveau === 'vendeur') return rows.filter(l => Number(l.id_user_attribue) === Number(v.cle));
+  const ids = new Set(v2Sites().map(s => s.id));
+  return rows.filter(l => ids.has(Number(l.id_site)));
+}
+
+/* Les LIGNES du mur suivent la hiérarchie : chaque niveau montre ses
+   ENFANTS. Seul le vendeur, qui n'en a pas, montre ses SOURCES. */
+function v2Lignes() {
+  const R = v2Referentiel(), v = state.v2;
+  if (v.niveau === 'groupe') return R.marques.map(m => ({
+    k:m.k, l:m.l, type:'marque',
+    sous: R.sites.filter(s => s.marque === m.k).length + ' sites' }));
+  if (v.niveau === 'marque') return R.affaires.filter(a => a.marque === v.cle).map(a => ({
+    k:a.k, l:a.l, type:'affaire',
+    sous: R.sites.filter(s => s.affaire === a.k).length + ' sites' }));
+  if (v.niveau === 'affaire') return R.sites.filter(s => s.affaire === v.cle).map(s => ({
+    k:s.id, l:s.l, type:'site', sous:(s.vendeurs || 0) + ' vendeurs' }));
+  if (v.niveau === 'site') return (dataEquipe || [])
+    .filter(e => Number(e.id_site) === Number(v.cle))
+    .map(e => ({ k:Number(e.id_user), l:e.vendeur_nom, type:'vendeur',
+      sous:(e.vn_vo || '—') + ' · ' + (e.contacts_par_jour_ouvre != null
+        ? e.contacts_par_jour_ouvre + '/' + (e.objectif_contacts_jour || '?') + ' contacts/j' : '') }));
+  const par = {};
+  v2Leads().forEach(l => { const s = l.source_libelle || l.source || '?';
+    par[s] = (par[s] || 0) + 1; });
+  return Object.keys(par).map(s => ({ k:s, l:s, type:'source', sous:par[s] + ' leads' }));
+}
+
+function v2LeadsDe(ln) {
+  const base = v2Leads(), R = v2Referentiel();
+  if (ln.type === 'marque') {
+    const i = new Set(R.sites.filter(s => s.marque === ln.k).map(s => s.id));
+    return base.filter(l => i.has(Number(l.id_site)));
+  }
+  if (ln.type === 'affaire') {
+    const i = new Set(R.sites.filter(s => s.affaire === ln.k).map(s => s.id));
+    return base.filter(l => i.has(Number(l.id_site)));
+  }
+  if (ln.type === 'site')    return base.filter(l => Number(l.id_site) === Number(ln.k));
+  if (ln.type === 'vendeur') return base.filter(l => Number(l.id_user_attribue) === Number(ln.k));
+  return base.filter(l => (l.source_libelle || l.source) === ln.k);
+}
+
+// --- Le fil de périmètre ------------------------------------
+function v2Fil() {
+  const R = v2Referentiel(), v = state.v2, p = [];
+  let site = null;
+  if (v.niveau === 'site')    site = R.sites.find(s => s.id === Number(v.cle));
+  if (v.niveau === 'vendeur') {
+    const e = (dataEquipe || []).find(x => Number(x.id_user) === Number(v.cle));
+    if (e) site = R.sites.find(s => s.id === Number(e.id_site));
+  }
+  const aff = site ? R.affaires.find(a => a.k === site.affaire)
+            : v.niveau === 'affaire' ? R.affaires.find(a => a.k === v.cle) : null;
+  const mq  = aff ? R.marques.find(m => m.k === aff.marque)
+            : v.niveau === 'marque' ? R.marques.find(m => m.k === v.cle) : null;
+
+  p.push({ l:'Tout mon périmètre', n:'groupe', k:'', a:v.niveau !== 'groupe' });
+  if (mq)   p.push({ l:mq.l,   n:'marque',  k:mq.k,   a:v.niveau !== 'marque' });
+  if (aff)  p.push({ l:aff.l,  n:'affaire', k:aff.k,  a:v.niveau !== 'affaire' });
+  if (site) p.push({ l:site.l, n:'site',    k:site.id, a:v.niveau !== 'site' });
+  if (v.niveau === 'vendeur') {
+    const e = (dataEquipe || []).find(x => Number(x.id_user) === Number(v.cle));
+    p.push({ l:(e && e.vendeur_nom) || ('Vendeur ' + v.cle), n:'vendeur', k:v.cle, a:false });
+  }
+
+  let h = '<div class="v2-fil"><span class="v2-fil-l">Périmètre</span>';
+  h += p.map(x => x.a
+    ? '<button type="button" data-v2niv="' + x.n + '" data-v2cle="' + escapeHtml(String(x.k)) + '">'
+      + escapeHtml(x.l) + '</button>'
+    : '<span class="v2-ici">' + escapeHtml(x.l) + '</span>').join('<span class="v2-sep">›</span>');
+  // Le sélecteur de dates est CELUI DU MODULE (state.period, calendrier
+  // deux clics) : une seule mécanique de période dans toute la page.
+  h += '<span class="v2-per">' + renderPeriodBar() + '</span>';
+  h += '</div>';
+  return h;
+}
+
+// --- Le bandeau : une phrase, pas quatre cartes -------------
+function v2Bandeau() {
+  const L = v2Leads();
+  const ko = L.filter(l => lmfNiveau(l) === 'ko').length;
+  const wa = L.filter(l => lmfNiveau(l) === 'warn').length;
+  if (!L.length) return '<div class="v2-tete"><span class="q">Aucun lead en attente '
+    + 'sur ce périmètre.</span></div>';
+  if (!ko) return '<div class="v2-tete"><b class="ok">' + L.length + '</b> '
+    + '<span class="q">leads en cours, aucun hors délai. Le périmètre est à jour.</span></div>';
+  const pire = Math.max.apply(null, L.map(l => Number(l.attente_min) || 0));
+  return '<div class="v2-tete"><b class="ko">' + ko + '</b> <span class="q">leads ont dépassé '
+    + 'leur délai de réponse' + (wa ? ', ' + wa + ' sont sur le fil' : '')
+    + '. Le plus ancien attend depuis <b class="ko" style="font-size:16px">' + lmfDuree(pire)
+    + '</b>.</span></div>';
+}
+
+// --- LE MUR DU TEMPS ----------------------------------------
+function v2Mur() {
+  const lignes = v2Lignes();
+  if (!lignes.length) return '<div class="lm-empty" style="padding:34px;font-size:12px">'
+    + 'Aucune entité sur ce périmètre.</div>';
+  const libCol = { groupe:'Marque', marque:'Affaire', affaire:'Site', site:'Vendeur' }[state.v2.niveau]
+              || 'Source';
+  const g = 'grid-template-columns:minmax(150px,1.5fr) repeat(' + V2_TRANCHES.length + ',1fr)';
+  let h = '<div class="v2-mur"><div class="v2-mur-h" style="' + g + '"><div>' + libCol + '</div>'
+        + V2_TRANCHES.map(t => '<div>' + t.l + '</div>').join('') + '</div>';
+  lignes.forEach(ln => {
+    const L = v2LeadsDe(ln);
+    h += '<div class="v2-mur-r" style="' + g + '">';
+    h += '<div class="v2-mur-n" data-v2ligne="' + escapeHtml(String(ln.k)) + '" '
+       + 'data-v2type="' + ln.type + '"><b>' + escapeHtml(ln.l || '—') + '</b>'
+       + '<i>' + escapeHtml(ln.sous || '') + '</i></div>';
+    V2_TRANCHES.forEach(t => {
+      const lst = L.filter(l => v2Tranche(l) === t.k);
+      if (!lst.length) { h += '<div class="v2-cell vide"></div>'; return; }
+      const c = v2Couleur(lst);
+      // Diamètre : RACINE du volume. L'œil compare des surfaces, donc
+      // 9 leads ne doivent pas faire neuf fois la taille de 1.
+      const d = Math.round(20 + Math.sqrt(lst.length) * 7);
+      h += '<div class="v2-cell" data-v2cell="' + escapeHtml(String(ln.k)) + '|' + t.k + '">'
+        + '<span class="v2-pas" style="width:' + d + 'px;height:' + d + 'px;background:' + c.bg
+        + ';color:' + c.fg + ';box-shadow:inset 0 0 0 1.5px ' + c.ring + '">' + lst.length
+        + '</span></div>';
+    });
+    h += '</div>';
+  });
+  h += '</div>';
+  h += '<div class="v2-leg">'
+    + '<span><i style="background:#daf0e9;box-shadow:inset 0 0 0 1.5px #9ed6c7"></i>dans les temps</span>'
+    + '<span><i style="background:#fbeecd;box-shadow:inset 0 0 0 1.5px #e0c98a"></i>sur le fil</span>'
+    + '<span><i style="background:#f7dcdc;box-shadow:inset 0 0 0 1.5px #e0a3a3"></i>délai dépassé</span>'
+    + '<span style="margin-left:auto;color:#c3cfdd">Chaque colonne est un ÂGE, pas un statut. '
+    + 'Le diamètre porte le volume, la teinte l\'urgence.</span></div>';
+  return h;
+}
+
+// --- LE RAPPORT CROISÉ --------------------------------------
+// Le mur montre OÙ ça coince maintenant ; le rapport montre CE QUE ça
+// produit. Même périmètre, d'où une bascule et non un onglet.
+function v2Rapport() {
+  const lignes = v2Lignes();
+  if (!lignes.length) return '<div class="lm-empty" style="padding:34px;font-size:12px">'
+    + 'Aucune entité sur ce périmètre.</div>';
+  const R = v2Referentiel();
+  const libCol = { groupe:'Marque', marque:'Affaire', affaire:'Site', site:'Vendeur' }[state.v2.niveau]
+              || 'Source';
+  const camp = dataCampagnes || [];
+
+  let h = '<div class="v2-rep"><table><thead><tr>'
+    + '<th>' + libCol + '</th><th>Leads reçus</th><th>En retard</th><th>Attente moyenne</th>'
+    + '<th>Sollicitations</th><th>À relancer</th><th>Commandes</th><th>Conversion</th>'
+    + '</tr></thead><tbody>';
+  const T = { l:0, r:0, s:0, ar:0, c:0, o:0 };
+
+  lignes.forEach(ln => {
+    const L = v2LeadsDe(ln);
+    const r = L.filter(x => lmfNiveau(x) === 'ko').length;
+    const dl = L.length
+      ? Math.round(L.reduce((a, x) => a + (Number(x.attente_min) || 0), 0) / L.length) : null;
+
+    let ss = [];
+    if (ln.type === 'marque')       ss = R.sites.filter(s => s.marque === ln.k);
+    else if (ln.type === 'affaire') ss = R.sites.filter(s => s.affaire === ln.k);
+    else if (ln.type === 'site')    ss = R.sites.filter(s => s.id === Number(ln.k));
+
+    // Au niveau SOURCE (vue vendeur), il n'existe ni objectif ni
+    // sollicitation rattachés : on laisse les colonnes vides plutôt que
+    // d'afficher des zéros qui passeraient pour des résultats.
+    if (ln.type === 'source') {
+      h += '<tr><td><b>' + escapeHtml(ln.l) + '</b><div class="v2-sous">'
+        + escapeHtml(ln.sous) + '</div></td>'
+        + '<td>' + (L.length || '<span class="v2-sous">—</span>') + '</td>'
+        + '<td>' + (r ? '<span class="v2-ko">' + r + '</span>' : '<span class="v2-sous">—</span>') + '</td>'
+        + '<td>' + (dl == null ? '<span class="v2-sous">—</span>'
+            : '<span class="v2-' + (dl > 60 ? 'ko' : dl > 25 ? 'warn' : 'ok') + '">'
+              + lmfDuree(dl) + '</span>') + '</td>'
+        + '<td class="v2-sous">—</td><td class="v2-sous">—</td>'
+        + '<td class="v2-sous">—</td><td class="v2-sous">—</td></tr>';
+      T.l += L.length; T.r += r;
+      return;
+    }
+
+    const ids = ss.map(s => s.id);
+    let so = 0, tr = 0;
+    (dataCampParVendeur || []).forEach(v => {
+      if (ln.type === 'vendeur' ? Number(v.id_user) === Number(ln.k)
+                                : ids.indexOf(Number(v.id_site)) >= 0) {
+        so += Number(v.nb_cibles) || 0; tr += Number(v.nb_traitees) || 0;
+      }
+    });
+    const ar = so - tr;
+
+    let cmd = 0, obj = 0;
+    if (ln.type === 'vendeur') {
+      const e = (dataEquipe || []).find(x => Number(x.id_user) === Number(ln.k)) || {};
+      cmd = Number(e.commandes_realisees) || 0; obj = Number(e.objectif_commandes) || 0;
+    } else {
+      ss.forEach(s => { cmd += s.fait; obj += s.obj; });
+    }
+    // La conversion rapporte les commandes à TOUT ce qui a été mis
+    // devant le vendeur — leads ET sollicitations. C'est le seul
+    // dénominateur qui ne flatte personne.
+    const cv = (L.length + so) ? Math.round(cmd / (L.length + so) * 100) : null;
+    T.l += L.length; T.r += r; T.s += so; T.ar += ar; T.c += cmd; T.o += obj;
+
+    h += '<tr data-v2ligne="' + escapeHtml(String(ln.k)) + '" data-v2type="' + ln.type + '">'
+      + '<td><b>' + escapeHtml(ln.l || '—') + '</b><div class="v2-sous">'
+        + escapeHtml(ln.sous || '') + '</div></td>'
+      + '<td>' + (L.length || '<span class="v2-sous">—</span>') + '</td>'
+      + '<td>' + (r ? '<span class="v2-ko">' + r + '</span>' : '<span class="v2-sous">—</span>') + '</td>'
+      + '<td>' + (dl == null ? '<span class="v2-sous">—</span>'
+          : '<span class="v2-' + (dl > 60 ? 'ko' : dl > 25 ? 'warn' : 'ok') + '">'
+            + lmfDuree(dl) + '</span>') + '</td>'
+      + '<td>' + (so || '<span class="v2-sous">—</span>') + '</td>'
+      + '<td>' + (ar ? '<span class="v2-' + (ar > 20 ? 'ko' : 'warn') + '">' + ar + '</span>'
+          : '<span class="v2-sous">—</span>') + '</td>'
+      + '<td>' + cmd + '<span class="v2-sous"> / ' + obj + '</span></td>'
+      + '<td>' + (cv == null ? '<span class="v2-sous">—</span>'
+          : '<span class="v2-' + (cv >= 40 ? 'ok' : cv >= 25 ? 'warn' : 'ko') + '">'
+            + cv + ' %</span>') + '</td></tr>';
+  });
+
+  const cvT = (T.l + T.s) ? Math.round(T.c / (T.l + T.s) * 100) : 0;
+  h += '</tbody><tfoot><tr><td>Total</td><td>' + T.l + '</td>'
+    + '<td' + (T.r ? ' class="v2-ko"' : '') + '>' + T.r + '</td><td>—</td>'
+    + '<td>' + T.s + '</td><td' + (T.ar ? ' class="v2-ko"' : '') + '>' + T.ar + '</td>'
+    + '<td>' + T.c + '<span class="v2-sous"> / ' + T.o + '</span></td>'
+    + '<td>' + cvT + ' %</td></tr></tfoot></table></div>';
+  h += '<div class="lmf-note">La <b>conversion</b> rapporte les commandes à TOUT ce qui a été mis '
+    + 'devant le vendeur — leads entrants ET sollicitations sortantes. C\'est le seul dénominateur '
+    + 'qui ne flatte personne : traiter peu de sollicitations remonte artificiellement un taux '
+    + 'calculé sur les seuls leads. Cliquez une ligne pour descendre.</div>';
+  return h;
+}
+
+// --- LES CAMPAGNES : deux tableaux par ligne ----------------
+function v2Campagnes() {
+  if (!dataCampagnes) return '<div class="lm-empty" style="padding:34px;font-size:12px">'
+    + '<span class="lm-spin"></span>Chargement des campagnes…</div>';
+  const R = v2Referentiel();
+  const ids = v2Sites().map(s => s.id);
+  const parV = (dataCampParVendeur || []).filter(v => ids.indexOf(Number(v.id_site)) >= 0);
+  const camp = dataCampagnes || [];
+  if (!camp.length) return '<div class="lm-empty" style="padding:34px;font-size:12px">'
+    + 'Aucune campagne sur ce périmètre et cette période.</div>';
+
+  const teinte = p => p >= 95 ? 'var(--green)' : p >= 80 ? '#b8851a' : 'var(--red-soft)';
+  const pct = (a, b) => b ? Math.round(a / b * 100) : 0;
+
+  // Les totaux d'avancement, sur le périmètre courant.
+  const G = parV.reduce((a, v) => ({ c:a.c + (+v.nb_cibles || 0), t:a.t + (+v.nb_traitees || 0) }),
+    { c:0, t:0 });
+  const gp = pct(G.t, G.c);
+
+  let h = '<div class="v2-grid2">';
+
+  // --- 1. AVANCEMENT ---------------------------------------
+  h += '<div class="v2-flux"><div class="v2-flux-t"><h3>Avancement</h3>'
+     + '<div style="font-size:12px;color:var(--text-soft)"><b style="font-size:20px;'
+     + 'font-weight:700;font-variant-numeric:tabular-nums;color:' + teinte(gp) + '">' + gp + ' %</b>'
+     + ' traité · ' + G.t + ' / ' + G.c + '</div></div>';
+  camp.forEach(c => {
+    const ci = Number(c.nb_sollicitations) || 0, tr = Number(c.nb_traitees) || 0;
+    const p = pct(tr, ci), r = ci - tr;
+    h += '<div class="v2-r"><div class="v2-n"><b>' + escapeHtml(c.campagne) + '</b>'
+      + '<i>' + ci + ' sollicitations'
+      + (c.delai_median_h != null ? ' · 1er contact en ' + Math.round(c.delai_median_h) + ' h' : '')
+      + '</i>'
+      // La barre porte SA PROPRE LÉGENDE : plus besoin de chercher le
+      // chiffre ailleurs, il est dans le segment qu'il décrit.
+      + '<div class="v2-b"><div class="v2-seg ' + (p >= 95 ? 'v2-s2' : 'v2-s1')
+      + '" style="width:' + p + '%">' + (p > 14 ? tr + ' traitées' : '') + '</div>'
+      + (r ? '<div class="v2-seg v2-sko" style="width:' + (100 - p) + '%">'
+          + (100 - p > 14 ? r + ' à traiter' : '') + '</div>' : '')
+      + '</div></div>'
+      + '<div class="v2-v"><b style="color:' + teinte(p) + '">' + p + ' %</b>'
+      + '<i>' + tr + ' / ' + ci + '</i></div></div>';
+  });
+  h += '<div class="v2-tot"><div class="v2-n"><b>Total</b>'
+    + '<div class="v2-b"><div class="v2-seg ' + (gp >= 95 ? 'v2-s2' : 'v2-s1')
+    + '" style="width:' + gp + '%">' + (gp > 14 ? G.t + ' traitées' : '') + '</div>'
+    + (G.c - G.t ? '<div class="v2-seg v2-sko" style="width:' + (100 - gp) + '%">'
+        + (100 - gp > 14 ? (G.c - G.t) + ' à traiter' : '') + '</div>' : '')
+    + '</div></div><div class="v2-v"><b style="color:' + teinte(gp) + '">' + gp + ' %</b>'
+    + '<i>' + G.t + ' / ' + G.c + '</i></div></div></div>';
+
+  // --- 2. RÉSULTAT -----------------------------------------
+  // Étapes CUMULÉES : `status` est un état COURANT, pas une étape
+  // franchie. Un dossier gagné EST passé par la propale et le BDC.
+  h += '<div class="v2-flux"><div class="v2-flux-t"><h3>Résultat</h3>'
+     + '<div style="font-size:11px;color:var(--text-mut)">100 % = sollicitations</div></div>';
+  camp.forEach(c => {
+    const cy = Number(c.nb_cycles) || 1;
+    const w = Number(c.nb_wins) || 0, b = Number(c.nb_bdc) || 0, pr = Number(c.nb_propales) || 0;
+    const pW = pct(w, cy), pB = pct(b - w, cy), pP = pct(pr - b, cy);
+    h += '<div class="v2-r"><div class="v2-n"><b>' + escapeHtml(c.campagne) + '</b>'
+      + '<i>' + pr + ' propales · ' + b + ' BDC · ' + w + ' commandes</i>'
+      + '<div class="v2-b"><div class="v2-seg v2-s2" style="width:' + pW + '%">'
+        + (pW > 12 ? w : '') + '</div>'
+      + '<div class="v2-seg v2-s4" style="width:' + pB + '%">' + (pB > 12 ? (b - w) : '') + '</div>'
+      + '<div class="v2-seg v2-s1" style="width:' + pP + '%">' + (pP > 12 ? (pr - b) : '') + '</div>'
+      + '<div class="v2-seg v2-s3" style="width:' + (100 - pW - pB - pP) + '%">'
+        + (100 - pW - pB - pP > 16 ? (cy - pr) : '') + '</div></div></div>'
+      + '<div class="v2-v"><b style="color:var(--green)">' + pW + ' %</b>'
+      + '<i>commandés</i></div></div>';
+  });
+  h += '<div class="v2-lg"><span><i style="background:#53bda7"></i>commandé</span>'
+    + '<span><i style="background:#8fc9bb"></i>BDC</span>'
+    + '<span><i style="background:var(--blue-line)"></i>propale</span>'
+    + '<span><i style="background:#e8eef6"></i>sans propale</span></div></div>';
+
+  // --- 3. CLASSEMENT PAR VENDEUR ---------------------------
+  // Une campagne est lancée par le marketing mais TRAITÉE par des
+  // vendeurs : un taux global ne dit pas s'il faut relancer l'équipe
+  // entière ou deux personnes.
+  if (parV.length) {
+    const sv = parV.slice().sort((a, b) =>
+      (Number(b.taux_traite) || 0) - (Number(a.taux_traite) || 0)
+      || (Number(b.nb_cibles) || 0) - (Number(a.nb_cibles) || 0));
+    h += '<div class="v2-flux"><div class="v2-flux-t"><h3>Traitement par vendeur</h3>'
+       + '<div style="font-size:11px;color:var(--text-mut)">du meilleur au moins bon</div></div>';
+    sv.forEach((v, i) => {
+      const ci = Number(v.nb_cibles) || 0, tr = Number(v.nb_traitees) || 0;
+      const p = pct(tr, ci), r = ci - tr;
+      h += '<div class="v2-r" style="cursor:pointer" data-v2vend="' + v.id_user + '">'
+        + '<div class="v2-n"><b>' + (i + 1) + '. ' + escapeHtml(v.vendeur_nom || '—') + '</b>'
+        + '<i>' + escapeHtml(v.nom_site || '') + ' · ' + ci + ' sollicitations</i>'
+        + '<div class="v2-b"><div class="v2-seg ' + (p >= 95 ? 'v2-s2' : 'v2-s1')
+        + '" style="width:' + p + '%">' + (p > 14 ? tr + ' traitées' : '') + '</div>'
+        + (r ? '<div class="v2-seg v2-sko" style="width:' + (100 - p) + '%">'
+            + (100 - p > 14 ? r + ' à traiter' : '') + '</div>' : '')
+        + '</div></div>'
+        + '<div class="v2-v"><b style="color:' + teinte(p) + '">' + p + ' %</b>'
+        + '<i>' + tr + ' / ' + ci + '</i></div></div>';
+    });
+    h += '</div>';
+  }
+
+  h += '</div>';
+  h += '<div class="lmf-note">L\'avancement précède le résultat : une campagne dont 40 % des '
+    + 'cibles ne sont pas traitées n\'a pas un mauvais taux de conversion, elle a un <b>retard de '
+    + 'traitement</b>. Les étapes sont cumulées — un dossier gagné est passé par la propale et le '
+    + 'bon de commande. Cliquez un vendeur pour ouvrir sa file.</div>';
+  return h;
+}
+
+// --- Chargement des campagnes -------------------------------
+let dataCampagnes = null, dataCampParVendeur = null;
+let campKey = null, campEnCours = null;
+
+function ensureCampagnes() {
+  const key = [state.period.from, state.period.to].join('|');
+  if (campKey === key && dataCampagnes) return Promise.resolve();
+  if (campEnCours) return campEnCours;
+  campKey = key;
+  campEnCours = (async function () {
+    try {
+      const [c, v] = await Promise.all([
+        sb.rpc('get_campagnes_sollicitation', {
+          p_viewer_id_user: Number(userId),
+          p_date_from: state.period.from, p_date_to: state.period.to }),
+        sb.rpc('get_campagnes_par_vendeur', {
+          p_viewer_id_user: Number(userId),
+          p_date_from: state.period.from, p_date_to: state.period.to, p_campagne: null })
+      ]);
+      if (c.error) throw c.error;
+      if (v.error) throw v.error;
+      dataCampagnes = c.data || [];
+      dataCampParVendeur = v.data || [];
+    } catch (e) {
+      console.error('[leadMgmt] campagnes', e);
+      dataCampagnes = []; dataCampParVendeur = [];
+    } finally {
+      campEnCours = null;
+      if (window.__renderLeadMgmt) window.__renderLeadMgmt();
+    }
+  })();
+  return campEnCours;
+}
+
 // File d'un vendeur atteint par la descente. Le manager la lit, et peut
 // réaffecter depuis chaque carte.
 function renderFileDe(idVendeur) {
@@ -3191,18 +3794,18 @@ function sectionEst(nom) {
   return SECTIONS_ROLE[state.sectionIdx || 0] === nom;
 }
 
+// Chaque vue ne charge QUE ce qu'elle lit. Le périmètre et l'équipe
+// servent au mur comme au rapport ; les campagnes ont leurs propres RPC,
+// bornées par state.period.
 function chargerSection() {
-  const SEC = SECTIONS_ROLE[state.sectionIdx || 0];
-  if (SEC === 'ma_file')      { state.mafileCible = undefined; fetchMaFile(); }
-  else if (SEC === 'leads' || SEC === 'par_source') {
-    state.mafileCible = null;   // tout le périmètre, pas moi
-    fetchMaFile();
-  }
-  else if (SEC === 'mon_equipe')  ensureEquipe(state.busSite ? Number(state.busSite) : null);
-  else if (SEC === 'mes_sites')   ensureSites();
-  else if (SEC === 'mes_chiffres')ensureKpiVendeur();
-  else if (SEC === 'campagnes')   ensureKpis();
-  else                            ensureCycles(cibleCourante());
+  ensureSites();
+  const V = state.v2 || {};
+  if (V.vue === 'campagnes') { ensureCampagnes(); return; }
+  // ⚠️ Le mur et le rapport lisent les leads de TOUT le périmètre : un
+  //    manager doit voir ceux de ses vendeurs, pas seulement les siens.
+  state.mafileCible = (PROFIL === 'vendeur') ? userId : null;
+  fetchMaFile();
+  ensureEquipe(V.niveau === 'site' ? Number(V.cle) : null);
 }
 
 function renderAll() {
@@ -3216,43 +3819,34 @@ function renderAll() {
     return;
   }
 
-  if (state.sectionIdx == null) state.sectionIdx = 0;
-  if (state.sectionIdx >= SECTIONS_ROLE.length) state.sectionIdx = 0;
-  const SEC = SECTIONS_ROLE[state.sectionIdx];
+  v2Init();
+  const V = state.v2;
 
-  // Niveau 1 : les sections du RÔLE, pas les six sections pour tous.
-  html += '<div class="lm-toggle">';
-  SECTIONS_ROLE.forEach(function (s, idx) {
-    html += '<button type="button" class="lm-toggle-btn' + (idx === state.sectionIdx ? ' active' : '')
-          + '" data-sec="' + idx + '">' + LIB_SECTION[s] + '</button>';
-  });
-  html += '</div>';
-
-  // La DESCENTE prime sur la section : on est allé chercher un détail,
-  // on le montre. Le fil d'Ariane porte le retour.
-  if (state.drillVendeur) {
-    html += renderFilAriane() + renderFileDe(state.drillVendeur);
-  } else if (state.drillSite) {
-    html += renderVueEquipe(state.drillSite);
-  } else if (SEC === 'ma_file') {
-    html += renderViewMaFile();
-  } else if (SEC === 'mon_equipe') {
-    html += renderVueEquipe(state.busSite ? Number(state.busSite) : null);
-  } else if (SEC === 'mes_sites') {
-    html += renderVueSites();
-  } else if (SEC === 'leads') {
-    html += renderViewLeads();
-  } else if (SEC === 'par_source') {
-    html += renderViewLeads();
-  } else if (SEC === 'campagnes') {
-    html += (kpisCharges ? renderViewCampagnes() : lmAttenteKpi());
-  } else if (SEC === 'mes_chiffres') {
-    html += ((kpisCharges || kpiVendeurCharge)
-      ? renderSyntheseVendeur(userId, 'Mes chiffres', false) : lmAttenteKpi());
-  } else {
-    // mes_cycles / cycles — le pipeline est une BASCULE, pas une section.
-    html += renderSectionCycles();
+  // Le périmètre s'appuie sur les sites : sans eux, rien à afficher.
+  if (!dataSites) {
+    ensureSites();
+    root.innerHTML = '<div class="lm-empty" style="padding:40px;font-size:12px">'
+      + '<span class="lm-spin"></span>Chargement du périmètre…</div>';
+    return;
   }
+
+  html += v2Fil();
+
+  // Trois lectures d'un même périmètre. Libellés IDENTIQUES pour tous
+  // les rôles : ce sont les mêmes questions, à des échelles différentes.
+  html += '<div class="v2-vues">'
+    + '<button type="button" data-v2vue="mur" class="' + (V.vue === 'mur' ? 'on' : '')
+      + '">Où ça coince</button>'
+    + '<button type="button" data-v2vue="rapport" class="' + (V.vue === 'rapport' ? 'on' : '')
+      + '">Ce que ça produit</button>'
+    + '<button type="button" data-v2vue="campagnes" class="' + (V.vue === 'campagnes' ? 'on' : '')
+      + '">Campagnes</button></div>';
+
+  if (V.vue !== 'campagnes') html += v2Bandeau();
+
+  if (V.vue === 'campagnes')    html += v2Campagnes();
+  else if (V.vue === 'rapport') html += v2Rapport();
+  else                          html += v2Mur();
 
   root.innerHTML = html;
   const __tBind = performance.now();
@@ -3350,7 +3944,41 @@ async function selectVendeurCible(idUser) {
 
 // --- 15. Bindings -------------------------------------------
 function bindEvents() {
-  // --- Socle par rôle : sections, descente, bascule cycles -------
+  // --- Refonte v2 : fil de périmètre, bascule, descente ---------
+  root.querySelectorAll('.v2-vues button[data-v2vue]').forEach(el => {
+    el.addEventListener('click', () => {
+      state.v2.vue = el.getAttribute('data-v2vue');
+      renderAll(); chargerSection();
+    });
+  });
+  root.querySelectorAll('.v2-fil button[data-v2niv]').forEach(el => {
+    el.addEventListener('click', () => {
+      const k = el.getAttribute('data-v2cle');
+      state.v2.niveau = el.getAttribute('data-v2niv');
+      state.v2.cle = (k !== '' && !isNaN(Number(k))) ? Number(k) : k;
+      renderAll(); chargerSection();
+    });
+  });
+  // Une ligne EST le niveau du dessous : cliquer descend d'un cran.
+  root.querySelectorAll('[data-v2ligne]').forEach(el => {
+    el.addEventListener('click', () => {
+      const ty = el.getAttribute('data-v2type');
+      if (ty === 'source') return;   // une source n'a pas d'enfant
+      const k = el.getAttribute('data-v2ligne');
+      state.v2.niveau = ty;
+      state.v2.cle = isNaN(Number(k)) ? k : Number(k);
+      renderAll(); chargerSection();
+    });
+  });
+  root.querySelectorAll('[data-v2vend]').forEach(el => {
+    el.addEventListener('click', () => {
+      state.v2.niveau = 'vendeur';
+      state.v2.cle = Number(el.getAttribute('data-v2vend'));
+      state.v2.vue = 'mur';
+      renderAll(); chargerSection();
+    });
+  });
+
   root.querySelectorAll('.lm-toggle-btn[data-sec]').forEach(el => {
     el.addEventListener('click', () => {
       state.sectionIdx = +el.getAttribute('data-sec');
@@ -3598,7 +4226,7 @@ renderAll();
 // Avant la refonte, le montage câblait en dur deux rôles — d'où des
 // onglets qui ne chargeaient rien pour les autres.
 if (SECTIONS_ROLE.length) {
-  state.sectionIdx = 0;
+  v2Init();
   chargerSection();
 }
 
