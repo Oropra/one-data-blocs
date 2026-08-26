@@ -78,28 +78,33 @@ const __initialVendeurCible = (userConnected.ID_Role === ROLE_VENDEUR) ? userCon
 // lourdes) ne sont PLUS chargés au montage. Ils le sont à la demande, à l'entrée
 // de « Suivi leads » (voir ensureCycles), scopés au vendeur ciblé. Un manager sur
 // « Synthèse » (page par défaut) n'en charge aucun -> premier affichage rapide.
-const [__perim, __kpiSite, __kpiVend, __clotures, __leads, __userCycles, __premier] = await Promise.all([
-  sb.from('v_mon_perimetre').select('*').eq('viewer_id_user', userConnected.ID_User),
-  sb.from('v_lead_kpi_site').select('*'),
-  sb.from('v_lead_kpi_vendeur').select('*'),
-  sb.from('v_cloture_cycle').select('*'),
-  sb.from('v_leads').select('*'),
-  sb.from('v_user_cycles_recent').select('*'),
-  sb.from('v_premier_contact').select('*')
-]);
-[__perim, __kpiSite, __kpiVend, __clotures, __leads, __userCycles, __premier]
-  .forEach(r => { if (r && r.error) console.error('[leadMgmt] chargement vue', r.error); });
+// ⚡ CHARGEMENT PARESSEUX (27/08/2026).
+//
+// Auparavant SEPT vues étaient chargées EN BLOQUANT au montage, avant même
+// de savoir quelle section serait affichée. Relevé au réseau par Antoine :
+// v_lead_kpi_vendeur 3,1 s, v_lead_kpi_site 1,45 s, v_user_cycles_recent
+// 1,28 s, v_premier_contact 0,72 s — soit plusieurs secondes avant le
+// premier pixel, pour un vendeur qui arrive sur « Ma file » et n'a besoin
+// QUE de v_lead_sla (116 ms mesurées).
+//
+// Seul le PÉRIMÈTRE reste bloquant : il décide du rôle et des sites, donc
+// de ce qu'on affiche. Tout le reste passe par ensureKpis().
+const __perim = await sb.from('v_mon_perimetre').select('*')
+  .eq('viewer_id_user', userConnected.ID_User);
+if (__perim && __perim.error) console.error('[leadMgmt] v_mon_perimetre', __perim.error);
 
 let dataActifs           = [];   // chargés à la demande (ensureCycles)
 let dataKanban           = [];
 let cyclesLoadedFor      = undefined;   // cible (idUser|null) pour laquelle les cycles sont chargés
 const userSites          = __perim.data || [];
-const dataKpiSite        = __kpiSite.data || [];
-const dataKpiVend        = __kpiVend.data || [];
-const dataClotures       = __clotures.data || [];
-const dataLeads          = __leads.data || [];
-const dataUserCycles     = __userCycles.data || [];
-const dataPremierContact = __premier.data || [];
+let dataKpiSite          = [];
+let dataKpiVend          = [];
+let dataClotures         = [];
+let dataLeads            = [];
+let dataUserCycles       = [];
+let dataPremierContact   = [];
+let kpisCharges          = false;
+let kpisEnCours          = null;
 
 const userSiteIds = userSites.map(r => r.id_site ?? r.ID_SITE);
 const userRole    = userConnected.ID_Role;
@@ -109,43 +114,86 @@ const isVendeur    = userRole === ROLE_VENDEUR;
 const isChefVentes = userRole === ROLE_CHEF_VENTES;
 const isManager    = !isVendeur && userRole != null;
 
-const dataKpiSiteScope = dataKpiSite.filter(r => userSiteIds.includes(r.id_site));
-const dataKpiVendScope = dataKpiVend.filter(r => userSiteIds.includes(r.id_site));
-
 // --- 2. Index pré-calculés ----------------------------------
-const cyclesAvecLeadSet = new Set();
-for (const l of dataLeads) {
-  if (l.id_cycle_comm) cyclesAvecLeadSet.add(l.id_cycle_comm);
+// Ils dérivent des vues KPI : ils sont donc VIDES tant qu'ensureKpis()
+// n'a pas tourné, et RECONSTRUITS à chaque chargement. Toute section qui
+// les lit doit avoir appelé ensureKpis() avant.
+let dataKpiSiteScope    = [];
+let dataKpiVendScope    = [];
+let cyclesAvecLeadSet   = new Set();
+let vendeurCyclesMap    = new Map();
+let premierContactMap   = {};
+let vendeurInfoMap      = new Map();
+
+function reconstruireIndexKpi() {
+  dataKpiSiteScope = dataKpiSite.filter(r => userSiteIds.includes(r.id_site));
+  dataKpiVendScope = dataKpiVend.filter(r => userSiteIds.includes(r.id_site));
+
+  cyclesAvecLeadSet = new Set();
+  for (const l of dataLeads) {
+    if (l.id_cycle_comm) cyclesAvecLeadSet.add(l.id_cycle_comm);
+  }
+
+  vendeurCyclesMap = new Map();
+  for (const uc of dataUserCycles) {
+    if (!vendeurCyclesMap.has(uc.id_user)) vendeurCyclesMap.set(uc.id_user, new Set());
+    vendeurCyclesMap.get(uc.id_user).add(uc.id_cycle_com);
+  }
+
+  premierContactMap = {};
+  for (const pc of dataPremierContact) {
+    premierContactMap[pc.id_cycle_com] = pc.premier_outbound_at;
+  }
+
+  vendeurInfoMap = new Map();
+  for (const v of dataKpiVendScope) {
+    if (!vendeurInfoMap.has(v.id_user)) {
+      vendeurInfoMap.set(v.id_user, {
+        id_user: v.id_user,
+        vendeur_nom: v.vendeur_nom,
+        sites: new Set(),
+        cycles_total: 0
+      });
+    }
+    const info = vendeurInfoMap.get(v.id_user);
+    info.sites.add(v.id_site);
+    info.cycles_total += (v.cycles_total || 0);
+  }
 }
 
-const vendeurCyclesMap = new Map();
-for (const uc of dataUserCycles) {
-  if (!vendeurCyclesMap.has(uc.id_user)) vendeurCyclesMap.set(uc.id_user, new Set());
-  vendeurCyclesMap.get(uc.id_user).add(uc.id_cycle_com);
+// Charge les six vues KPI, UNE SEULE FOIS. Les appels concurrents
+// partagent la même promesse : deux sections ouvertes coup sur coup ne
+// déclenchent pas deux fois le réseau.
+function ensureKpis() {
+  if (kpisCharges) return Promise.resolve();
+  if (kpisEnCours) return kpisEnCours;
+  kpisEnCours = (async function () {
+    const [kSite, kVend, clot, leads, uCycles, premier] = await Promise.all([
+      sb.from('v_lead_kpi_site').select('*'),
+      sb.from('v_lead_kpi_vendeur').select('*'),
+      sb.from('v_cloture_cycle').select('*'),
+      sb.from('v_leads').select('*'),
+      sb.from('v_user_cycles_recent').select('*'),
+      sb.from('v_premier_contact').select('*')
+    ]);
+    [kSite, kVend, clot, leads, uCycles, premier]
+      .forEach(r => { if (r && r.error) console.error('[leadMgmt] chargement vue KPI', r.error); });
+    dataKpiSite        = kSite.data   || [];
+    dataKpiVend        = kVend.data   || [];
+    dataClotures       = clot.data    || [];
+    dataLeads          = leads.data   || [];
+    dataUserCycles     = uCycles.data || [];
+    dataPremierContact = premier.data || [];
+    reconstruireIndexKpi();
+    kpisCharges = true;
+    kpisEnCours = null;
+    if (window.__renderLeadMgmt) window.__renderLeadMgmt();
+  })();
+  return kpisEnCours;
 }
 
 function getVendeurCycleIds(idUser) {
   return vendeurCyclesMap.get(idUser) || new Set();
-}
-
-const premierContactMap = {};
-for (const pc of dataPremierContact) {
-  premierContactMap[pc.id_cycle_com] = pc.premier_outbound_at;
-}
-
-const vendeurInfoMap = new Map();
-for (const v of dataKpiVendScope) {
-  if (!vendeurInfoMap.has(v.id_user)) {
-    vendeurInfoMap.set(v.id_user, {
-      id_user: v.id_user,
-      vendeur_nom: v.vendeur_nom,
-      sites: new Set(),
-      cycles_total: 0
-    });
-  }
-  const info = vendeurInfoMap.get(v.id_user);
-  info.sites.add(v.id_site);
-  info.cycles_total += (v.cycles_total || 0);
 }
 
 const doc = __anchor.ownerDocument || document;
@@ -2489,7 +2537,11 @@ function renderMaFileCard(l, avecReaff) {
 async function fetchMaFile() {
   const cible = state.mafileCible || userId;
   const key   = [cible, state.busSite || 'tous'].join('|');
-  if (state.mafileKey === key && state.mafileData) return;
+  // ⚠️ Tester `mafileData` NE SUFFIT PAS : au montage, le bus de site se
+  // lie juste apres et rappelle fetchMaFile alors que la premiere requete
+  // est ENCORE EN VOL — d'ou deux appels reseau identiques (releve par
+  // Antoine le 27/08). On garde donc aussi la cle EN COURS.
+  if (state.mafileKey === key && (state.mafileData || state.mafileLoading)) return;
   state.mafileKey = key;
   state.mafileLoading = true;
   if (window.__renderLeadMgmt) window.__renderLeadMgmt();
@@ -2608,6 +2660,8 @@ function renderViewMaFile() {
 
 // --- Section « Leads » : la vue du chef ----------------------
 function renderViewLeads() {
+  // Le regroupement par vendeur lit dataKpiVend pour les noms.
+  ensureKpis();
   if (state.mafileLoading && !state.mafileData) {
     return '<div class="lm-empty" style="padding:30px;font-size:12px">Chargement…</div>';
   }
@@ -2711,6 +2765,11 @@ async function ouvrirReaffectation(idLead) {
   }
 }
 
+function lmAttenteKpi() {
+  return '<div class="lm-empty" style="padding:34px;font-size:12px;color:var(--text-mut)">'
+       + 'Chargement des indicateurs…</div>';
+}
+
 function renderAll() {
   let html = '';
   if (isManager) {
@@ -2726,6 +2785,11 @@ function renderAll() {
     html += '</div>';
     if (state.section === 'ma_file')        html += renderViewMaFile();
     else if (state.section === 'leads')     html += renderViewLeads();
+    // ⚠️ Les vues ci-dessous derivent des index KPI. Tant qu'ensureKpis()
+    //    n'a pas rendu, ces index sont VIDES : rendre quand meme afficherait
+    //    des ZEROS credibles pendant une seconde, ce qui est pire qu'un
+    //    ecran d'attente. ensureKpis() rappelle renderAll a la fin.
+    else if (!kpisCharges)                  html += lmAttenteKpi();
     else if (state.section === 'synthese')  html += renderViewSynthese();
     else if (state.section === 'campagnes') html += renderViewCampagnes();
     else if (state.section === 'creation')  html += renderViewCreationCampagne();
@@ -2740,6 +2804,7 @@ function renderAll() {
     html += '<button type="button" class="lm-toggle-btn' + (state.view === 'pipeline'  ? ' active' : '') + '" data-view="pipeline">Pipeline</button>';
     html += '</div>';
     if (state.view === 'ma_file')       html += renderViewMaFile();
+    else if (!kpisCharges)              html += lmAttenteKpi();
     else if (state.view === 'pipeline') html += renderViewKanban();
     else if (state.view === 'synthese') html += renderSyntheseVendeur(userId, 'Ma synthese', false);
     else                                html += renderViewActifs();
@@ -2832,6 +2897,9 @@ function bindEvents() {
       }
       state.section = newSection;
       renderAll();
+      // Toutes les sections SAUF « Ma file » lisent les vues KPI : on les
+      // charge a l'entree, pas au montage.
+      if (newSection !== 'ma_file') ensureKpis();
       if (newSection === 'suivi_leads') ensureCycles(cibleCourante());   // chargement à la demande
       // « Ma file » et « Leads » lisent la MEME source (v_lead_sla) : un
       // seul chargement sert les deux. La cle de cache porte le site.
@@ -2844,6 +2912,7 @@ function bindEvents() {
       state.view = el.getAttribute('data-view');
       renderAll();
       if (state.view === 'ma_file') { state.mafileCible = userId; fetchMaFile(); }
+      else ensureKpis();
     });
   });
   root.querySelectorAll('.lm-subtoggle-btn[data-vleads]').forEach(el => {
@@ -3014,16 +3083,20 @@ renderAll();
 // Chargement initial des cycles UNIQUEMENT si on arrive sur « Suivi leads »
 // (vendeur par défaut, ou manager pré-filtré depuis le dashboard). Un manager
 // sur « Synthèse » (défaut) n'en charge aucun -> premier affichage rapide.
-if (state.section === 'suivi_leads') {
-  if (state.selectedVendeur) selectVendeurCible(state.selectedVendeur.id_user);
-  else ensureCycles(cibleCourante());
-}
-// « Ma file » est le defaut : elle doit se charger au montage, sinon le
-// vendeur arrive sur un ecran vide (defaut classique du chargement a la
-// demande quand la section par defaut change).
-if (state.section === 'ma_file' || (!isManager && state.view === 'ma_file')) {
+// Au montage on ne charge QUE ce que la section affichee exige.
+const __surMaFile = (isManager && state.section === 'ma_file')
+                 || (!isManager && state.view === 'ma_file');
+if (__surMaFile) {
+  // « Ma file » n'a besoin que de v_lead_sla : premier affichage en ~120 ms
+  // au lieu de plusieurs secondes.
   state.mafileCible = userId;
   fetchMaFile();
+} else {
+  ensureKpis();
+  if (state.section === 'suivi_leads') {
+    if (state.selectedVendeur) selectVendeurCible(state.selectedVendeur.id_user);
+    else ensureCycles(cibleCourante());
+  }
 }
 
 // Bascule .lm-narrow d'après la largeur RÉELLE de #lead-mgmt-root (repli des @media).
