@@ -1655,7 +1655,26 @@ function renderTeamTable() {
 function renderSyntheseVendeur(idUser, nom, avecRetour) {
   fetchEntonnoir();
 
-  const v = dataKpiVend.find(function (x) { return Number(x.id_user) === Number(idUser); }) || {};
+  // v_lead_kpi_vendeur rend UNE LIGNE PAR SITE. Un .find() prenait la
+  // premiere et figeait donc la synthese sur un seul site, quel que soit
+  // le selecteur de la topnav (releve par Antoine le 27/08/2026 : chiffres
+  // identiques sur les deux sites). On agrege les lignes du vendeur, en se
+  // limitant au site courant quand il y en a un de selectionne.
+  const _siteSel = (function () {
+    try { const b = siteBus(); const id = b && b.getSiteId(); return id == null ? null : Number(id); }
+    catch (e) { return null; }
+  })();
+  const _lignes = dataKpiVend.filter(function (x) {
+    if (Number(x.id_user) !== Number(idUser)) return false;
+    return _siteSel == null || Number(x.id_site) === _siteSel;
+  });
+  const v = _lignes.reduce(function (acc, r) {
+    acc.cycles_total += (+r.cycles_total || 0);
+    acc.a_traiter    += (+r.a_traiter    || 0);
+    acc.pipeline     += (+r.pipeline     || 0);
+    acc.clos_recent  += (+r.clos_recent  || 0);
+    return acc;
+  }, { cycles_total: 0, a_traiter: 0, pipeline: 0, clos_recent: 0 });
   const n = function (x) { const y = parseFloat(x); return isNaN(y) ? 0 : y; };
 
   // Chaque compteur mene a la vue qui le detaille : un chiffre qui ne se
@@ -1776,13 +1795,25 @@ const SECTIONS = [
 // On s'aligne sur le TABLEAU : le détail montre les cycles du vendeur.
 // Le repli sur user_ids_actifs ne sert plus que si id_vendeur est absent
 // (cycle sans propriétaire), pour ne pas faire disparaître la ligne.
+// Filtre « cycles de CE vendeur ».
+//
+// RÈGLE MÉTIER (Antoine, 27/08/2026) : PERSONNE n'est propriétaire d'un
+// cycle. Un cycle relie un CLIENT à un SITE. Un vendeur voit le cycle s'il
+// y a fait une ACTION SORTANTE — appel émis, message, rapport de visite.
+//
+// ⚠️ NE PAS filtrer sur `c.id_vendeur` : cette colonne porte le CRÉATEUR du
+// cycle (CYCLE_COM.id_user), pas un titulaire. Le faire — comme le 26/08 —
+// masquait les cycles travaillés par le vendeur sans qu'il les ait créés,
+// et laissait 517 cycles ouverts sur 4 611 (11 %) sans aucun rattachement.
+//
+// `user_ids_actifs` porte exactement la règle depuis la migration
+// 20260827100000 : RPV + contacts sortants, sans les entrants ni les
+// propales.
 function matchVendeurFilter(c) {
   if (!state.selectedVendeur) return true;
-  const cible = state.selectedVendeur.id_user;
-  if (c.id_vendeur != null) return Number(c.id_vendeur) === Number(cible);
   const arr = c.user_ids_actifs;
-  if (Array.isArray(arr) && arr.length > 0) return arr.includes(cible);
-  return true;
+  if (!Array.isArray(arr)) return false;
+  return arr.includes(state.selectedVendeur.id_user);
 }
 function filteredActifs() {
   const q = state.search.trim().toLowerCase();
