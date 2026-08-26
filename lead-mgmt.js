@@ -915,7 +915,7 @@ async function fetchEntonnoir() {
   state.entKey = key;
 
   try {
-    const { data, error } = await ctx.supabase.rpc('get_entonnoir', {
+    const { data, error } = await ctx.sb.rpc('get_entonnoir', {
       p_viewer_id_user: Number(userId),
       p_date_from: b.from,
       p_date_to: b.to,
@@ -1096,7 +1096,7 @@ async function fetchClassement() {
 
   try {
     const supabase = ctx.supabase;
-    const { data, error } = await supabase.rpc('get_classement_vendeur', {
+    const { data, error } = await sb.rpc('get_classement_vendeur', {
       p_viewer_id_user: Number(userId),
       p_date_from: ymd(from),
       p_date_to: ymd(to)
@@ -1163,8 +1163,8 @@ async function fetchGraphes() {
       p_sites: portéeSites()
     };
     const [evo, src] = await Promise.all([
-      supabase.rpc('get_leads_par_jour', params),
-      supabase.rpc('get_leads_par_source', params)
+      sb.rpc('get_leads_par_jour', params),
+      sb.rpc('get_leads_par_source', params)
     ]);
     if (evo.error) throw evo.error;
     if (src.error) throw src.error;
@@ -1414,7 +1414,7 @@ async function fetchCampagnes() {
 
   try {
     const supabase = ctx.supabase;
-    const { data, error } = await supabase.rpc('get_campagnes_sollicitation', {
+    const { data, error } = await sb.rpc('get_campagnes_sollicitation', {
       p_viewer_id_user: Number(userId),
       p_date_from: ymd(from),
       p_date_to: ymd(to)
@@ -2282,7 +2282,7 @@ async function campSimuler() {
   updateCampResult();
   try {
     const supabase = ctx.supabase;
-    const { data, error } = await supabase.rpc('creer_campagne_sollicitation', p);
+    const { data, error } = await sb.rpc('creer_campagne_sollicitation', p);
     if (error) throw error;
     cs.result = data || [];
     cs.params = p;
@@ -2314,7 +2314,7 @@ async function campLancer() {
   updateCampResult();
   try {
     const supabase = ctx.supabase;
-    const { data, error } = await supabase.rpc('creer_campagne_sollicitation', p);
+    const { data, error } = await sb.rpc('creer_campagne_sollicitation', p);
     if (error) throw error;
     cs.launched = (data || []).filter(r => r.o_id_user != null).reduce((s, r) => s + Number(r.o_nb_cibles || 0), 0);
     cs.done = true; cs.result = null;
@@ -2494,7 +2494,7 @@ async function fetchMaFile() {
   state.mafileLoading = true;
   if (window.__renderLeadMgmt) window.__renderLeadMgmt();
   try {
-    let q = supabase.from('v_lead_sla')
+    let q = sb.from('v_lead_sla')
       .select('id_lead,source,source_libelle,id_site,id_client,id_cycle_comm,statut,'
             + 'recu_le,attribue_le,premier_contact_le,sla_minutes,attente_min,'
             + 'delai_reponse_min,sla_tenu,id_user_attribue,attribution_regle')
@@ -2537,7 +2537,7 @@ async function enrichirMaFile() {
   if (!rows.length) return;
   const ids = rows.map(r => r.id_lead);
   try {
-    const { data } = await supabase.from('LEADS_EXTERNES')
+    const { data } = await sb.from('LEADS_EXTERNES')
       .select('id_lead,nom,prenom,vehicule_interet').in('id_lead', ids);
     const idx = {};
     (data || []).forEach(r => { idx[r.id_lead] = r; });
@@ -2678,7 +2678,7 @@ function renderViewLeads() {
 async function ouvrirReaffectation(idLead) {
   let cibles = [];
   try {
-    const { data, error } = await supabase.rpc('lead_vendeurs_cibles', { p_id_lead: Number(idLead) });
+    const { data, error } = await sb.rpc('lead_vendeurs_cibles', { p_id_lead: Number(idLead) });
     if (error) throw error;
     cibles = data || [];
   } catch (e) {
@@ -2698,7 +2698,7 @@ async function ouvrirReaffectation(idLead) {
   if (isNaN(idx) || idx < 0 || idx >= cibles.length) { alert('Choix invalide.'); return; }
   const motif = prompt('Motif de la réaffectation (facultatif) :') || null;
   try {
-    const { error } = await supabase.rpc('lead_reaffecter', {
+    const { error } = await sb.rpc('lead_reaffecter', {
       p_id_lead: Number(idLead), p_id_user: Number(cibles[idx].id_user), p_motif: motif
     });
     if (error) throw error;
