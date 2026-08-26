@@ -105,6 +105,8 @@ let dataUserCycles       = [];
 let dataPremierContact   = [];
 let kpisCharges          = false;
 let kpisEnCours          = null;
+let kpiVendeurCharge     = false;   // « Ma synthese » : v_lead_kpi_vendeur seule
+let kpiVendeurEnCours    = null;
 
 const userSiteIds = userSites.map(r => r.id_site ?? r.ID_SITE);
 const userRole    = userConnected.ID_Role;
@@ -186,10 +188,37 @@ function ensureKpis() {
     dataPremierContact = premier.data || [];
     reconstruireIndexKpi();
     kpisCharges = true;
+    kpiVendeurCharge = true;   // le lot complet contient v_lead_kpi_vendeur
     kpisEnCours = null;
     if (window.__renderLeadMgmt) window.__renderLeadMgmt();
   })();
   return kpisEnCours;
+}
+
+// Chargeur MINIMAL pour « Ma synthese » du vendeur.
+//
+// Mesure du 27/08 : renderSyntheseVendeur ne lit QUE dataKpiVend, et
+// renderViewActifs / renderViewKanban ne lisent AUCUN index KPI. Un
+// vendeur qui ouvrait sa synthese declenchait pourtant les six vues —
+// cinq requetes pour rien, dont v_lead_kpi_site (1,25 s),
+// v_user_cycles_recent (1,28 s) et v_premier_contact (0,88 s).
+function ensureKpiVendeur() {
+  if (kpisCharges || kpiVendeurCharge) return Promise.resolve();
+  if (kpiVendeurEnCours) return kpiVendeurEnCours;
+  kpiVendeurEnCours = (async function () {
+    // ⚠️ NE PAS ajouter de .eq('id_user', …) : mesure du 27/08, filtrer
+    //    cette vue la rend NEUF FOIS PLUS LENTE (2,35 s contre 270 ms).
+    //    Le planificateur bascule sur un Merge Join qui ecarte 599 886
+    //    lignes. On charge tout et on filtre cote client.
+    const r = await sb.from('v_lead_kpi_vendeur').select('*');
+    if (r && r.error) console.error('[leadMgmt] v_lead_kpi_vendeur', r.error);
+    dataKpiVend = r.data || [];
+    dataKpiVendScope = dataKpiVend.filter(x => userSiteIds.includes(x.id_site));
+    kpiVendeurCharge = true;
+    kpiVendeurEnCours = null;
+    if (window.__renderLeadMgmt) window.__renderLeadMgmt();
+  })();
+  return kpiVendeurEnCours;
 }
 
 function getVendeurCycleIds(idUser) {
@@ -2803,10 +2832,17 @@ function renderAll() {
     html += '<button type="button" class="lm-toggle-btn' + (state.view === 'a_traiter' ? ' active' : '') + '" data-view="a_traiter">Cycles actifs</button>';
     html += '<button type="button" class="lm-toggle-btn' + (state.view === 'pipeline'  ? ' active' : '') + '" data-view="pipeline">Pipeline</button>';
     html += '</div>';
+    // Chaque onglet ne dépend QUE de ce qu'il lit réellement :
+    //  • Ma file        -> v_lead_sla
+    //  • Ma synthese    -> v_lead_kpi_vendeur SEULE
+    //  • Cycles/Pipeline-> les cycles, AUCUNE vue KPI
     if (state.view === 'ma_file')       html += renderViewMaFile();
-    else if (!kpisCharges)              html += lmAttenteKpi();
     else if (state.view === 'pipeline') html += renderViewKanban();
-    else if (state.view === 'synthese') html += renderSyntheseVendeur(userId, 'Ma synthese', false);
+    else if (state.view === 'synthese') {
+      html += (kpisCharges || kpiVendeurCharge)
+            ? renderSyntheseVendeur(userId, 'Ma synthese', false)
+            : lmAttenteKpi();
+    }
     else                                html += renderViewActifs();
   }
   root.innerHTML = html;
@@ -2912,17 +2948,16 @@ function bindEvents() {
       state.view = el.getAttribute('data-view');
       renderAll();
       if (state.view === 'ma_file') { state.mafileCible = userId; fetchMaFile(); }
-      else {
-        ensureKpis();
-        // ⚠️ « Cycles actifs » et « Pipeline » lisent dataActifs/dataKanban,
-        //    charges par ensureCycles. Au montage ils l'etaient parce que la
-        //    section par defaut du vendeur etait « suivi_leads ». Depuis que
-        //    « Ma file » est le defaut, plus personne ne declenchait le
-        //    chargement : les deux onglets restaient VIDES (releve le 27/08).
-        if (state.view === 'a_traiter' || state.view === 'pipeline') {
-          ensureCycles(cibleCourante());
-        }
+      // ⚠️ « Cycles actifs » et « Pipeline » lisent dataActifs/dataKanban,
+      //    charges par ensureCycles. Au montage ils l'etaient parce que la
+      //    section par defaut du vendeur etait « suivi_leads ». Depuis que
+      //    « Ma file » est le defaut, plus personne ne declenchait le
+      //    chargement : les deux onglets restaient VIDES (releve le 27/08).
+      //    Ils n'ont en revanche besoin d'AUCUNE vue KPI.
+      else if (state.view === 'a_traiter' || state.view === 'pipeline') {
+        ensureCycles(cibleCourante());
       }
+      else if (state.view === 'synthese') ensureKpiVendeur();
     });
   });
   root.querySelectorAll('.lm-subtoggle-btn[data-vleads]').forEach(el => {
@@ -3101,6 +3136,10 @@ if (__surMaFile) {
   // au lieu de plusieurs secondes.
   state.mafileCible = userId;
   fetchMaFile();
+} else if (!isManager) {
+  // Vendeur hors « Ma file » : chaque onglet ne charge que sa source.
+  if (state.view === 'synthese') ensureKpiVendeur();
+  else ensureCycles(cibleCourante());
 } else {
   ensureKpis();
   if (state.section === 'suivi_leads') {
