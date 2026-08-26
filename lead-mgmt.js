@@ -116,6 +116,61 @@ const isVendeur    = userRole === ROLE_VENDEUR;
 const isChefVentes = userRole === ROLE_CHEF_VENTES;
 const isManager    = !isVendeur && userRole != null;
 
+// ============================================================
+//  SOCLE DE NAVIGATION PAR RÔLE      (refonte du 27/08/2026)
+//
+//  Chaque rôle arrive avec UNE question, et l'écran d'entrée y répond
+//  avant tout le reste :
+//    vendeur   « qu'est-ce que je fais maintenant ? »  -> l'action
+//    chef      « qui décroche, qui laisse filer ? »    -> le VENDEUR
+//    directeur « mes sites tiennent-ils leurs objectifs ? » -> le SITE
+//    marketing « mes campagnes rapportent-elles ? »    -> la SOURCE
+//
+//  Avant cette refonte, les quatre recevaient les MÊMES six sections :
+//  un chef entrait sur une liste de cartes alors qu'il lui faut ses
+//  vendeurs. D'où « les onglets sont vides et peu compréhensibles ».
+// ============================================================
+const ROLE_DIRECTEUR   = 2;
+const ROLE_MARKETING   = 5;
+const ROLE_DIR_PLAQUE  = 6;
+const ROLE_DIR_MARQUE  = 7;
+const ROLE_DIR_GROUPE  = 8;
+const ROLE_SECRETAIRE  = 9;
+const ROLE_ADMIN       = 1;
+
+// ⚠️ La SECRÉTAIRE COMMERCIALE n'a PAS de lead management (décision
+//    d'Antoine, 27/08). Elle doit être traitée explicitement : la laisser
+//    tomber dans le cas par défaut lui donnerait la vue vendeur.
+const PROFILS = {
+  vendeur:   { sections:['ma_file','mes_cycles','mes_chiffres'] },
+  chef:      { sections:['mon_equipe','ma_file','leads','cycles'] },
+  directeur: { sections:['mes_sites','cycles','leads','campagnes','ma_file'] },
+  marketing: { sections:['par_source','campagnes'] },
+  aucun:     { sections:[] }
+};
+
+const LIB_SECTION = {
+  ma_file:'Ma file', mes_cycles:'Mes cycles', mes_chiffres:'Mes chiffres',
+  mon_equipe:'Mon équipe', leads:'Leads', cycles:'Cycles',
+  mes_sites:'Mes sites', campagnes:'Campagnes', par_source:'Par source'
+};
+
+function profilDuRole(r) {
+  if (r === ROLE_SECRETAIRE) return 'aucun';
+  if (r === ROLE_VENDEUR)    return 'vendeur';
+  if (r === ROLE_CHEF_VENTES) return 'chef';
+  if (r === ROLE_MARKETING)  return 'marketing';
+  if (r === ROLE_DIRECTEUR || r === ROLE_DIR_PLAQUE
+   || r === ROLE_DIR_MARQUE || r === ROLE_DIR_GROUPE || r === ROLE_ADMIN) return 'directeur';
+  return 'vendeur';   // repli : un rôle inconnu voit au moins sa file
+}
+
+const PROFIL   = profilDuRole(userRole);
+const SECTIONS_ROLE = PROFILS[PROFIL].sections;
+// Un manager qui n'a pas « mon_equipe » n'est pas un chef : le drapeau
+// sert à décider des boutons (réaffecter), pas des sections.
+const PEUT_REAFFECTER = PROFIL === 'chef' || PROFIL === 'directeur';
+
 // --- 2. Index pré-calculés ----------------------------------
 // Ils dérivent des vues KPI : ils sont donc VIDES tant qu'ensureKpis()
 // n'a pas tourné, et RECONSTRUITS à chaque chargement. Toute section qui
@@ -265,6 +320,39 @@ const LM_SLA_CSS = `
 #lead-mgmt-root .lm-spin { display:inline-block; width:12px; height:12px; margin-right:8px; vertical-align:-1px;
   border:2px solid #dfe6f0; border-top-color:#2a5ea9; border-radius:50%; animation:lm-spin .7s linear infinite; }
 @keyframes lm-spin { to { transform:rotate(360deg); } }
+`;
+
+const LM_ROLE_CSS = `
+#lead-mgmt-root .lmr-tbl { width:100%; border-collapse:collapse; background:var(--card);
+  border:1px solid var(--border); border-radius:8px; overflow:hidden; }
+#lead-mgmt-root .lmr-tbl th { text-align:left; font-size:10.5px; text-transform:uppercase;
+  letter-spacing:.05em; color:var(--text-mut); font-weight:700; padding:11px 14px;
+  background:var(--blue-bg); border-bottom:1px solid var(--border); white-space:nowrap; }
+#lead-mgmt-root .lmr-tbl td { padding:12px 14px; border-bottom:1px solid #eef2f8; font-size:13px; }
+#lead-mgmt-root .lmr-tbl tbody tr:last-child td { border-bottom:none; }
+#lead-mgmt-root .lmr-tbl tbody tr.lmr-clic { cursor:pointer; }
+#lead-mgmt-root .lmr-tbl tbody tr.lmr-clic:hover { background:var(--blue-bg); }
+#lead-mgmt-root .lmr-num { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+#lead-mgmt-root .lmr-nom { font-weight:600; }
+#lead-mgmt-root .lmr-sous { font-size:11px; color:var(--text-mut); font-weight:400; }
+#lead-mgmt-root .lmr-bar { height:5px; background:#eef2f8; border-radius:3px; overflow:hidden;
+  min-width:74px; margin-top:5px; }
+#lead-mgmt-root .lmr-bar i { display:block; height:5px; border-radius:3px; }
+#lead-mgmt-root .lmr-ok   { color:var(--green); font-weight:600; }
+#lead-mgmt-root .lmr-warn { color:#b8851a; font-weight:600; }
+#lead-mgmt-root .lmr-ko   { color:var(--red-soft); font-weight:600; }
+#lead-mgmt-root .lmr-b-ok i   { background:#53bda7; }
+#lead-mgmt-root .lmr-b-warn i { background:#b8851a; }
+#lead-mgmt-root .lmr-b-ko i   { background:var(--red-soft); }
+#lead-mgmt-root .lmr-fil { display:flex; align-items:center; gap:7px; margin:0 0 16px;
+  font-size:12px; flex-wrap:wrap; }
+#lead-mgmt-root .lmr-fil button { background:none; border:none; color:var(--blue-dk); padding:0;
+  font-size:12px; font-family:inherit; cursor:pointer; text-decoration:underline;
+  text-underline-offset:2px; }
+#lead-mgmt-root .lmr-fil span { color:var(--text-mut); }
+#lead-mgmt-root .lmr-fil .ici { color:var(--text); font-weight:600; text-decoration:none; }
+#lead-mgmt-root .lmr-alerte { background:#fdf6e6; border-left:3px solid #b8851a;
+  padding:11px 15px; border-radius:0 5px 5px 0; font-size:12px; color:#7a5a12; margin:16px 0 0; }
 `;
 
 // --- 3. Style (injection forcée) ----------------------------
@@ -626,13 +714,18 @@ styleEl.textContent = `
 #lead-mgmt-root.lm-narrow .lm-camp-grid { grid-template-columns:repeat(2,1fr); }
 
 ${LM_SLA_CSS}
+${LM_ROLE_CSS}
 `;
 doc.head.appendChild(styleEl);
 
 // --- 4. État local ------------------------------------------
 const state = window.__leadMgmt || {};
-if (state.section === undefined)         state.section = isManager ? 'ma_file' : 'suivi_leads';
-if (state.view === undefined)            state.view = isVendeur ? 'ma_file' : 'a_traiter';
+// Le routage passe par SECTIONS_ROLE et state.sectionIdx (socle par rôle).
+// `state.section` et `state.view` ne servent plus qu'aux vues héritées.
+if (state.sectionIdx === undefined)      state.sectionIdx = 0;
+if (state.vueCycles === undefined)       state.vueCycles = 'liste';
+if (state.drillSite === undefined)       state.drillSite = null;
+if (state.drillVendeur === undefined)    state.drillVendeur = null;
 if (state.filterSource === undefined)    state.filterSource = 'all';
 if (state.search === undefined)          state.search = '';
 if (state.expanded === undefined)        state.expanded = {};
@@ -704,12 +797,14 @@ function applyBusSiteLead(siteId) {
   if (changed) state.busSelPending = true;
   adoptBusSelectionLead();
   if (window.__renderLeadMgmt) window.__renderLeadMgmt();
-  // La cle de cache de la file porte le site : au changement, on relance.
-  // Sans cela l'ecran garde les leads de l'ancien site — exactement le
-  // defaut corrige le 27/08 sur la synthese vendeur.
-  if (changed && (state.section === 'ma_file' || state.section === 'leads'
-                  || (!isManager && state.view === 'ma_file'))) {
-    fetchMaFile();
+  // Au changement de site, la descente en cours porte sur un autre
+  // périmètre : on la referme plutôt que d'afficher un détail qui ne
+  // correspond plus au site sélectionné.
+  if (changed) {
+    state.drillSite = null; state.drillVendeur = null;
+    state.mafileKey = null; state.mafileData = null;
+    equipeKey = null; dataEquipe = null;
+    chargerSection();
   }
 }
 function adoptBusSelectionLead() {
@@ -1200,14 +1295,14 @@ async function fetchClassement() {
     state.rankingData = [];
   } finally {
     state.rankingLoading = false;
-    if (state.section === 'synthese' && window.__renderLeadMgmt) window.__renderLeadMgmt();
+    if (window.__renderLeadMgmt) window.__renderLeadMgmt();
   }
 }
 
 function reloadClassement() {
   state.rankingData = null;
   state.rankingKey = null;
-  if (state.section === 'synthese') fetchClassement();
+  
 }
 
 // --- 8b. GRAPHES (Chart.js via CDN + RPC d'agrégation) ------
@@ -1261,7 +1356,7 @@ async function fetchGraphes() {
     state.sourcesData = [];
   } finally {
     state.graphesLoading = false;
-    if (state.section === 'synthese' && window.__renderLeadMgmt) window.__renderLeadMgmt();
+    if (window.__renderLeadMgmt) window.__renderLeadMgmt();
   }
 }
 
@@ -1269,7 +1364,7 @@ function reloadGraphes() {
   state.evolutionData = null;
   state.sourcesData = null;
   state.graphesKey = null;
-  if (state.section === 'synthese') fetchGraphes();
+  
 }
 
 const SOURCE_COLORS = {
@@ -1523,14 +1618,14 @@ async function fetchCampagnes() {
     state.campagnesData = [];
   } finally {
     state.campagnesLoading = false;
-    if (state.section === 'campagnes' && window.__renderLeadMgmt) window.__renderLeadMgmt();
+    if (window.__renderLeadMgmt) window.__renderLeadMgmt();
   }
 }
 
 function reloadCampagnes() {
   state.campagnesData = null;
   state.campagnesKey = null;
-  if (state.section === 'campagnes') fetchCampagnes();
+  if (sectionEst('campagnes')) fetchCampagnes();
 }
 
 function renderCampagneFunnel(c) {
@@ -2581,7 +2676,13 @@ function renderMaFileCard(l, avecReaff) {
 // inclut le SITE et la CIBLE : c'est le patron deja en place pour le
 // classement et les graphiques.
 async function fetchMaFile() {
-  const cible = state.mafileCible || userId;
+  // ⚠️ `|| userId` ECRASAIT le null volontaire pose pour voir TOUT le
+  //    perimetre (section « Leads » du chef) : il ne voyait que SES
+  //    leads, d'ou des onglets vides alors que la base rendait 20 leads
+  //    dont 10 en retard sous son identite. `undefined` = « moi »,
+  //    `null` = « tout le perimetre ».
+  const cible = (state.mafileCible === null) ? null
+              : (state.mafileCible === undefined ? userId : state.mafileCible);
   const key   = [cible, state.busSite || 'tous'].join('|');
   // ⚠️ Tester `mafileData` NE SUFFIT PAS : au montage, le bus de site se
   // lie juste apres et rappelle fetchMaFile alors que la premiere requete
@@ -2811,59 +2912,348 @@ async function ouvrirReaffectation(idLead) {
   }
 }
 
+// ============================================================
+//  ÉCRANS MANAGER : « Mon équipe » et « Mes sites »
+//                                        (refonte du 27/08/2026)
+//
+//  LA DESCENTE VA JUSQU'AU DOSSIER (arbitrage d'Antoine) :
+//    site -> équipe du site -> file du vendeur -> carte du lead.
+//  Quatre niveaux, un seul chemin, aucun raccourci par un onglet. Un
+//  directeur qui voit un site décrocher doit pouvoir savoir QUEL dossier
+//  décroche : s'arrêter à l'agrégat produit un constat sans moyen d'agir.
+// ============================================================
+
+
+
+/* Une valeur mesurée face à son objectif. La barre EST la donnée ;
+   le chiffre la précise. */
+function lmrTaux(fait, obj) {
+  if (obj == null || obj === 0) return null;
+  return Math.round((Number(fait) || 0) / Number(obj) * 100);
+}
+function lmrCls(pct) {
+  if (pct == null) return '';
+  return pct >= 100 ? 'ok' : pct >= 80 ? 'warn' : 'ko';
+}
+function lmrCellObj(fait, obj, suffixe) {
+  if (obj == null) {
+    return '<span class="lmr-sous">objectif non saisi</span>';
+  }
+  const pct = lmrTaux(fait, obj), c = lmrCls(pct);
+  return '<span class="lmr-' + c + '">' + (fait == null ? '—' : fait) + '</span>'
+       + '<span class="lmr-sous"> / ' + obj + (suffixe || '') + '</span>'
+       + '<div class="lmr-bar lmr-b-' + c + '"><i style="width:'
+       + Math.min(100, pct || 0) + '%"></i></div>';
+}
+function lmrDelai(min) {
+  if (min == null) return '<span class="lmr-sous">pas encore</span>';
+  const m = Math.round(Number(min));
+  const c = m > 60 ? 'ko' : m > 25 ? 'warn' : 'ok';
+  return '<span class="lmr-' + c + '">' + lmfDuree(m) + '</span>';
+}
+
+// --- Chargement des deux vues -------------------------------
+let dataEquipe = null, dataSites = null;
+let equipeKey = null, sitesCharge = false;
+let equipeEnCours = null, sitesEnCours = null;
+
+function ensureEquipe(idSite) {
+  const key = String(idSite || 'tous');
+  if (equipeKey === key && dataEquipe) return Promise.resolve();
+  if (equipeEnCours) return equipeEnCours;
+  equipeKey = key;
+  equipeEnCours = (async function () {
+    try {
+      let q = sb.from('v_lead_equipe').select('*');
+      if (idSite) q = q.eq('id_site', Number(idSite));
+      const { data, error } = await q;
+      if (error) throw error;
+      dataEquipe = data || [];
+    } catch (e) {
+      console.error('[leadMgmt] v_lead_equipe', e);
+      dataEquipe = [];
+    } finally {
+      equipeEnCours = null;
+      if (window.__renderLeadMgmt) window.__renderLeadMgmt();
+    }
+  })();
+  return equipeEnCours;
+}
+
+function ensureSites() {
+  if (sitesCharge) return Promise.resolve();
+  if (sitesEnCours) return sitesEnCours;
+  sitesEnCours = (async function () {
+    try {
+      const { data, error } = await sb.from('v_lead_sites').select('*');
+      if (error) throw error;
+      // ⚠️ La vue rend les sites où l'appelant a des vendeurs visibles,
+      //    ce qui n'est PAS son périmètre. Mesuré le 27/08 :
+      //    v_lead_kpi_site rend 34 sites à une directrice qui en gère 3.
+      //    On croise donc avec le périmètre réel, déjà chargé au montage.
+      const perim = new Set(userSiteIds.map(Number));
+      dataSites = (data || []).filter(r => perim.has(Number(r.id_site)));
+      sitesCharge = true;
+    } catch (e) {
+      console.error('[leadMgmt] v_lead_sites', e);
+      dataSites = [];
+    } finally {
+      sitesEnCours = null;
+      if (window.__renderLeadMgmt) window.__renderLeadMgmt();
+    }
+  })();
+  return sitesEnCours;
+}
+
+// --- Fil d'Ariane : il matérialise la descente ---------------
+// Sans lui, un dossier atteint depuis trois niveaux plus haut n'a plus
+// de contexte et aucun retour possible.
+function renderFilAriane() {
+  const p = [];
+  if (state.drillSite || state.drillVendeur) {
+    p.push({ t: LIB_SECTION[SECTIONS_ROLE[state.sectionIdx || 0]] || 'Retour', a: 'racine' });
+  }
+  if (state.drillSite) {
+    const s = (dataSites || []).find(x => Number(x.id_site) === Number(state.drillSite));
+    p.push({ t: (s && s.nom_site) || ('Site ' + state.drillSite),
+             a: state.drillVendeur ? 'site' : null });
+  }
+  if (state.drillVendeur) {
+    const v = (dataEquipe || []).find(x => Number(x.id_user) === Number(state.drillVendeur));
+    p.push({ t: (v && v.vendeur_nom) || ('Vendeur ' + state.drillVendeur), a: null });
+  }
+  if (!p.length) return '';
+  return '<div class="lmr-fil">' + p.map(function (x) {
+    return x.a ? '<button type="button" data-fil="' + x.a + '">' + escapeHtml(x.t) + '</button>'
+               : '<span class="ici">' + escapeHtml(x.t) + '</span>';
+  }).join(' <span>›</span> ') + '</div>';
+}
+
+// --- « MON ÉQUIPE » : une ligne par VENDEUR ------------------
+function renderVueEquipe(idSite) {
+  ensureEquipe(idSite);
+  if (!dataEquipe) {
+    return '<div class="lm-empty" style="padding:34px;font-size:12px">'
+         + '<span class="lm-spin"></span>Chargement de l\'équipe…</div>';
+  }
+  const rows = dataEquipe.slice().sort(function (a, b) {
+    const r = (b.leads_en_retard || 0) - (a.leads_en_retard || 0);
+    if (r) return r;   // ce qui brûle remonte
+    return (a.contacts_par_jour_ouvre || 0) - (b.contacts_par_jour_ouvre || 0);
+  });
+  if (!rows.length) {
+    return renderFilAriane() + '<div class="lm-empty" style="padding:34px;font-size:12px">'
+      + 'Aucun vendeur sur ce périmètre.</div>';
+  }
+
+  const retard = rows.reduce((a, r) => a + (r.leads_en_retard || 0), 0);
+  let h = renderFilAriane();
+  h += '<div class="lmf-bandeau"><span class="lmf-bandeau-n ' + (retard ? 'retard' : 'ok') + '">'
+     + retard + '</span><span class="lmf-bandeau-txt">'
+     + (retard ? 'lead' + (retard > 1 ? 's' : '') + ' en retard sur ' + rows.length + ' vendeurs'
+               : 'lead en retard — l\'équipe est à jour')
+     + '</span></div>';
+
+  h += '<table class="lmr-tbl"><thead><tr>'
+     + '<th>Vendeur</th>'
+     + '<th class="lmr-num">Contacts / jour</th>'
+     + '<th class="lmr-num">En retard</th>'
+     + '<th class="lmr-num">Délai 1<sup>er</sup> contact</th>'
+     + '<th class="lmr-num">Commandes</th>'
+     + '</tr></thead><tbody>';
+
+  rows.forEach(function (v) {
+    h += '<tr class="lmr-clic" data-vendeur="' + v.id_user + '">'
+      + '<td><div class="lmr-nom">' + escapeHtml(v.vendeur_nom || ('Vendeur ' + v.id_user)) + '</div>'
+      +     '<div class="lmr-sous">' + escapeHtml(v.vn_vo || '—') + '</div></td>'
+      + '<td class="lmr-num">' + lmrCellObj(v.contacts_par_jour_ouvre, v.objectif_contacts_jour) + '</td>'
+      + '<td class="lmr-num">' + (v.leads_en_retard
+            ? '<span class="lmr-ko">' + v.leads_en_retard + '</span>'
+            : '<span class="lmr-sous">—</span>')
+      +     (v.leads_en_file ? '<div class="lmr-sous">' + v.leads_en_file + ' en file</div>' : '')
+      + '</td>'
+      + '<td class="lmr-num">' + lmrDelai(v.delai_moyen_min) + '</td>'
+      + '<td class="lmr-num">' + lmrCellObj(v.commandes_realisees, v.objectif_commandes) + '</td>'
+      + '</tr>';
+  });
+  h += '</tbody></table>';
+
+  h += '<div class="lmf-note">Trié par leads en retard : ce qui brûle remonte. '
+     + '<b>Contacts par jour</b> compte les actions SORTANTES du mois divisées par les jours '
+     + 'ouvrés — comparable à l\'objectif, contrairement au compteur de contacts global qui '
+     + 'inclut les entrants. Cliquez une ligne pour ouvrir la file du vendeur.</div>';
+  return h;
+}
+
+// --- « MES SITES » : une ligne par SITE ----------------------
+function renderVueSites() {
+  ensureSites();
+  if (!dataSites) {
+    return '<div class="lm-empty" style="padding:34px;font-size:12px">'
+         + '<span class="lm-spin"></span>Chargement des sites…</div>';
+  }
+  const rows = dataSites.slice().sort(function (a, b) {
+    return (b.leads_en_retard || 0) - (a.leads_en_retard || 0);
+  });
+  if (!rows.length) {
+    return '<div class="lm-empty" style="padding:34px;font-size:12px">'
+      + 'Aucun site dans votre périmètre.</div>';
+  }
+
+  const fait = rows.reduce((a, r) => a + (Number(r.commandes_realisees) || 0), 0);
+  const obj  = rows.reduce((a, r) => a + (Number(r.objectif_commandes) || 0), 0);
+  const pct  = lmrTaux(fait, obj);
+
+  let h = '<div class="lmf-bandeau"><span class="lmf-bandeau-n ' + (pct >= 100 ? 'ok' : '') + '">'
+        + fait + '</span><span class="lmf-bandeau-txt">commandes sur un objectif de ' + obj
+        + ' · ' + rows.length + ' site' + (rows.length > 1 ? 's' : '') + '</span></div>';
+
+  h += '<table class="lmr-tbl"><thead><tr>'
+     + '<th>Site</th>'
+     + '<th class="lmr-num">Commandes</th>'
+     + '<th class="lmr-num">Objectifs saisis</th>'
+     + '<th class="lmr-num">Leads en retard</th>'
+     + '<th class="lmr-num">Délai 1<sup>er</sup> contact</th>'
+     + '<th class="lmr-num">Contacts / jour</th>'
+     + '</tr></thead><tbody>';
+
+  let incomplets = 0;
+  rows.forEach(function (s) {
+    if (s.objectifs_incomplets) incomplets++;
+    h += '<tr class="lmr-clic" data-site="' + s.id_site + '">'
+      + '<td><div class="lmr-nom">' + escapeHtml(s.nom_site || ('Site ' + s.id_site)) + '</div>'
+      +     '<div class="lmr-sous">' + (s.cycles_ouverts || 0) + ' cycles ouverts</div></td>'
+      + '<td class="lmr-num">' + lmrCellObj(s.commandes_realisees, s.objectif_commandes) + '</td>'
+      + '<td class="lmr-num">' + (s.objectifs_incomplets
+            ? '<span class="lmr-ko">' + s.vendeurs_avec_objectif + ' / ' + s.vendeurs + '</span>'
+            : '<span class="lmr-sous">' + s.vendeurs_avec_objectif + ' / ' + s.vendeurs + '</span>')
+      + '</td>'
+      + '<td class="lmr-num">' + (s.leads_en_retard
+            ? '<span class="lmr-' + (s.leads_en_retard > 5 ? 'ko' : 'warn') + '">' + s.leads_en_retard + '</span>'
+            : '<span class="lmr-sous">—</span>') + '</td>'
+      + '<td class="lmr-num">' + lmrDelai(s.delai_moyen_min) + '</td>'
+      + '<td class="lmr-num">' + (s.contacts_par_jour_ouvre != null
+            ? s.contacts_par_jour_ouvre : '<span class="lmr-sous">—</span>') + '</td>'
+      + '</tr>';
+  });
+  h += '</tbody></table>';
+
+  // Un objectif de site est une SOMME d'objectifs vendeurs : un site
+  // incomplètement paramétré paraît moins ambitieux qu'il ne l'est.
+  if (incomplets) {
+    h += '<div class="lmr-alerte">' + incomplets + ' site' + (incomplets > 1 ? 's ont' : ' a')
+      + ' des objectifs incomplets : tous leurs vendeurs n\'ont pas d\'objectif saisi. '
+      + 'Leur objectif est donc une somme partielle — comparez-les avec cette réserve.</div>';
+  }
+  h += '<div class="lmf-note">Cliquez un site pour voir son équipe, puis un vendeur pour sa file, '
+     + 'puis un lead pour le dossier.</div>';
+  return h;
+}
+
+// File d'un vendeur atteint par la descente. Le manager la lit, et peut
+// réaffecter depuis chaque carte.
+function renderFileDe(idVendeur) {
+  if (state.mafileCible !== idVendeur) {
+    state.mafileCible = idVendeur;
+    state.mafileKey = null;
+    state.mafileData = null;
+    fetchMaFile();
+  }
+  return renderViewMaFile();
+}
+
+// Les cycles : liste ou kanban. Le pipeline n'est PAS un ensemble
+// distinct — ce sont les mêmes cycles rangés par avancement.
+function renderSectionCycles() {
+  ensureCycles(cibleCourante());
+  const vue = state.vueCycles || 'liste';
+  let h = '<div class="lm-subtoggle">'
+    + '<button type="button" class="lm-subtoggle-btn' + (vue === 'liste' ? ' active' : '')
+    + '" data-cyc="liste">Liste</button>'
+    + '<button type="button" class="lm-subtoggle-btn' + (vue === 'kanban' ? ' active' : '')
+    + '" data-cyc="kanban">Kanban</button></div>';
+  if (state.cyclesLoading && !dataActifs.length) return h + lmAttenteCycles('des cycles');
+  h += (vue === 'kanban') ? renderViewKanban() : renderViewActifs();
+  return h;
+}
+
 function lmAttenteKpi() {
   return '<div class="lm-empty" style="padding:34px;font-size:12px;color:var(--text-mut)">'
        + 'Chargement des indicateurs…</div>';
 }
 
+// Chaque section ne charge QUE ce qu'elle lit. Un onglet ne doit jamais
+// payer pour les autres (acquis du 27/08).
+// Nom de la section courante, dans le vocabulaire du socle par rôle.
+// Les anciennes comparaisons `state.section === 'synthese'` visaient des
+// sections qui N'EXISTENT PLUS : elles doivent passer par ici.
+function sectionEst(nom) {
+  return SECTIONS_ROLE[state.sectionIdx || 0] === nom;
+}
+
+function chargerSection() {
+  const SEC = SECTIONS_ROLE[state.sectionIdx || 0];
+  if (SEC === 'ma_file')      { state.mafileCible = undefined; fetchMaFile(); }
+  else if (SEC === 'leads' || SEC === 'par_source') {
+    state.mafileCible = null;   // tout le périmètre, pas moi
+    fetchMaFile();
+  }
+  else if (SEC === 'mon_equipe')  ensureEquipe(state.busSite ? Number(state.busSite) : null);
+  else if (SEC === 'mes_sites')   ensureSites();
+  else if (SEC === 'mes_chiffres')ensureKpiVendeur();
+  else if (SEC === 'campagnes')   ensureKpis();
+  else                            ensureCycles(cibleCourante());
+}
+
 function renderAll() {
   const __tDebutRender = performance.now();
   let html = '';
-  if (isManager) {
-    // « Ma file » EN PREMIER, meme pour un manager : un chef vend aussi,
-    // et ce qui brule passe avant le recul.
-    html += '<div class="lm-toggle">';
-    html += '<button type="button" class="lm-toggle-btn' + (state.section === 'ma_file'     ? ' active' : '') + '" data-section="ma_file">Ma file</button>';
-    html += '<button type="button" class="lm-toggle-btn' + (state.section === 'synthese'    ? ' active' : '') + '" data-section="synthese">Synthèse</button>';
-    html += '<button type="button" class="lm-toggle-btn' + (state.section === 'leads'       ? ' active' : '') + '" data-section="leads">Leads</button>';
-    html += '<button type="button" class="lm-toggle-btn' + (state.section === 'suivi_leads' ? ' active' : '') + '" data-section="suivi_leads">Suivi leads</button>';
-    html += '<button type="button" class="lm-toggle-btn' + (state.section === 'campagnes'   ? ' active' : '') + '" data-section="campagnes">Campagnes</button>';
-    html += '<button type="button" class="lm-toggle-btn' + (state.section === 'creation'    ? ' active' : '') + '" data-section="creation">Créer une campagne</button>';
-    html += '</div>';
-    if (state.section === 'ma_file')        html += renderViewMaFile();
-    else if (state.section === 'leads')     html += renderViewLeads();
-    // ⚠️ Les vues ci-dessous derivent des index KPI. Tant qu'ensureKpis()
-    //    n'a pas rendu, ces index sont VIDES : rendre quand meme afficherait
-    //    des ZEROS credibles pendant une seconde, ce qui est pire qu'un
-    //    ecran d'attente. ensureKpis() rappelle renderAll a la fin.
-    else if (!kpisCharges)                  html += lmAttenteKpi();
-    else if (state.section === 'synthese')  html += renderViewSynthese();
-    else if (state.section === 'campagnes') html += renderViewCampagnes();
-    else if (state.section === 'creation')  html += renderViewCreationCampagne();
-    else                                    html += renderSectionSuiviLeads();
-  } else {
-    html += '<div class="lm-toggle">';
-    // « Ma file » est le defaut du vendeur : ce qu'il doit traiter
-    // AUJOURD'HUI, trie par ce qui brule. La synthese vient apres.
-    html += '<button type="button" class="lm-toggle-btn' + (state.view === 'ma_file'   ? ' active' : '') + '" data-view="ma_file">Ma file</button>';
-    html += '<button type="button" class="lm-toggle-btn' + (state.view === 'synthese'  ? ' active' : '') + '" data-view="synthese">Ma synthese</button>';
-    html += '<button type="button" class="lm-toggle-btn' + (state.view === 'a_traiter' ? ' active' : '') + '" data-view="a_traiter">Cycles actifs</button>';
-    html += '<button type="button" class="lm-toggle-btn' + (state.view === 'pipeline'  ? ' active' : '') + '" data-view="pipeline">Pipeline</button>';
-    html += '</div>';
-    // Chaque onglet ne dépend QUE de ce qu'il lit réellement :
-    //  • Ma file        -> v_lead_sla
-    //  • Ma synthese    -> v_lead_kpi_vendeur SEULE
-    //  • Cycles/Pipeline-> les cycles, AUCUNE vue KPI
-    if (state.view === 'ma_file')       html += renderViewMaFile();
-    else if (state.view === 'pipeline') html += renderViewKanban();
-    else if (state.view === 'synthese') {
-      html += (kpisCharges || kpiVendeurCharge)
-            ? renderSyntheseVendeur(userId, 'Ma synthese', false)
-            : lmAttenteKpi();
-    }
-    else                                html += renderViewActifs();
+
+  // ⚠️ La secrétaire commerciale n'a pas de lead management (27/08).
+  if (!SECTIONS_ROLE.length) {
+    root.innerHTML = '<div class="lm-empty" style="padding:40px;font-size:13px">'
+      + 'Le lead management n\'est pas ouvert à votre profil.</div>';
+    return;
   }
-  const __tInject = performance.now();
+
+  if (state.sectionIdx == null) state.sectionIdx = 0;
+  if (state.sectionIdx >= SECTIONS_ROLE.length) state.sectionIdx = 0;
+  const SEC = SECTIONS_ROLE[state.sectionIdx];
+
+  // Niveau 1 : les sections du RÔLE, pas les six sections pour tous.
+  html += '<div class="lm-toggle">';
+  SECTIONS_ROLE.forEach(function (s, idx) {
+    html += '<button type="button" class="lm-toggle-btn' + (idx === state.sectionIdx ? ' active' : '')
+          + '" data-sec="' + idx + '">' + LIB_SECTION[s] + '</button>';
+  });
+  html += '</div>';
+
+  // La DESCENTE prime sur la section : on est allé chercher un détail,
+  // on le montre. Le fil d'Ariane porte le retour.
+  if (state.drillVendeur) {
+    html += renderFilAriane() + renderFileDe(state.drillVendeur);
+  } else if (state.drillSite) {
+    html += renderVueEquipe(state.drillSite);
+  } else if (SEC === 'ma_file') {
+    html += renderViewMaFile();
+  } else if (SEC === 'mon_equipe') {
+    html += renderVueEquipe(state.busSite ? Number(state.busSite) : null);
+  } else if (SEC === 'mes_sites') {
+    html += renderVueSites();
+  } else if (SEC === 'leads') {
+    html += renderViewLeads();
+  } else if (SEC === 'par_source') {
+    html += renderViewLeads();
+  } else if (SEC === 'campagnes') {
+    html += (kpisCharges ? renderViewCampagnes() : lmAttenteKpi());
+  } else if (SEC === 'mes_chiffres') {
+    html += ((kpisCharges || kpiVendeurCharge)
+      ? renderSyntheseVendeur(userId, 'Mes chiffres', false) : lmAttenteKpi());
+  } else {
+    // mes_cycles / cycles — le pipeline est une BASCULE, pas une section.
+    html += renderSectionCycles();
+  }
+
   root.innerHTML = html;
   const __tBind = performance.now();
   bindEvents();
@@ -2960,6 +3350,47 @@ async function selectVendeurCible(idUser) {
 
 // --- 15. Bindings -------------------------------------------
 function bindEvents() {
+  // --- Socle par rôle : sections, descente, bascule cycles -------
+  root.querySelectorAll('.lm-toggle-btn[data-sec]').forEach(el => {
+    el.addEventListener('click', () => {
+      state.sectionIdx = +el.getAttribute('data-sec');
+      state.drillSite = null; state.drillVendeur = null;
+      state.mafileCible = undefined;
+      state.mafileKey = null; state.mafileData = null;
+      renderAll();
+      chargerSection();
+    });
+  });
+  root.querySelectorAll('[data-site]').forEach(el => {
+    el.addEventListener('click', () => {
+      state.drillSite = +el.getAttribute('data-site');
+      state.drillVendeur = null;
+      equipeKey = null; dataEquipe = null;   // l'équipe change de site
+      renderAll();
+    });
+  });
+  root.querySelectorAll('[data-vendeur]').forEach(el => {
+    el.addEventListener('click', () => {
+      state.drillVendeur = +el.getAttribute('data-vendeur');
+      renderAll();
+    });
+  });
+  root.querySelectorAll('.lmr-fil button[data-fil]').forEach(el => {
+    el.addEventListener('click', () => {
+      const q = el.getAttribute('data-fil');
+      if (q === 'racine') { state.drillSite = null; state.drillVendeur = null; }
+      if (q === 'site')   { state.drillVendeur = null; }
+      state.mafileCible = undefined; state.mafileKey = null; state.mafileData = null;
+      renderAll();
+      chargerSection();
+    });
+  });
+  root.querySelectorAll('.lm-subtoggle-btn[data-cyc]').forEach(el => {
+    el.addEventListener('click', () => {
+      state.vueCycles = el.getAttribute('data-cyc'); renderAll();
+    });
+  });
+
   root.querySelectorAll('.lm-toggle-btn[data-section]').forEach(el => {
     el.addEventListener('click', () => {
       const newSection = el.getAttribute('data-section');
@@ -3163,24 +3594,12 @@ renderAll();
 // Chargement initial des cycles UNIQUEMENT si on arrive sur « Suivi leads »
 // (vendeur par défaut, ou manager pré-filtré depuis le dashboard). Un manager
 // sur « Synthèse » (défaut) n'en charge aucun -> premier affichage rapide.
-// Au montage on ne charge QUE ce que la section affichee exige.
-const __surMaFile = (isManager && state.section === 'ma_file')
-                 || (!isManager && state.view === 'ma_file');
-if (__surMaFile) {
-  // « Ma file » n'a besoin que de v_lead_sla : premier affichage en ~120 ms
-  // au lieu de plusieurs secondes.
-  state.mafileCible = userId;
-  fetchMaFile();
-} else if (!isManager) {
-  // Vendeur hors « Ma file » : chaque onglet ne charge que sa source.
-  if (state.view === 'synthese') ensureKpiVendeur();
-  else ensureCycles(cibleCourante());
-} else {
-  ensureKpis();
-  if (state.section === 'suivi_leads') {
-    if (state.selectedVendeur) selectVendeurCible(state.selectedVendeur.id_user);
-    else ensureCycles(cibleCourante());
-  }
+// Au montage, un seul point de décision : la section par défaut du RÔLE.
+// Avant la refonte, le montage câblait en dur deux rôles — d'où des
+// onglets qui ne chargeaient rien pour les autres.
+if (SECTIONS_ROLE.length) {
+  state.sectionIdx = 0;
+  chargerSection();
 }
 
 // Bascule .lm-narrow d'après la largeur RÉELLE de #lead-mgmt-root (repli des @media).
