@@ -152,6 +152,41 @@ const doc = __anchor.ownerDocument || document;
 const root = __anchor;
 try { window.__leadVer = 'v25-responsive'; } catch (e) {}
 
+const LM_SLA_CSS = `
+#lead-mgmt-root .lmf-bandeau { display:flex; align-items:baseline; gap:10px; margin-bottom:14px; }
+#lead-mgmt-root .lmf-bandeau-n { font-size:26px; font-weight:700; font-variant-numeric:tabular-nums; }
+#lead-mgmt-root .lmf-bandeau-n.retard { color:var(--red-soft); }
+#lead-mgmt-root .lmf-bandeau-n.ok     { color:var(--green); }
+#lead-mgmt-root .lmf-bandeau-txt { font-size:13px; color:var(--text-soft); }
+#lead-mgmt-root .lmf-groupe { font-size:11px; font-weight:700; letter-spacing:.4px; text-transform:uppercase; margin:18px 0 8px; }
+#lead-mgmt-root .lmf-groupe.retard  { color:var(--red-soft); }
+#lead-mgmt-root .lmf-groupe.bientot { color:#b8851a; }
+#lead-mgmt-root .lmf-groupe.calme   { color:var(--green); }
+#lead-mgmt-root .lmf-card { background:var(--card); border:1px solid var(--border); border-left:3px solid var(--text-mut); padding:12px 14px; margin-bottom:8px; cursor:pointer; transition:background .12s ease; }
+#lead-mgmt-root .lmf-card:hover { background:var(--blue-bg); }
+#lead-mgmt-root .lmf-card.retard  { border-left-color:var(--red-soft); }
+#lead-mgmt-root .lmf-card.bientot { border-left-color:#b8851a; }
+#lead-mgmt-root .lmf-card.calme   { border-left-color:#53bda7; }
+#lead-mgmt-root .lmf-card.hors    { border-left-color:#b4b2a9; }
+#lead-mgmt-root .lmf-head { display:flex; justify-content:space-between; align-items:baseline; gap:10px; }
+#lead-mgmt-root .lmf-nom { font-size:14px; font-weight:600; color:var(--text); }
+#lead-mgmt-root .lmf-temps { font-size:13px; font-weight:600; font-variant-numeric:tabular-nums; white-space:nowrap; }
+#lead-mgmt-root .lmf-temps.retard  { color:var(--red-soft); }
+#lead-mgmt-root .lmf-temps.bientot { color:#b8851a; }
+#lead-mgmt-root .lmf-temps.calme   { color:var(--green); }
+#lead-mgmt-root .lmf-temps.hors    { color:var(--text-mut); font-weight:500; }
+#lead-mgmt-root .lmf-jauge { height:3px; background:#eef2f8; border-radius:2px; margin:8px 0 6px; overflow:hidden; }
+#lead-mgmt-root .lmf-jauge span { display:block; height:3px; border-radius:2px; }
+#lead-mgmt-root .lmf-meta { font-size:12px; color:var(--text-soft); display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+#lead-mgmt-root .lmf-src { font-size:10px; font-weight:600; padding:2px 8px; border-radius:4px; background:#eaf0f9; color:var(--blue-dk); }
+#lead-mgmt-root .lmf-src.hors { background:#f1efe8; color:#5f5e5a; }
+#lead-mgmt-root .lmf-reaff { margin-left:auto; font-size:11px; font-weight:600; padding:4px 10px; border-radius:5px; border:1px solid var(--border); background:var(--card); color:var(--blue-dk); cursor:pointer; font-family:inherit; }
+#lead-mgmt-root .lmf-reaff:hover { background:var(--blue-bg); }
+#lead-mgmt-root .lmf-note { font-size:11px; color:var(--text-mut); margin-top:14px; padding-top:10px; border-top:1px solid var(--border); }
+#lead-mgmt-root .lmf-vend { display:flex; justify-content:space-between; align-items:center; padding:10px 14px; border:1px solid var(--border); background:var(--card); margin-bottom:6px; border-radius:6px; }
+#lead-mgmt-root .lmf-vend-n { font-size:16px; font-weight:700; font-variant-numeric:tabular-nums; }
+`;
+
 // --- 3. Style (injection forcée) ----------------------------
 const STYLE_ID = 'lead-mgmt-style';
 const existing = doc.getElementById(STYLE_ID);
@@ -509,13 +544,15 @@ styleEl.textContent = `
 #lead-mgmt-root.lm-narrow .lm-synth-2col { grid-template-columns:1fr; }
 #lead-mgmt-root.lm-narrow .lm-cmp-summary { grid-template-columns:repeat(2,1fr); }
 #lead-mgmt-root.lm-narrow .lm-camp-grid { grid-template-columns:repeat(2,1fr); }
+
+${LM_SLA_CSS}
 `;
 doc.head.appendChild(styleEl);
 
 // --- 4. État local ------------------------------------------
 const state = window.__leadMgmt || {};
-if (state.section === undefined)         state.section = isManager ? 'synthese' : 'suivi_leads';
-if (state.view === undefined)            state.view = isVendeur ? 'synthese' : 'a_traiter';
+if (state.section === undefined)         state.section = isManager ? 'ma_file' : 'suivi_leads';
+if (state.view === undefined)            state.view = isVendeur ? 'ma_file' : 'a_traiter';
 if (state.filterSource === undefined)    state.filterSource = 'all';
 if (state.search === undefined)          state.search = '';
 if (state.expanded === undefined)        state.expanded = {};
@@ -587,6 +624,13 @@ function applyBusSiteLead(siteId) {
   if (changed) state.busSelPending = true;
   adoptBusSelectionLead();
   if (window.__renderLeadMgmt) window.__renderLeadMgmt();
+  // La cle de cache de la file porte le site : au changement, on relance.
+  // Sans cela l'ecran garde les leads de l'ancien site — exactement le
+  // defaut corrige le 27/08 sur la synthese vendeur.
+  if (changed && (state.section === 'ma_file' || state.section === 'leads'
+                  || (!isManager && state.view === 'ma_file'))) {
+    fetchMaFile();
+  }
 }
 function adoptBusSelectionLead() {
   if (!state.busSelPending || state.busSite == null) return;
@@ -2341,29 +2385,362 @@ function bindCampagneCreation() {
 }
 
 // --- 13. Rendu principal ------------------------------------
+// ============================================================
+//  SECTIONS « MA FILE » ET « LEADS »            (ajout 27/08/2026)
+//
+//  PRINCIPE : LE TEMPS EST L'AXE, PAS LE STATUT.
+//
+//  Un lead management classique affiche une colonne « statut » et trie
+//  par date d'arrivee. C'est l'inverse du besoin : ce qui compte n'est
+//  pas QUAND le lead est arrive, mais COMBIEN DE TEMPS IL RESTE avant
+//  qu'il soit trop tard.
+//
+//  La barre de chaque carte ne mesure donc PAS un avancement de
+//  traitement : elle se remplit toute seule a mesure que le temps passe.
+//  Un vendeur qui ne fait rien voit ses barres progresser. C'est un objet
+//  qui se degrade, pas une tache qui avance.
+//
+//  Chaque source portant son propre SLA (lead_source.sla_minutes), deux
+//  leads arrives ensemble ne vieillissent pas au meme rythme : un
+//  Leboncoin brule en 15 min, le site web en 30. La barre le rend visible
+//  sans qu'on ait a lire les chiffres.
+//
+//  LA COLONNE STATUT DISPARAIT, volontairement : elle est portee par la
+//  position dans la file et la couleur du lisere. Un vendeur n'a pas a
+//  lire « attribue », il a a savoir s'il doit appeler MAINTENANT.
+// ============================================================
+
+
+
+// Combien de temps reste-t-il, en minutes ? Negatif = SLA depasse.
+function lmfReste(l) {
+  const sla = Number(l.sla_minutes) || 60;
+  if (l.premier_contact_le) return null;                 // deja traite
+  const attente = Number(l.attente_min);
+  if (isNaN(attente)) return null;
+  return sla - attente;
+}
+
+// Le NIVEAU d'urgence porte la couleur ET le tri. Une sollicitation
+// n'entre pas dans les compteurs de leads (decision 6 du 27/08) : elle
+// cohabite dans la file mais reste identifiee.
+function lmfNiveau(l) {
+  if (l.hors_lead) return 'hors';
+  const r = lmfReste(l);
+  if (r === null) return 'calme';
+  if (r < 0)  return 'retard';
+  if (r <= 5) return 'bientot';
+  return 'calme';
+}
+
+function lmfDuree(min) {
+  const m = Math.abs(Math.round(min));
+  if (m < 60) return m + ' min';
+  const h = Math.floor(m / 60), r = m % 60;
+  if (h < 24) return r ? (h + ' h ' + String(r).padStart(2, '0')) : (h + ' h');
+  return Math.floor(h / 24) + ' j';
+}
+
+// La jauge se remplit avec le TEMPS ECOULE, pas avec l'avancement.
+function lmfJauge(l) {
+  const sla = Number(l.sla_minutes) || 60;
+  const attente = Number(l.attente_min);
+  if (isNaN(attente)) return 0;
+  return Math.max(0, Math.min(100, Math.round((attente / sla) * 100)));
+}
+
+const LMF_COUL = { retard:'#a32d2d', bientot:'#b8851a', calme:'#53bda7', hors:'#b4b2a9' };
+
+function renderMaFileCard(l, avecReaff) {
+  const niv   = lmfNiveau(l);
+  const reste = lmfReste(l);
+  const pct   = lmfJauge(l);
+  let temps;
+  if (l.hors_lead)          temps = l.temps_libelle || '—';
+  else if (reste === null)  temps = 'traité';
+  else if (reste < 0)       temps = '+ ' + lmfDuree(reste);
+  else                      temps = lmfDuree(reste);
+
+  let h = '<div class="lmf-card ' + niv + '" data-lead="' + l.id_lead + '"'
+        + (l.id_client ? ' data-client="' + l.id_client + '"' : '') + '>';
+  h += '<div class="lmf-head">';
+  h += '<span class="lmf-nom">' + escapeHtml(l.nom_affiche || 'Sans nom') + '</span>';
+  h += '<span class="lmf-temps ' + niv + '">' + temps + '</span>';
+  h += '</div>';
+  h += '<div class="lmf-jauge"><span style="width:' + pct + '%;background:' + LMF_COUL[niv] + '"></span></div>';
+  h += '<div class="lmf-meta">';
+  h += '<span class="lmf-src' + (l.hors_lead ? ' hors' : '') + '">' + escapeHtml(l.source_libelle || l.source || '?') + '</span>';
+  const detail = [];
+  if (l.vehicule_interet) detail.push(escapeHtml(l.vehicule_interet));
+  if (l.hors_lead) detail.push('hors compteur lead');
+  else if (l.sla_minutes) detail.push('SLA ' + l.sla_minutes + ' min');
+  if (detail.length) h += '<span>' + detail.join(' · ') + '</span>';
+  if (avecReaff && !l.hors_lead) {
+    h += '<button type="button" class="lmf-reaff" data-reaff="' + l.id_lead + '">Réaffecter</button>';
+  }
+  h += '</div></div>';
+  return h;
+}
+
+// --- Chargement ---------------------------------------------
+// Une section ne charge qu'a sa premiere ouverture, et la cle de cache
+// inclut le SITE et la CIBLE : c'est le patron deja en place pour le
+// classement et les graphiques.
+async function fetchMaFile() {
+  const cible = state.mafileCible || userId;
+  const key   = [cible, state.busSite || 'tous'].join('|');
+  if (state.mafileKey === key && state.mafileData) return;
+  state.mafileKey = key;
+  state.mafileLoading = true;
+  if (window.__renderLeadMgmt) window.__renderLeadMgmt();
+  try {
+    let q = supabase.from('v_lead_sla')
+      .select('id_lead,source,source_libelle,id_site,id_client,id_cycle_comm,statut,'
+            + 'recu_le,attribue_le,premier_contact_le,sla_minutes,attente_min,'
+            + 'delai_reponse_min,sla_tenu,id_user_attribue,attribution_regle')
+      .in('statut', ['recu', 'resolu', 'attribue'])
+      .order('attente_min', { ascending: false })
+      .limit(300);
+    if (cible) q = q.eq('id_user_attribue', cible);
+    if (state.busSite) q = q.eq('id_site', Number(state.busSite));
+    const { data, error } = await q;
+    if (error) throw error;
+    state.mafileData = (data || []).map(r => ({
+      id_lead:            r.id_lead,
+      source:             r.source,
+      source_libelle:     r.source_libelle,
+      id_site:            r.id_site,
+      id_client:          r.id_client,
+      statut:             r.statut,
+      sla_minutes:        Number(r.sla_minutes) || 60,
+      attente_min:        r.attente_min != null ? Number(r.attente_min) : null,
+      premier_contact_le: r.premier_contact_le,
+      id_user_attribue:   r.id_user_attribue,
+      nom_affiche:        r.nom_affiche || null,
+      hors_lead:          false
+    }));
+    await enrichirMaFile();
+  } catch (e) {
+    console.error('[leadMgmt] Erreur v_lead_sla', e);
+    state.mafileError = (e && e.message) ? e.message : 'Erreur de chargement';
+    state.mafileData = [];
+  } finally {
+    state.mafileLoading = false;
+    if (window.__renderLeadMgmt) window.__renderLeadMgmt();
+  }
+}
+
+// Le nom du prospect vient de LEADS_EXTERNES : v_lead_sla ne l'expose pas
+// (elle porte les delais, pas l'identite).
+async function enrichirMaFile() {
+  const rows = state.mafileData || [];
+  if (!rows.length) return;
+  const ids = rows.map(r => r.id_lead);
+  try {
+    const { data } = await supabase.from('LEADS_EXTERNES')
+      .select('id_lead,nom,prenom,vehicule_interet').in('id_lead', ids);
+    const idx = {};
+    (data || []).forEach(r => { idx[r.id_lead] = r; });
+    rows.forEach(r => {
+      const s = idx[r.id_lead];
+      if (!s) return;
+      r.nom_affiche      = [s.prenom, s.nom].filter(Boolean).join(' ').trim() || null;
+      r.vehicule_interet = s.vehicule_interet || null;
+    });
+  } catch (e) { /* le nom est un confort, pas un bloquant */ }
+}
+
+function renderViewMaFile() {
+  if (state.mafileLoading && !state.mafileData) {
+    return '<div class="lm-empty" style="padding:30px;font-size:12px">Chargement de la file…</div>';
+  }
+  if (state.mafileError) {
+    return '<div class="lm-empty" style="padding:30px;font-size:12px">' + escapeHtml(state.mafileError) + '</div>';
+  }
+  const rows = (state.mafileData || []).slice();
+  const avecReaff = isManager;
+
+  // Tri par URGENCE : ce qui brule d'abord. Le temps restant, pas la date.
+  rows.sort(function (a, b) {
+    const ra = lmfReste(a), rb = lmfReste(b);
+    if (ra === null && rb === null) return 0;
+    if (ra === null) return 1;
+    if (rb === null) return -1;
+    return ra - rb;
+  });
+
+  const g = { retard: [], bientot: [], calme: [], hors: [] };
+  rows.forEach(r => { g[lmfNiveau(r)].push(r); });
+
+  let h = '';
+  h += '<div class="lmf-bandeau">';
+  if (g.retard.length) {
+    h += '<span class="lmf-bandeau-n retard">' + g.retard.length + '</span>';
+    h += '<span class="lmf-bandeau-txt">en retard · <span style="color:#b8851a">'
+       + g.bientot.length + ' à traiter</span> · ' + g.calme.length + ' en cours</span>';
+  } else {
+    h += '<span class="lmf-bandeau-n ok">' + rows.length + '</span>';
+    h += '<span class="lmf-bandeau-txt">' + (rows.length ? 'lead' + (rows.length > 1 ? 's' : '') + ' en cours, aucun en retard' : 'rien en attente') + '</span>';
+  }
+  h += '</div>';
+
+  if (!rows.length) {
+    h += '<div class="lm-empty" style="padding:30px;font-size:12px">Aucun lead en attente sur ce périmètre.</div>';
+    return h;
+  }
+
+  const blocs = [
+    { k:'retard',  t:'SLA dépassé' },
+    { k:'bientot', t:'Il reste du temps' },
+    { k:'calme',   t:'En cours' },
+    { k:'hors',    t:'Sollicitations' }
+  ];
+  blocs.forEach(function (b) {
+    if (!g[b.k].length) return;
+    h += '<div class="lmf-groupe ' + b.k + '">' + b.t + ' <span style="opacity:.6">' + g[b.k].length + '</span></div>';
+    g[b.k].forEach(function (l) { h += renderMaFileCard(l, avecReaff); });
+  });
+
+  h += '<div class="lmf-note">La barre se remplit à mesure que le temps passe. '
+     + 'Rouge = le SLA de la source est dépassé.</div>';
+  return h;
+}
+
+// --- Section « Leads » : la vue du chef ----------------------
+function renderViewLeads() {
+  if (state.mafileLoading && !state.mafileData) {
+    return '<div class="lm-empty" style="padding:30px;font-size:12px">Chargement…</div>';
+  }
+  const rows = (state.mafileData || []).slice();
+
+  let h = '<div class="lm-subtoggle">';
+  h += '<button type="button" class="lm-subtoggle-btn' + (state.viewLeads === 'sans_suite' || !state.viewLeads ? ' active' : '') + '" data-vleads="sans_suite">Sans suite</button>';
+  h += '<button type="button" class="lm-subtoggle-btn' + (state.viewLeads === 'a_attribuer' ? ' active' : '') + '" data-vleads="a_attribuer">À attribuer</button>';
+  h += '<button type="button" class="lm-subtoggle-btn' + (state.viewLeads === 'par_source' ? ' active' : '') + '" data-vleads="par_source">Par source</button>';
+  h += '</div>';
+
+  const vue = state.viewLeads || 'sans_suite';
+
+  if (vue === 'a_attribuer') {
+    const sans = rows.filter(r => !r.id_user_attribue);
+    if (!sans.length) return h + '<div class="lm-empty" style="padding:30px;font-size:12px">Tous les leads sont attribués.</div>';
+    sans.forEach(function (l) { h += renderMaFileCard(l, true); });
+    return h;
+  }
+
+  if (vue === 'par_source') {
+    const par = {};
+    rows.forEach(function (r) {
+      const k = r.source_libelle || r.source || '?';
+      if (!par[k]) par[k] = { n:0, retard:0, sla:r.sla_minutes };
+      par[k].n++;
+      if (lmfNiveau(r) === 'retard') par[k].retard++;
+    });
+    const cles = Object.keys(par).sort((a, b) => par[b].n - par[a].n);
+    if (!cles.length) return h + '<div class="lm-empty" style="padding:30px;font-size:12px">Aucun lead en cours.</div>';
+    cles.forEach(function (k) {
+      const p = par[k];
+      h += '<div class="lmf-vend">';
+      h += '<div><div style="font-size:13px;font-weight:600">' + escapeHtml(k) + '</div>';
+      h += '<div style="font-size:11px;color:var(--text-mut)">SLA ' + p.sla + ' min</div></div>';
+      h += '<div style="text-align:right">';
+      h += '<span class="lmf-vend-n"' + (p.retard ? ' style="color:var(--red-soft)"' : '') + '>' + p.retard + '</span>';
+      h += '<div style="font-size:11px;color:var(--text-mut)">en retard sur ' + p.n + '</div>';
+      h += '</div></div>';
+    });
+    return h;
+  }
+
+  // Sans suite : le lead attribue qui n'a jamais ete contacte, groupe par
+  // vendeur. C'est l'ecran qui manque le plus au chef des ventes.
+  const sansSuite = rows.filter(r => r.statut === 'attribue' && !r.premier_contact_le && lmfReste(r) !== null && lmfReste(r) < 0);
+  if (!sansSuite.length) {
+    return h + '<div class="lm-empty" style="padding:30px;font-size:12px">Aucun lead en dépassement. Toute l\'équipe est à jour.</div>';
+  }
+  const parV = {};
+  sansSuite.forEach(function (r) {
+    const k = r.id_user_attribue || 0;
+    if (!parV[k]) parV[k] = [];
+    parV[k].push(r);
+  });
+  Object.keys(parV).sort((a, b) => parV[b].length - parV[a].length).forEach(function (k) {
+    const lst = parV[k];
+    const nom = (dataKpiVend.find(v => Number(v.id_user) === Number(k)) || {}).vendeur_nom || ('Vendeur ' + k);
+    h += '<div class="lmf-groupe retard">' + escapeHtml(nom) + ' <span style="opacity:.6">' + lst.length + '</span></div>';
+    lst.forEach(function (l) { h += renderMaFileCard(l, true); });
+  });
+  return h;
+}
+
+// --- Réaffectation par un manager ---------------------------
+// La RPC refuse deja un appelant sans droit (42501) : le front n'est pas
+// le garde-fou, il ne fait qu'eviter un aller-retour inutile.
+async function ouvrirReaffectation(idLead) {
+  let cibles = [];
+  try {
+    const { data, error } = await supabase.rpc('lead_vendeurs_cibles', { p_id_lead: Number(idLead) });
+    if (error) throw error;
+    cibles = data || [];
+  } catch (e) {
+    alert('Impossible de charger les vendeurs : ' + ((e && e.message) || 'erreur'));
+    return;
+  }
+  if (!cibles.length) {
+    alert('Aucun vendeur disponible sur ce site, ou vous n\'avez pas le droit de réaffecter ce lead.');
+    return;
+  }
+  const lignes = cibles.map(function (c, i) {
+    return (i + 1) + '. ' + c.nom + ' — ' + c.charge + ' en cours' + (c.habituel ? ' (suit déjà ce client)' : '');
+  }).join('\n');
+  const rep = prompt('Réaffecter ce lead à :\n\n' + lignes + '\n\nNuméro du vendeur :');
+  if (!rep) return;
+  const idx = parseInt(rep, 10) - 1;
+  if (isNaN(idx) || idx < 0 || idx >= cibles.length) { alert('Choix invalide.'); return; }
+  const motif = prompt('Motif de la réaffectation (facultatif) :') || null;
+  try {
+    const { error } = await supabase.rpc('lead_reaffecter', {
+      p_id_lead: Number(idLead), p_id_user: Number(cibles[idx].id_user), p_motif: motif
+    });
+    if (error) throw error;
+    state.mafileKey = null;
+    state.mafileData = null;
+    fetchMaFile();
+  } catch (e) {
+    // 42501 = la RPC a refuse : l'appelant n'encadre pas ce site.
+    alert('Réaffectation refusée : ' + ((e && e.message) || 'droits insuffisants'));
+  }
+}
+
 function renderAll() {
   let html = '';
   if (isManager) {
+    // « Ma file » EN PREMIER, meme pour un manager : un chef vend aussi,
+    // et ce qui brule passe avant le recul.
     html += '<div class="lm-toggle">';
+    html += '<button type="button" class="lm-toggle-btn' + (state.section === 'ma_file'     ? ' active' : '') + '" data-section="ma_file">Ma file</button>';
     html += '<button type="button" class="lm-toggle-btn' + (state.section === 'synthese'    ? ' active' : '') + '" data-section="synthese">Synthèse</button>';
+    html += '<button type="button" class="lm-toggle-btn' + (state.section === 'leads'       ? ' active' : '') + '" data-section="leads">Leads</button>';
     html += '<button type="button" class="lm-toggle-btn' + (state.section === 'suivi_leads' ? ' active' : '') + '" data-section="suivi_leads">Suivi leads</button>';
     html += '<button type="button" class="lm-toggle-btn' + (state.section === 'campagnes'   ? ' active' : '') + '" data-section="campagnes">Campagnes</button>';
     html += '<button type="button" class="lm-toggle-btn' + (state.section === 'creation'    ? ' active' : '') + '" data-section="creation">Créer une campagne</button>';
     html += '</div>';
-    if (state.section === 'synthese')       html += renderViewSynthese();
+    if (state.section === 'ma_file')        html += renderViewMaFile();
+    else if (state.section === 'leads')     html += renderViewLeads();
+    else if (state.section === 'synthese')  html += renderViewSynthese();
     else if (state.section === 'campagnes') html += renderViewCampagnes();
     else if (state.section === 'creation')  html += renderViewCreationCampagne();
     else                                    html += renderSectionSuiviLeads();
   } else {
     html += '<div class="lm-toggle">';
-    // La synthese EN PREMIER : on regarde ou on en est avant d'attaquer la
-    // liste. L'ordre precedent (cycles d'abord) faisait de la page une file
-    // de taches sans recul.
+    // « Ma file » est le defaut du vendeur : ce qu'il doit traiter
+    // AUJOURD'HUI, trie par ce qui brule. La synthese vient apres.
+    html += '<button type="button" class="lm-toggle-btn' + (state.view === 'ma_file'   ? ' active' : '') + '" data-view="ma_file">Ma file</button>';
     html += '<button type="button" class="lm-toggle-btn' + (state.view === 'synthese'  ? ' active' : '') + '" data-view="synthese">Ma synthese</button>';
     html += '<button type="button" class="lm-toggle-btn' + (state.view === 'a_traiter' ? ' active' : '') + '" data-view="a_traiter">Cycles actifs</button>';
     html += '<button type="button" class="lm-toggle-btn' + (state.view === 'pipeline'  ? ' active' : '') + '" data-view="pipeline">Pipeline</button>';
     html += '</div>';
-    if (state.view === 'pipeline')      html += renderViewKanban();
+    if (state.view === 'ma_file')       html += renderViewMaFile();
+    else if (state.view === 'pipeline') html += renderViewKanban();
     else if (state.view === 'synthese') html += renderSyntheseVendeur(userId, 'Ma synthese', false);
     else                                html += renderViewActifs();
   }
@@ -2456,10 +2833,33 @@ function bindEvents() {
       state.section = newSection;
       renderAll();
       if (newSection === 'suivi_leads') ensureCycles(cibleCourante());   // chargement à la demande
+      // « Ma file » et « Leads » lisent la MEME source (v_lead_sla) : un
+      // seul chargement sert les deux. La cle de cache porte le site.
+      if (newSection === 'ma_file') { state.mafileCible = userId; fetchMaFile(); }
+      if (newSection === 'leads')   { state.mafileCible = null;   fetchMaFile(); }
     });
   });
   root.querySelectorAll('.lm-toggle-btn[data-view], .lm-subtoggle-btn[data-view]').forEach(el => {
-    el.addEventListener('click', () => { state.view = el.getAttribute('data-view'); renderAll(); });
+    el.addEventListener('click', () => {
+      state.view = el.getAttribute('data-view');
+      renderAll();
+      if (state.view === 'ma_file') { state.mafileCible = userId; fetchMaFile(); }
+    });
+  });
+  root.querySelectorAll('.lm-subtoggle-btn[data-vleads]').forEach(el => {
+    el.addEventListener('click', () => { state.viewLeads = el.getAttribute('data-vleads'); renderAll(); });
+  });
+  // Reaffectation : le bouton ne doit PAS ouvrir la fiche client sous lui.
+  root.querySelectorAll('.lmf-reaff').forEach(el => {
+    el.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      ouvrirReaffectation(el.getAttribute('data-reaff'));
+    });
+  });
+  root.querySelectorAll('.lmf-card[data-client]').forEach(el => {
+    el.addEventListener('click', () => {
+      openClientFiche(el.getAttribute('data-client'), TAB_DEFAULT, el);
+    });
   });
 
   const rangeBtn = root.querySelector('#lm-range');
@@ -2617,6 +3017,13 @@ renderAll();
 if (state.section === 'suivi_leads') {
   if (state.selectedVendeur) selectVendeurCible(state.selectedVendeur.id_user);
   else ensureCycles(cibleCourante());
+}
+// « Ma file » est le defaut : elle doit se charger au montage, sinon le
+// vendeur arrive sur un ecran vide (defaut classique du chargement a la
+// demande quand la section par defaut change).
+if (state.section === 'ma_file' || (!isManager && state.view === 'ma_file')) {
+  state.mafileCible = userId;
+  fetchMaFile();
 }
 
 // Bascule .lm-narrow d'après la largeur RÉELLE de #lead-mgmt-root (repli des @media).
