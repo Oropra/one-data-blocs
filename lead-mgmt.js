@@ -2912,7 +2912,17 @@ function bindEvents() {
       state.view = el.getAttribute('data-view');
       renderAll();
       if (state.view === 'ma_file') { state.mafileCible = userId; fetchMaFile(); }
-      else ensureKpis();
+      else {
+        ensureKpis();
+        // ⚠️ « Cycles actifs » et « Pipeline » lisent dataActifs/dataKanban,
+        //    charges par ensureCycles. Au montage ils l'etaient parce que la
+        //    section par defaut du vendeur etait « suivi_leads ». Depuis que
+        //    « Ma file » est le defaut, plus personne ne declenchait le
+        //    chargement : les deux onglets restaient VIDES (releve le 27/08).
+        if (state.view === 'a_traiter' || state.view === 'pipeline') {
+          ensureCycles(cibleCourante());
+        }
+      }
     });
   });
   root.querySelectorAll('.lm-subtoggle-btn[data-vleads]').forEach(el => {
