@@ -446,6 +446,13 @@ const LM_V2_CSS = `
 #lead-mgmt-root .v2-esc-res { margin-top:6px; font-size:11px; color:var(--text-mut); }
 /* Micro-jauge en cellule de tableau : la proportion se lit mieux qu'un
    chiffre, mais elle ne doit pas peser plus qu'une ligne de texte. */
+/* Un chiffre cliquable doit LE MONTRER, sans devenir un bouton : on
+   garde la typographie du tableau et on souligne au survol. */
+#lead-mgmt-root .v2-lien { background:none; border:none; padding:0; font-family:inherit;
+  font-size:13px; font-weight:700; color:var(--blue); cursor:pointer;
+  font-variant-numeric:tabular-nums; }
+#lead-mgmt-root .v2-lien:hover { text-decoration:underline; text-underline-offset:2px; }
+#lead-mgmt-root .v2-lien.v2-ko { color:var(--red-soft); }
 #lead-mgmt-root .v2-mini { height:3px; background:#eef2f8; border-radius:2px; margin-top:4px;
   overflow:hidden; }
 #lead-mgmt-root .v2-mini i { display:block; height:3px; border-radius:2px;
@@ -1129,6 +1136,11 @@ function applyPeriod(from, to) {
   reloadGraphes();
   reloadCampagnes();
   renderAll();
+  // 🐛 Sans cet appel, le cache était vidé mais RIEN ne relançait le
+  //    chargement : la vue Campagnes restait sur un spinner sans fin
+  //    (relevé le 27/08). Chaque vue doit aussi savoir se charger seule
+  //    — voir ensureCampagnes() appelée depuis v2Campagnes().
+  chargerSection();
 }
 function openRangePicker(anchor) {
   closeRangePicker();
@@ -3610,7 +3622,10 @@ let reacKey = null, reacEnCours = null;
 
 function ensureReactivite() {
   const ids = v2Sites().map(s => s.id).sort();
-  const key = [state.period.from, state.period.to, ids.join(',')].join('|');
+  const V = state.v2 || {};
+  // La clé porte le NIVEAU : descendre sur un vendeur doit recharger.
+  const key = [state.period.from, state.period.to, ids.join(','),
+               V.niveau, V.cle].join('|');
   if (reacKey === key && dataReactivite) return Promise.resolve();
   if (reacEnCours) return reacEnCours;
   reacKey = key;
@@ -3624,7 +3639,12 @@ function ensureReactivite() {
         sb.rpc('get_lead_delai_par_source', {
           p_viewer_id_user: Number(userId),
           p_date_from: state.period.from, p_date_to: state.period.to,
-          p_site_ids: ids.length ? ids : null })
+          p_site_ids: ids.length ? ids : null,
+          // ⚠️ Sans ce paramètre, l'écran d'un vendeur affichait les
+          //    leads de toute l'équipe à côté d'un tableau filtré sur
+          //    lui : 16 contre 9 sur La Centrale.
+          p_id_user: (state.v2 && state.v2.niveau === 'vendeur')
+            ? Number(state.v2.cle) : null })
       ]);
       if (r.error) throw r.error;
       dataReactivite  = r.data || [];
@@ -3706,18 +3726,29 @@ function v2Reactivite() {
     h += '<div class="v2-rep" style="margin-bottom:14px"><table><thead><tr>'
       + '<th>Source</th><th>En attente</th><th>En retard</th><th>SLA</th>'
       + '<th>Attente médiane</th></tr></thead><tbody>';
+    const TS = { a:0, r:0 };
     S.forEach(x => {
       const att = n(x.attente_med_min), sla = n(x.sla_minutes);
       const ko = sla && att > sla;
+      TS.a += n(x.nb_en_attente); TS.r += n(x.nb_en_retard);
+      // Les chiffres de leads sont CLIQUABLES : ils ouvrent la liste,
+      // comme une pastille du mur. Un compteur qu'on ne peut pas ouvrir
+      // désigne un problème sans donner prise dessus.
       h += '<tr><td><b>' + escapeHtml(x.source_libelle || x.source) + '</b></td>'
-        + '<td>' + n(x.nb_en_attente) + '</td>'
-        + '<td>' + (n(x.nb_en_retard) ? '<span class="v2-ko">' + x.nb_en_retard + '</span>'
+        + '<td><button type="button" class="v2-lien" data-v2src="' + escapeHtml(x.source)
+          + '" data-v2filtre="attente">' + n(x.nb_en_attente) + '</button></td>'
+        + '<td>' + (n(x.nb_en_retard)
+            ? '<button type="button" class="v2-lien v2-ko" data-v2src="' + escapeHtml(x.source)
+              + '" data-v2filtre="retard">' + x.nb_en_retard + '</button>'
             : '<span class="v2-sous">—</span>') + '</td>'
         + '<td class="v2-sous">' + (sla ? sla + ' min' : '—') + '</td>'
         + '<td><span class="' + (ko ? 'v2-ko' : 'v2-ok') + '">' + lmfDuree(att) + '</span></td>'
         + '</tr>';
     });
-    h += '</tbody></table></div>'
+    h += '</tbody><tfoot><tr><td>Total · ' + S.length + ' sources</td>'
+      + '<td>' + TS.a + '</td>'
+      + '<td' + (TS.r ? ' class="v2-ko"' : '') + '>' + TS.r + '</td>'
+      + '<td>—</td><td>—</td></tr></tfoot></table></div>'
       + '<div class="lmf-note" style="margin:-6px 0 14px">Deux sources au même SLA avec des '
       + 'attentes très différentes désignent l\'organisation, pas l\'apporteur.</div>';
   }
@@ -3784,10 +3815,14 @@ function v2Rapport() {
   // Les enseignements D'ABORD : quatre barres qui expliquent, puis le
   // tableau qui détaille. L'inverse obligerait à lire 12 lignes avant de
   // comprendre ce qui compte.
+  // Au niveau SOURCE, quatre colonnes n'ont pas de sens : on ne les
+  // affiche pas plutôt que de les remplir de tirets.
+  const parSource = (state.v2.niveau === 'vendeur');
   let h = v2Reactivite();
   h += '<div class="v2-rep"><table><thead><tr>'
     + '<th>' + libCol + '</th><th>Leads reçus</th><th>En retard</th><th>Attente moyenne</th>'
-    + '<th>Sollicitations</th><th>À relancer</th><th>Commandes</th><th>Conversion</th>'
+    + (parSource ? ''
+       : '<th>Sollicitations</th><th>À relancer</th><th>Commandes</th><th>Conversion</th>')
     + '</tr></thead><tbody>';
   const T = { l:0, r:0, s:0, ar:0, c:0, o:0 };
 
@@ -3806,15 +3841,24 @@ function v2Rapport() {
     // sollicitation rattachés : on laisse les colonnes vides plutôt que
     // d'afficher des zéros qui passeraient pour des résultats.
     if (ln.type === 'source') {
+      // ⚠️ Les colonnes sollicitations / à relancer / commandes /
+      //    conversion n'existent PAS au niveau source : une campagne se
+      //    rattache à un vendeur, pas à un apporteur. Elles étaient
+      //    remplies de tirets — le tableau est donc RÉDUIT à ce qui a
+      //    du sens (voir l'en-tête, qui s'adapte).
       h += '<tr><td><b>' + escapeHtml(ln.l) + '</b><div class="v2-sous">'
         + escapeHtml(ln.sous) + '</div></td>'
-        + '<td>' + (L.length || '<span class="v2-sous">—</span>') + '</td>'
-        + '<td>' + (r ? '<span class="v2-ko">' + r + '</span>' : '<span class="v2-sous">—</span>') + '</td>'
+        + '<td>' + (L.length
+            ? '<button type="button" class="v2-lien" data-v2src="' + escapeHtml(String(ln.k))
+              + '" data-v2filtre="attente">' + L.length + '</button>'
+            : '<span class="v2-sous">—</span>') + '</td>'
+        + '<td>' + (r
+            ? '<button type="button" class="v2-lien v2-ko" data-v2src="' + escapeHtml(String(ln.k))
+              + '" data-v2filtre="retard">' + r + '</button>'
+            : '<span class="v2-sous">—</span>') + '</td>'
         + '<td>' + (dl == null ? '<span class="v2-sous">—</span>'
             : '<span class="v2-' + (dl > 60 ? 'ko' : dl > 25 ? 'warn' : 'ok') + '">'
-              + lmfDuree(dl) + '</span>') + '</td>'
-        + '<td class="v2-sous">—</td><td class="v2-sous">—</td>'
-        + '<td class="v2-sous">—</td><td class="v2-sous">—</td></tr>';
+              + lmfDuree(dl) + '</span>') + '</td></tr>';
       T.l += L.length; T.r += r;
       return;
     }
@@ -3862,9 +3906,11 @@ function v2Rapport() {
   const cvT = (T.l + T.s) ? Math.round(T.c / (T.l + T.s) * 100) : 0;
   h += '</tbody><tfoot><tr><td>Total</td><td>' + T.l + '</td>'
     + '<td' + (T.r ? ' class="v2-ko"' : '') + '>' + T.r + '</td><td>—</td>'
-    + '<td>' + T.s + '</td><td' + (T.ar ? ' class="v2-ko"' : '') + '>' + T.ar + '</td>'
-    + '<td>' + T.c + '<span class="v2-sous"> / ' + T.o + '</span></td>'
-    + '<td>' + cvT + ' %</td></tr></tfoot></table></div>';
+    + (parSource ? ''
+       : '<td>' + T.s + '</td><td' + (T.ar ? ' class="v2-ko"' : '') + '>' + T.ar + '</td>'
+         + '<td>' + T.c + '<span class="v2-sous"> / ' + T.o + '</span></td>'
+         + '<td>' + cvT + ' %</td>')
+    + '</tr></tfoot></table></div>';
   h += '<div class="lmf-note">La <b>conversion</b> rapporte les commandes à TOUT ce qui a été mis '
     + 'devant le vendeur — leads entrants ET sollicitations sortantes. C\'est le seul dénominateur '
     + 'qui ne flatte personne : traiter peu de sollicitations remonte artificiellement un taux '
@@ -3874,6 +3920,7 @@ function v2Rapport() {
 
 // --- LES CAMPAGNES : deux tableaux par ligne ----------------
 function v2Campagnes() {
+  ensureCampagnes();
   if (!dataCampagnes) return '<div class="lm-empty" style="padding:34px;font-size:12px">'
     + '<span class="lm-spin"></span>Chargement des campagnes…</div>';
   const camp = dataCampagnes || [];
@@ -4089,7 +4136,7 @@ function renderAll() {
   if (V.vue !== 'campagnes') html += v2Bandeau();
 
   if (V.vue === 'campagnes')    html += v2Campagnes();
-  else if (V.vue === 'rapport') html += v2Rapport();
+  else if (V.vue === 'rapport') html += v2Rapport() + v2Panneau();
   else                          html += v2Mur() + v2Panneau();
 
   root.innerHTML = html;
@@ -4229,6 +4276,26 @@ function bindEvents() {
         leads: v2LeadsDe(ln).filter(l => v2Tranche(l) === tk)
       };
       renderAll();
+    });
+  });
+  // Les chiffres de leads du rapport ouvrent la MÊME liste que les
+  // pastilles du mur : un compteur doit toujours pouvoir s'ouvrir.
+  root.querySelectorAll('[data-v2src]').forEach(el => {
+    el.addEventListener('click', () => {
+      const src = el.getAttribute('data-v2src');
+      const filtre = el.getAttribute('data-v2filtre');
+      let lst = v2Leads().filter(l =>
+        String(l.source) === String(src) || String(l.source_libelle) === String(src));
+      if (filtre === 'retard') lst = lst.filter(l => lmfNiveau(l) === 'retard');
+      const lib = (lst[0] && lst[0].source_libelle) || src;
+      state.v2.sel = {
+        titre: lib + (filtre === 'retard' ? ' · en retard' : ' · en attente'),
+        leads: lst
+      };
+      renderAll();
+      // Le panneau s'ouvre en bas de page : on l'amène sous les yeux.
+      const pan = root.querySelector('.v2-pan');
+      if (pan && pan.scrollIntoView) pan.scrollIntoView({ behavior:'smooth', block:'nearest' });
     });
   });
   root.querySelectorAll('[data-v2fermer]').forEach(el => {
