@@ -3765,6 +3765,11 @@ function v2Reactivite() {
 function v2Panneau() {
   const V = state.v2;
   if (!V || !V.sel) return '';
+
+  // Le panneau sert DEUX natures : des leads (mur, rapport) et des
+  // sollicitations de campagne. Même contenant, contenus différents.
+  if (V.sel.type === 'campagne') return v2PanneauCampagne();
+
   const L = V.sel.leads || [];
   let h = '<div class="v2-pan"><div class="v2-pan-h"><div><b>'
     + escapeHtml(V.sel.titre) + '</b><div class="v2-pan-n">' + L.length + ' dossier'
@@ -3797,6 +3802,40 @@ function v2Panneau() {
   return h;
 }
 
+// Le détail d'une campagne : qui, depuis quand, et le cycle où sauter.
+function v2PanneauCampagne() {
+  const V = state.v2, S = V.sel;
+  let h = '<div class="v2-pan"><div class="v2-pan-h"><div><b>'
+    + escapeHtml(S.titre) + '</b><div class="v2-pan-n">'
+    + (S.rows ? S.rows.length + ' sollicitation' + (S.rows.length > 1 ? 's' : '') : '…')
+    + '</div></div><button type="button" class="v2-x" data-v2fermer="1">×</button></div>'
+    + '<div class="v2-pan-b">';
+  if (!S.rows) {
+    h += '<div style="padding:20px;text-align:center;color:var(--text-mut);font-size:12px">'
+      + '<span class="lm-spin"></span>Chargement…</div>';
+  } else if (!S.rows.length) {
+    h += '<div style="padding:20px;text-align:center;color:var(--text-mut);font-size:12px">'
+      + 'Aucune sollicitation dans cette sélection.</div>';
+  } else {
+    S.rows.forEach(r => {
+      // L'ancienneté colore : au-delà de 14 jours sans traitement, une
+      // sollicitation de campagne n'a plus grand sens.
+      const j = Number(r.anciennete_j) || 0;
+      const cls = r.traitee ? 'ok' : (j > 14 ? 'ko' : j > 7 ? 'warn' : '');
+      h += '<div class="v2-lead ' + cls + '"'
+        + (r.id_client ? ' data-v2client="' + r.id_client + '"' : '') + '>'
+        + '<div class="v2-lead-h"><b>' + escapeHtml(r.client_nom || 'Sans nom') + '</b>'
+        + '<em class="' + cls + '">' + (r.traitee ? 'traitée' : j + ' j') + '</em></div>'
+        + '<div class="v2-lead-m"><span class="v2-tag">'
+        + escapeHtml(r.campagne || '') + '</span> '
+        + escapeHtml(r.vendeur_nom || '') + ' · ' + escapeHtml(r.nom_site || '') + '</div>'
+        + '</div>';
+    });
+  }
+  h += '</div></div>';
+  return h;
+}
+
 // --- LE RAPPORT CROISÉ --------------------------------------
 // Le mur montre OÙ ça coince maintenant ; le rapport montre CE QUE ça
 // produit. Même périmètre, d'où une bascule et non un onglet.
@@ -3815,9 +3854,14 @@ function v2Rapport() {
   // Les enseignements D'ABORD : quatre barres qui expliquent, puis le
   // tableau qui détaille. L'inverse obligerait à lire 12 lignes avant de
   // comprendre ce qui compte.
-  // Au niveau SOURCE, quatre colonnes n'ont pas de sens : on ne les
-  // affiche pas plutôt que de les remplir de tirets.
-  const parSource = (state.v2.niveau === 'vendeur');
+  // 🐛 REDONDANCE CORRIGÉE (27/08) : au niveau vendeur, ce tableau
+  //    affichait exactement les mêmes lignes que celui des sources —
+  //    mêmes sources, mêmes chiffres. Le tableau des sources porte en
+  //    plus le SLA et l'attente MÉDIANE : il est strictement plus
+  //    informatif. On ne garde donc que lui à ce niveau.
+  if (state.v2.niveau === 'vendeur') return v2Reactivite();
+
+  const parSource = false;
   let h = v2Reactivite();
   h += '<div class="v2-rep"><table><thead><tr>'
     + '<th>' + libCol + '</th><th>Leads reçus</th><th>En retard</th><th>Attente moyenne</th>'
@@ -3952,11 +3996,18 @@ function v2Campagnes() {
     const pr = n(c.nb_propales), bd = n(c.nb_bdc), wi = n(c.nb_wins);
     const pt = pc(tr, s), cv = pc(wi, cy);
     T.s += s; T.t += tr; T.a += at; T.p += pr; T.b += bd; T.w += wi;
+    // Chaque compteur ouvre SA liste : sollicitations, traitées, ou
+    // celles qui restent. Sans cela « 71 à traiter » ne dit pas QUI.
     h += '<tr><td><b>' + escapeHtml(c.campagne) + '</b></td>'
-      + '<td>' + s + '</td>'
-      + '<td><span class="' + cls(pt) + '">' + pt + ' %</span>'
+      + '<td><button type="button" class="v2-lien" data-v2camp="' + escapeHtml(c.campagne)
+        + '" data-v2cf="tout">' + s + '</button></td>'
+      + '<td><button type="button" class="v2-lien ' + cls(pt) + '" data-v2camp="'
+        + escapeHtml(c.campagne) + '" data-v2cf="traitees">' + pt + ' %</button>'
       + '<div class="v2-mini"><i class="' + cls(pt) + '" style="width:' + pt + '%"></i></div></td>'
-      + '<td>' + (at ? '<span class="v2-ko">' + at + '</span>' : '<span class="v2-sous">—</span>') + '</td>'
+      + '<td>' + (at
+          ? '<button type="button" class="v2-lien v2-ko" data-v2camp="' + escapeHtml(c.campagne)
+            + '" data-v2cf="a_traiter">' + at + '</button>'
+          : '<span class="v2-sous">—</span>') + '</td>'
       + '<td>' + (pr || '<span class="v2-sous">—</span>') + '</td>'
       + '<td>' + (bd || '<span class="v2-sous">—</span>') + '</td>'
       + '<td>' + (wi || '<span class="v2-sous">—</span>') + '</td>'
@@ -3990,7 +4041,9 @@ function v2Campagnes() {
         + '<td>' + ci + '</td>'
         + '<td><span class="' + cls(pt) + '">' + pt + ' %</span>'
         + '<div class="v2-mini"><i class="' + cls(pt) + '" style="width:' + pt + '%"></i></div></td>'
-        + '<td>' + (ar ? '<span class="v2-ko">' + ar + '</span>'
+        + '<td>' + (ar
+            ? '<button type="button" class="v2-lien v2-ko" data-v2camp="" data-v2cf="a_traiter" '
+              + 'data-v2cvend="' + v.id_user + '">' + ar + '</button>'
             : '<span class="v2-sous">—</span>') + '</td></tr>';
     });
     h += '</tbody></table></div>';
@@ -4001,6 +4054,40 @@ function v2Campagnes() {
     + 'de traitement</b>. Les étapes sont cumulées — un dossier gagné est passé par la propale '
     + 'et le bon de commande. Cliquez un vendeur pour ouvrir sa file.</div>';
   return h;
+}
+
+// Charge le détail derrière un chiffre de campagne. Le panneau s'ouvre
+// tout de suite (avec son spinner) : l'utilisateur voit que son clic a
+// été pris en compte, plutôt qu'un écran qui ne bouge pas.
+async function ouvrirDetailCampagne(campagne, filtre, idVend) {
+  const ids = v2Sites().map(s => s.id);
+  const V = state.v2;
+  const lib = { a_traiter:'à traiter', traitees:'traitées', tout:'sollicitations' }[filtre] || '';
+  V.sel = { type:'campagne', titre: (campagne || 'Toutes campagnes') + ' · ' + lib, rows: null };
+  renderAll();
+  try {
+    const { data, error } = await sb.rpc('get_campagne_detail', {
+      p_viewer_id_user: Number(userId),
+      p_date_from: state.period.from, p_date_to: state.period.to,
+      p_campagne: campagne || null,
+      p_filtre: filtre,
+      p_site_ids: ids.length ? ids : null,
+      p_id_user: idVend ? Number(idVend)
+                 : (V.niveau === 'vendeur' ? Number(V.cle) : null),
+      p_limit: 300
+    });
+    if (error) throw error;
+    if (state.v2.sel && state.v2.sel.type === 'campagne') {
+      state.v2.sel.rows = data || [];
+      renderAll();
+    }
+  } catch (e) {
+    console.error('[leadMgmt] detail campagne', e);
+    if (state.v2.sel && state.v2.sel.type === 'campagne') {
+      state.v2.sel.rows = [];
+      renderAll();
+    }
+  }
 }
 
 // --- Chargement des campagnes -------------------------------
@@ -4135,7 +4222,7 @@ function renderAll() {
 
   if (V.vue !== 'campagnes') html += v2Bandeau();
 
-  if (V.vue === 'campagnes')    html += v2Campagnes();
+  if (V.vue === 'campagnes')    html += v2Campagnes() + v2Panneau();
   else if (V.vue === 'rapport') html += v2Rapport() + v2Panneau();
   else                          html += v2Mur() + v2Panneau();
 
@@ -4296,6 +4383,13 @@ function bindEvents() {
       // Le panneau s'ouvre en bas de page : on l'amène sous les yeux.
       const pan = root.querySelector('.v2-pan');
       if (pan && pan.scrollIntoView) pan.scrollIntoView({ behavior:'smooth', block:'nearest' });
+    });
+  });
+  root.querySelectorAll('[data-v2camp]').forEach(el => {
+    el.addEventListener('click', () => {
+      ouvrirDetailCampagne(el.getAttribute('data-v2camp'),
+                           el.getAttribute('data-v2cf'),
+                           el.getAttribute('data-v2cvend'));
     });
   });
   root.querySelectorAll('[data-v2fermer]').forEach(el => {
