@@ -1028,6 +1028,44 @@ OD.define('topnav', {
     [50, 150, 300, 600, 1200, 2500, 5000].forEach(function (d) { setTimeout(ensureNav, d); });
     if (!window.__navSafety) { window.__navSafety = setInterval(ensureNav, 4000); }
   }
+
+  // ---- Rappel d'arbitrage au retour sur One Data (patch BACS2) ----
+  // Réutilise rafraichirBadgeArbitrage / openArbitrage / arbSb / arbUserId / root / doc.
+  async function rappelArbitrageAuRetour() {
+    try {
+      const sb = arbSb(), uid = arbUserId();
+      if (!sb || uid == null) return;
+      rafraichirBadgeArbitrage();
+      const { data, error } = await sb.rpc('client_file_arbitrage', { p_id_user: uid, p_statut: 'en_attente', p_limit: 99 });
+      if (error) return;
+      const n = (data && data.lignes) ? data.lignes.length : 0;
+      afficherBandeauArbitrage(n);
+    } catch (e) {}
+  }
+  function afficherBandeauArbitrage(n) {
+    const r = root(); if (!r) return;
+    let b = r.querySelector('#od-arb-rappel');
+    if (!n || n <= 0) { if (b) b.remove(); return; }
+    if (!b) {
+      b = doc.createElement('div');
+      b.id = 'od-arb-rappel';
+      b.style.cssText = 'position:fixed;top:64px;right:16px;z-index:99999;background:#1F4A85;color:#fff;'
+        + 'padding:10px 14px;border-radius:10px;box-shadow:0 3px 12px rgba(0,0,0,.25);'
+        + 'font:600 13px "Nunito Sans",system-ui,sans-serif;cursor:pointer;display:flex;'
+        + 'align-items:center;gap:10px;max-width:340px';
+      b.addEventListener('click', function () { b.remove(); openArbitrage(); });
+      r.appendChild(b);
+    }
+    b.innerHTML = '<span>\u26A0\uFE0F ' + n + ' client' + (n > 1 ? 's' : '') + ' \u00E0 arbitrer</span>'
+      + '<span style="opacity:.85;text-decoration:underline">Ouvrir</span>';
+  }
+  if (!window.__navArbReturnBound) {
+    window.__navArbReturnBound = true;
+    var __onArbReturn = function () { if (doc.visibilityState === 'visible') rappelArbitrageAuRetour(); };
+    try { doc.addEventListener('visibilitychange', __onArbReturn); } catch (e) {}
+    try { window.addEventListener('focus', __onArbReturn); } catch (e) {}
+    setTimeout(rappelArbitrageAuRetour, 1500);
+  }
   boot();
 })();
     // La nav s'est peut-être construite AVANT que oropraUser soit à jour (event
