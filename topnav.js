@@ -794,6 +794,7 @@ OD.define('topnav', {
       const { data, error } = await sb.rpc('client_arbitrage_detail', { p_id_file: ligne.id_file, p_id_user: uid });
       if (error) throw error;
       // fiche_entrant = 'b' (créée), fiche_candidat = 'a' (existante)
+      ARB.srcLabel = data.source_libelle || null;
       ARB.detail = {
         id_file: ligne.id_file, score: ligne.score, detail: ligne.detail || {},
         a: data.fiche_candidat || {}, b: data.fiche_entrant || {}
@@ -851,7 +852,7 @@ OD.define('topnav', {
     '</b> (fiche ' + esc(d.a.idvu) + ') et récupère les infos de la fiche ' + esc(d.b.idvu) + '.</p></div>';
   }
   function arbMini(cote, f) {
-    return '<div class="mini ' + cote + '"><div class="ref">' + (cote === 'a' ? 'Fiche existante' : 'Vient d\'être créée') + '</div>' +
+    return '<div class="mini ' + cote + '"><div class="ref">' + (cote === 'a' ? 'Fiche existante' : (ARB && ARB.srcLabel ? ARB.srcLabel : 'Saisie vendeur')) + '</div>' +
       '<div class="n">' + esc(arbNom(f)) + '</div>' +
       '<div class="l">' + esc([f.mobile, f.email].filter(Boolean).join(' · ')) + '</div>' +
       '<div class="l">' + esc([f.code_postal, f.ville].filter(Boolean).join(' ') + (f.vehicules ? ' · ' + f.vehicules + ' véh.' : '')) + '</div></div>';
@@ -885,7 +886,7 @@ OD.define('topnav', {
   }
   function arbOpt(cote, k, v) {
     const on = (ARB.choix[k] || 'a') === cote;
-    const src = (cote === 'a') ? 'existante' : 'saisie vendeur';
+    const src = (cote === 'a') ? 'existante' : ((ARB && ARB.srcLabel) ? ARB.srcLabel : 'saisie vendeur');
     return '<button class="od-arb-opt ' + cote + '" data-champ="' + k + '" data-cote="' + cote + '" aria-pressed="' + on + '">' +
       '<span class="ov' + (v ? '' : ' vide') + '">' + (esc(v) || 'non renseigné') + '</span>' +
       '<span class="os">(' + src + ')</span></button>';
