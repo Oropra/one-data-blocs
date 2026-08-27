@@ -460,19 +460,33 @@ const LM_V2_CSS = `
 #lead-mgmt-root .v2-mini i.v2-ok { background:#53bda7; }
 #lead-mgmt-root .v2-mini i.v2-warn { background:#b8851a; }
 #lead-mgmt-root .v2-mini i.v2-ko { background:var(--red-soft); }
-#lead-mgmt-root .v2-pan { background:var(--card); border:1px solid var(--border);
-  border-radius:12px; margin-top:14px; }
-#lead-mgmt-root .v2-pan-h { padding:13px 16px; border-bottom:1px solid var(--border);
-  display:flex; justify-content:space-between; align-items:flex-start; gap:10px; }
+/* VOLET LATÉRAL GAUCHE, en modal : la liste s'ouvre PAR-DESSUS, à
+   portée de regard, au lieu d'apparaître en bas de page où il fallait
+   défiler pour la trouver (relevé le 27/08). Le fond assombri isole la
+   lecture ; Échap et le clic dehors referment. */
+#lead-mgmt-root .v2-ovl { position:fixed; inset:0; background:rgba(28,43,61,.34);
+  z-index:9998; animation:v2fade .16s ease; }
+@keyframes v2fade { from { opacity:0; } }
+#lead-mgmt-root .v2-pan { position:fixed; top:0; left:0; bottom:0; width:420px; max-width:92vw;
+  background:var(--card); z-index:9999; display:flex; flex-direction:column;
+  box-shadow:4px 0 28px rgba(28,43,61,.2); animation:v2slide .2s cubic-bezier(.22,1,.36,1); }
+@keyframes v2slide { from { transform:translateX(-100%); } }
+#lead-mgmt-root .v2-pan-h { padding:15px 18px; border-bottom:1px solid var(--border);
+  display:flex; justify-content:space-between; align-items:flex-start; gap:10px;
+  flex-shrink:0; }
 #lead-mgmt-root .v2-pan-h b { font-size:14px; }
 #lead-mgmt-root .v2-pan-n { font-size:11px; color:var(--text-mut); margin-top:2px; }
 #lead-mgmt-root .v2-x { background:none; border:none; color:var(--text-mut); font-size:20px;
   line-height:1; padding:0 2px; cursor:pointer; font-family:inherit; }
 #lead-mgmt-root .v2-x:hover { color:var(--text); }
-#lead-mgmt-root .v2-pan-b { padding:10px 14px 14px; display:grid;
-  grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:6px; }
-#lead-mgmt-root .v2-lead { border-left:2px solid var(--text-mut); padding:9px 12px;
-  border-radius:0 6px 6px 0; position:relative; }
+/* Une seule colonne, dense : on parcourt une LISTE de clients, on ne
+   compare pas des cartes. */
+#lead-mgmt-root .v2-pan-b { padding:8px 12px 18px; overflow-y:auto; flex:1; }
+#lead-mgmt-root .v2-pan-f { padding:10px 18px; border-top:1px solid var(--border);
+  font-size:11px; color:var(--text-mut); flex-shrink:0; }
+#lead-mgmt-root .v2-lead { border-left:2px solid var(--text-mut); padding:8px 11px;
+  border-radius:0 6px 6px 0; position:relative; cursor:pointer; }
+#lead-mgmt-root .v2-lead + .v2-lead { margin-top:2px; }
 #lead-mgmt-root .v2-lead:hover { background:var(--blue-bg); }
 #lead-mgmt-root .v2-lead.ko { border-left-color:var(--red-soft); }
 #lead-mgmt-root .v2-lead.warn { border-left-color:#b8851a; }
@@ -3765,6 +3779,12 @@ function v2Reactivite() {
 function v2Panneau() {
   const V = state.v2;
   if (!V || !V.sel) return '';
+  // L'overlay ferme au clic : il fait partie du volet, pas de la page.
+  return '<div class="v2-ovl" data-v2fermer="1"></div>' + v2PanneauCorps();
+}
+
+function v2PanneauCorps() {
+  const V = state.v2;
 
   // Le panneau sert DEUX natures : des leads (mur, rapport) et des
   // sollicitations de campagne. Même contenant, contenus différents.
@@ -3798,7 +3818,9 @@ function v2Panneau() {
     }
     h += '</div>';
   });
-  h += '</div></div>';
+  h += '</div>';
+  h += '<div class="v2-pan-f">Cliquez un client pour ouvrir sa fiche. '
+    + 'Échap ou le fond pour refermer.</div></div>';
   return h;
 }
 
@@ -3832,7 +3854,9 @@ function v2PanneauCampagne() {
         + '</div>';
     });
   }
-  h += '</div></div>';
+  h += '</div>';
+  h += '<div class="v2-pan-f">Triées des plus anciennes. Cliquez un client pour ouvrir '
+    + 'sa fiche et relancer.</div></div>';
   return h;
 }
 
@@ -4099,7 +4123,8 @@ function ensureCampagnes() {
   // fil doit recharger des totaux bornés à la sélection, pas afficher
   // ceux de tout le périmètre du viewer.
   const ids = v2Sites().map(s => s.id).sort();
-  const key = [state.period.from, state.period.to, ids.join(',')].join('|');
+  const V = state.v2 || {};
+  const key = [state.period.from, state.period.to, ids.join(','), V.niveau, V.cle].join('|');
   if (campKey === key && dataCampagnes) return Promise.resolve();
   if (campEnCours) return campEnCours;
   campKey = key;
@@ -4109,7 +4134,12 @@ function ensureCampagnes() {
         sb.rpc('get_campagnes_sollicitation', {
           p_viewer_id_user: Number(userId),
           p_date_from: state.period.from, p_date_to: state.period.to,
-          p_site_ids: ids.length ? ids : null }),
+          p_site_ids: ids.length ? ids : null,
+          // ⚠️ INDISPENSABLE à la cohérence : sans lui, le tableau d'un
+          //    vendeur comptait les sollicitations de toute l'équipe et
+          //    le détail derrière le clic n'en trouvait aucune.
+          p_id_user: (state.v2 && state.v2.niveau === 'vendeur')
+            ? Number(state.v2.cle) : null }),
         sb.rpc('get_campagnes_par_vendeur', {
           p_viewer_id_user: Number(userId),
           p_date_from: state.period.from, p_date_to: state.period.to,
@@ -4395,6 +4425,16 @@ function bindEvents() {
   root.querySelectorAll('[data-v2fermer]').forEach(el => {
     el.addEventListener('click', () => { state.v2.sel = null; renderAll(); });
   });
+  // Échap referme le volet. L'écouteur est posé UNE fois pour toutes :
+  // bindEvents rejoue à chaque rendu, un ajout par rendu empilerait les
+  // écouteurs jusqu'à saturer la page.
+  if (!window.__v2EscBound) {
+    window.__v2EscBound = true;
+    (doc.defaultView || window).addEventListener('keydown', (ev) => {
+      if (ev.key !== 'Escape') return;
+      if (state.v2 && state.v2.sel) { state.v2.sel = null; renderAll(); }
+    });
+  }
   root.querySelectorAll('[data-v2client]').forEach(el => {
     el.addEventListener('click', (ev) => {
       if (ev.target.closest('[data-v2reaff]')) return;   // le bouton d'abord
