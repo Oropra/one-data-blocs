@@ -419,6 +419,72 @@ const LM_V2_CSS = `
   margin-top:12px; font-size:11px; color:var(--text-mut); }
 #lead-mgmt-root .v2-leg i { display:inline-block; width:9px; height:9px; border-radius:50%;
   vertical-align:-1px; margin-right:6px; }
+/* Le détail s'ouvre SOUS le mur, jamais ailleurs : on ne perd pas la
+   vue d'ensemble en descendant dans un dossier. */
+/* L'escalier : une colonne par palier, la hauteur porte le taux.
+   On VOIT la marche descendre — quatre barres horizontales noyaient
+   exactement le propos qu'elles devaient servir. */
+#lead-mgmt-root .v2-esc-w { background:var(--card); border:1px solid var(--border);
+  border-radius:12px; padding:16px 18px; margin-bottom:14px; }
+#lead-mgmt-root .v2-esc { display:grid; grid-template-columns:repeat(4,1fr); gap:10px;
+  align-items:end; margin:6px 0 2px; }
+@media (max-width:640px) { #lead-mgmt-root .v2-esc { grid-template-columns:repeat(2,1fr); } }
+#lead-mgmt-root .v2-esc-c { text-align:center; }
+#lead-mgmt-root .v2-esc-v { font-size:19px; font-weight:700; font-variant-numeric:tabular-nums;
+  color:var(--text-soft); letter-spacing:-.02em; margin-bottom:5px; }
+#lead-mgmt-root .v2-esc-v.best { color:var(--green); }
+#lead-mgmt-root .v2-esc-b { height:74px; display:flex; align-items:flex-end;
+  justify-content:center; }
+#lead-mgmt-root .v2-esc-b i { display:block; width:100%; max-width:64px; border-radius:5px 5px 0 0;
+  background:var(--blue-line); }
+#lead-mgmt-root .v2-esc-b i.best { background:#53bda7; }
+#lead-mgmt-root .v2-esc-l { font-size:11.5px; font-weight:600; margin-top:7px;
+  padding-top:7px; border-top:1px solid var(--border); }
+#lead-mgmt-root .v2-esc-n { font-size:10.5px; color:var(--text-mut); margin-top:2px; }
+#lead-mgmt-root .v2-esc-note { margin-top:14px; padding-top:12px;
+  border-top:1px solid #f0f4f9; font-size:12.5px; line-height:1.6; color:var(--text-soft); }
+#lead-mgmt-root .v2-esc-res { margin-top:6px; font-size:11px; color:var(--text-mut); }
+/* Micro-jauge en cellule de tableau : la proportion se lit mieux qu'un
+   chiffre, mais elle ne doit pas peser plus qu'une ligne de texte. */
+#lead-mgmt-root .v2-mini { height:3px; background:#eef2f8; border-radius:2px; margin-top:4px;
+  overflow:hidden; }
+#lead-mgmt-root .v2-mini i { display:block; height:3px; border-radius:2px;
+  background:var(--blue-line); }
+#lead-mgmt-root .v2-mini i.v2-ok { background:#53bda7; }
+#lead-mgmt-root .v2-mini i.v2-warn { background:#b8851a; }
+#lead-mgmt-root .v2-mini i.v2-ko { background:var(--red-soft); }
+#lead-mgmt-root .v2-pan { background:var(--card); border:1px solid var(--border);
+  border-radius:12px; margin-top:14px; }
+#lead-mgmt-root .v2-pan-h { padding:13px 16px; border-bottom:1px solid var(--border);
+  display:flex; justify-content:space-between; align-items:flex-start; gap:10px; }
+#lead-mgmt-root .v2-pan-h b { font-size:14px; }
+#lead-mgmt-root .v2-pan-n { font-size:11px; color:var(--text-mut); margin-top:2px; }
+#lead-mgmt-root .v2-x { background:none; border:none; color:var(--text-mut); font-size:20px;
+  line-height:1; padding:0 2px; cursor:pointer; font-family:inherit; }
+#lead-mgmt-root .v2-x:hover { color:var(--text); }
+#lead-mgmt-root .v2-pan-b { padding:10px 14px 14px; display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:6px; }
+#lead-mgmt-root .v2-lead { border-left:2px solid var(--text-mut); padding:9px 12px;
+  border-radius:0 6px 6px 0; position:relative; }
+#lead-mgmt-root .v2-lead:hover { background:var(--blue-bg); }
+#lead-mgmt-root .v2-lead.ko { border-left-color:var(--red-soft); }
+#lead-mgmt-root .v2-lead.warn { border-left-color:#b8851a; }
+#lead-mgmt-root .v2-lead.ok { border-left-color:#53bda7; }
+#lead-mgmt-root .v2-lead-h { display:flex; justify-content:space-between; gap:8px;
+  align-items:baseline; }
+#lead-mgmt-root .v2-lead-h b { font-size:13px; }
+#lead-mgmt-root .v2-lead-h em { font-style:normal; font-size:12px; font-weight:600;
+  font-variant-numeric:tabular-nums; white-space:nowrap; }
+#lead-mgmt-root .v2-lead-h em.ko { color:var(--red-soft); }
+#lead-mgmt-root .v2-lead-h em.warn { color:#b8851a; }
+#lead-mgmt-root .v2-lead-h em.ok { color:var(--green); }
+#lead-mgmt-root .v2-lead-m { font-size:11px; color:var(--text-soft); margin-top:3px; }
+#lead-mgmt-root .v2-tag { display:inline-block; font-size:9.5px; font-weight:700;
+  padding:2px 7px; border-radius:9px; background:var(--blue-bg); color:var(--blue-dk); }
+#lead-mgmt-root .v2-reaff { margin-top:7px; font-size:11px; font-weight:600; padding:4px 10px;
+  border-radius:5px; border:1px solid var(--border); background:var(--card);
+  color:var(--blue-dk); cursor:pointer; font-family:inherit; }
+#lead-mgmt-root .v2-reaff:hover { background:var(--blue-bg); }
 
 /* --- Campagnes : DEUX PAR LIGNE --------------------------- */
 #lead-mgmt-root .v2-grid2 { display:grid; grid-template-columns:1fr 1fr; gap:14px;
@@ -3324,8 +3390,8 @@ function v2Tranche(l) {
    diamètre. Un aplat saturé écrase la lecture : teinte claire, anneau fin. */
 function v2Couleur(lst) {
   if (!lst.length) return null;
-  const ko = lst.filter(l => lmfNiveau(l) === 'ko').length / lst.length;
-  const wa = lst.filter(l => lmfNiveau(l) === 'warn').length / lst.length;
+  const ko = lst.filter(l => lmfNiveau(l) === 'retard').length / lst.length;
+  const wa = lst.filter(l => lmfNiveau(l) === 'bientot').length / lst.length;
   if (ko > .5)          return { bg:'#f7dcdc', fg:'#8f2222', ring:'#e0a3a3' };
   if (ko > 0 || wa > .3) return { bg:'#fbeecd', fg:'#8a6412', ring:'#e0c98a' };
   return { bg:'#daf0e9', fg:'#14614f', ring:'#9ed6c7' };
@@ -3461,8 +3527,8 @@ function v2Fil() {
 // --- Le bandeau : une phrase, pas quatre cartes -------------
 function v2Bandeau() {
   const L = v2Leads();
-  const ko = L.filter(l => lmfNiveau(l) === 'ko').length;
-  const wa = L.filter(l => lmfNiveau(l) === 'warn').length;
+  const ko = L.filter(l => lmfNiveau(l) === 'retard').length;
+  const wa = L.filter(l => lmfNiveau(l) === 'bientot').length;
   if (!L.length) return '<div class="v2-tete"><span class="q">Aucun lead en attente '
     + 'sur ce périmètre.</span></div>';
   if (!ko) return '<div class="v2-tete"><b class="ok">' + L.length + '</b> '
@@ -3576,92 +3642,127 @@ function ensureReactivite() {
 
 function v2Reactivite() {
   if (!dataReactivite) return '<div class="v2-flux" style="margin-bottom:14px">'
-    + '<div class="lm-empty" style="padding:20px;font-size:12px">'
+    + '<div class="lm-empty" style="padding:18px;font-size:12px">'
     + '<span class="lm-spin"></span>Analyse des délais…</div></div>';
   const R = dataReactivite;
   if (!R.length) return '';
+  const n = x => Number(x) || 0;
 
-  const tot  = R.reduce((a, x) => a + (Number(x.nb_dossiers) || 0), 0);
-  const cmd  = R.reduce((a, x) => a + (Number(x.nb_commandes) || 0), 0);
-  const maxT = Math.max.apply(null, R.map(x => Number(x.taux_conversion) || 0));
+  const tot = R.reduce((a, x) => a + n(x.nb_dossiers), 0);
+  const maxT = Math.max.apply(null, R.map(x => n(x.taux_conversion)));
 
-  // Le manque à gagner : un directeur n'agit pas sur un pourcentage, il
-  // agit sur des voitures. On compare le palier le plus lent au meilleur
-  // des paliers rapides, sur les dossiers réellement concernés.
-  const lent   = R[R.length - 1];
-  const rapide = R.filter(x => Number(x.ordre) <= 2);
-  const nRap = rapide.reduce((a, x) => a + (Number(x.nb_dossiers) || 0), 0);
-  const cRap = rapide.reduce((a, x) => a + (Number(x.nb_commandes) || 0), 0);
+  // Le manque à gagner : un directeur agit sur des voitures, pas sur
+  // des points de pourcentage.
+  const lent = R[R.length - 1];
+  const rapide = R.filter(x => n(x.ordre) <= 2);
+  const nRap = rapide.reduce((a, x) => a + n(x.nb_dossiers), 0);
+  const cRap = rapide.reduce((a, x) => a + n(x.nb_commandes), 0);
   const txRap = nRap ? (cRap / nRap * 100) : null;
-  const txLent = Number(lent && lent.taux_conversion);
-  const ecart = (txRap != null && !isNaN(txLent)) ? (txRap - txLent) : null;
+  const txLent = lent ? n(lent.taux_conversion) : null;
+  const ecart = (txRap != null && txLent != null) ? (txRap - txLent) : null;
   const manque = (ecart != null && ecart > 0)
-    ? Math.round((Number(lent.nb_dossiers) || 0) * ecart / 100) : 0;
-  const partRapide = tot ? Math.round(nRap / tot * 100) : 0;
+    ? Math.round(n(lent.nb_dossiers) * ecart / 100) : 0;
+  const partRap = tot ? Math.round(nRap / tot * 100) : 0;
 
-  let h = '<div class="v2-flux" style="margin-bottom:14px">';
-  h += '<div class="v2-flux-t"><h3>Ce qui fait produire · réactivité</h3>'
-     + '<div style="font-size:11px;color:var(--text-mut)">' + tot + ' dossiers · '
-     + cmd + ' commandes</div></div>';
-
+  // UN ESCALIER, pas quatre barres empilées : chaque palier est une
+  // colonne, la hauteur porte le taux. On voit la marche descendre —
+  // c'est exactement le propos, et quatre barres horizontales le
+  // noyaient (« touffu », 27/08).
+  let h = '<div class="v2-esc-w"><div class="v2-flux-t">'
+    + '<h3>Ce qui fait produire · délai avant premier contact</h3>'
+    + '<div style="font-size:11px;color:var(--text-mut)">' + tot + ' dossiers</div></div>';
+  h += '<div class="v2-esc">';
   R.forEach(x => {
-    const n = Number(x.nb_dossiers) || 0, t = Number(x.taux_conversion) || 0;
-    const w = maxT ? Math.round(t / maxT * 100) : 0;
-    const best = t >= maxT - 0.01;
-    h += '<div class="v2-r"><div class="v2-n"><b>' + escapeHtml(x.palier) + '</b>'
-      + '<i>' + n + ' dossiers · ' + (x.part_dossiers != null ? x.part_dossiers + ' % du total' : '')
-      + '</i>'
-      + '<div class="v2-b"><div class="v2-seg ' + (best ? 'v2-s2' : 'v2-s1')
-      + '" style="width:' + w + '%">' + (w > 16 ? (x.nb_commandes + ' commandes') : '') + '</div>'
-      + '</div></div>'
-      + '<div class="v2-v"><b style="color:' + (best ? 'var(--green)' : 'var(--text)') + '">'
-      + t + ' %</b><i>conversion</i></div></div>';
-  });
-
-  // L'enseignement, en clair. Sans lui, quatre barres ne décident rien.
-  if (ecart != null && ecart > 1) {
-    h += '<div class="v2-lg" style="display:block;line-height:1.6;color:var(--text-soft);'
-      + 'font-size:12px">'
-      + '<b style="color:var(--text)">Les dossiers repris rapidement convertissent '
-      + Math.round(ecart) + ' points de plus.</b> '
-      + (manque ? 'Sur les ' + lent.nb_dossiers + ' dossiers repris au-delà de 48 h, l\'écart '
-          + 'représente environ <b style="color:var(--red-soft)">' + manque + ' commandes</b>. ' : '')
-      + 'Aujourd\'hui <b>' + partRapide + ' %</b> des dossiers sont repris en moins de 12 h.'
-      // La réserve est indispensable : sans elle, l'écran promet une
-      // causalité que la donnée ne démontre pas.
-      + '<div style="margin-top:6px;font-size:11px;color:var(--text-mut)">'
-      + 'Ces chiffres décrivent une corrélation, pas une causalité : un dossier repris vite peut '
-      + 'aussi être un dossier plus chaud au départ. La tendance est nette, la promesse « rappelez '
-      + 'plus vite et vous gagnerez ' + Math.round(ecart) + ' points » ne le serait pas.</div>'
+    const t2 = n(x.taux_conversion), d2 = n(x.nb_dossiers);
+    const hh = maxT ? Math.max(8, Math.round(t2 / maxT * 100)) : 8;
+    const best = t2 >= maxT - 0.01;
+    h += '<div class="v2-esc-c">'
+      + '<div class="v2-esc-v' + (best ? ' best' : '') + '">' + t2 + ' %</div>'
+      + '<div class="v2-esc-b"><i class="' + (best ? 'best' : '')
+        + '" style="height:' + hh + '%"></i></div>'
+      + '<div class="v2-esc-l">' + escapeHtml(x.palier) + '</div>'
+      + '<div class="v2-esc-n">' + d2 + ' dossiers · ' + n(x.part_dossiers) + ' %</div>'
       + '</div>';
+  });
+  h += '</div>';
+
+  if (ecart != null && ecart > 1) {
+    h += '<div class="v2-esc-note"><b>Les dossiers repris rapidement convertissent '
+      + Math.round(ecart) + ' points de plus.</b> '
+      + (manque ? 'Sur les ' + n(lent.nb_dossiers) + ' repris au-delà de 48 h, l\'écart '
+          + 'représente environ <b class="v2-ko">' + manque + ' commandes</b>. ' : '')
+      + 'Aujourd\'hui <b>' + partRap + ' %</b> sont repris en moins de 12 h.'
+      // Sans cette réserve, l'écran promet une causalité que la donnée
+      // ne démontre pas.
+      + '<div class="v2-esc-res">Corrélation, pas causalité : un dossier repris vite peut aussi '
+      + 'être un dossier plus chaud au départ. La tendance est nette, la promesse « rappelez plus '
+      + 'vite et vous gagnerez ' + Math.round(ecart) + ' points » ne le serait pas.</div></div>';
   }
   h += '</div>';
 
-  // --- Le délai par source : le canal ou l'équipe ? ---------
-  const S = (dataDelaiSource || []).filter(x => Number(x.nb_en_attente) > 0);
+  // L'attente par source, en tableau court : le canal ou l'équipe ?
+  const S = (dataDelaiSource || []).filter(x => n(x.nb_en_attente) > 0);
   if (S.length) {
-    h += '<div class="v2-flux" style="margin-bottom:14px"><div class="v2-flux-t">'
-      + '<h3>Attente par source · leads en cours</h3>'
-      + '<div style="font-size:11px;color:var(--text-mut)">le canal ou l\'équipe ?</div></div>';
-    const maxA = Math.max.apply(null, S.map(x => Number(x.attente_med_min) || 0)) || 1;
+    h += '<div class="v2-rep" style="margin-bottom:14px"><table><thead><tr>'
+      + '<th>Source</th><th>En attente</th><th>En retard</th><th>SLA</th>'
+      + '<th>Attente médiane</th></tr></thead><tbody>';
     S.forEach(x => {
-      const att = Number(x.attente_med_min) || 0, sla = Number(x.sla_minutes) || 0;
-      const w = Math.round(att / maxA * 100);
+      const att = n(x.attente_med_min), sla = n(x.sla_minutes);
       const ko = sla && att > sla;
-      h += '<div class="v2-r"><div class="v2-n"><b>'
-        + escapeHtml(x.source_libelle || x.source) + '</b>'
-        + '<i>' + x.nb_en_attente + ' en attente'
-        + (sla ? ' · SLA ' + sla + ' min' : '')
-        + (Number(x.nb_en_retard) ? ' · ' + x.nb_en_retard + ' en retard' : '') + '</i>'
-        + '<div class="v2-b"><div class="v2-seg ' + (ko ? 'v2-sko' : 'v2-s1')
-        + '" style="width:' + w + '%">' + (w > 20 ? lmfDuree(att) : '') + '</div></div></div>'
-        + '<div class="v2-v"><b style="color:' + (ko ? 'var(--red-soft)' : 'var(--text)') + '">'
-        + lmfDuree(att) + '</b><i>attente médiane</i></div></div>';
+      h += '<tr><td><b>' + escapeHtml(x.source_libelle || x.source) + '</b></td>'
+        + '<td>' + n(x.nb_en_attente) + '</td>'
+        + '<td>' + (n(x.nb_en_retard) ? '<span class="v2-ko">' + x.nb_en_retard + '</span>'
+            : '<span class="v2-sous">—</span>') + '</td>'
+        + '<td class="v2-sous">' + (sla ? sla + ' min' : '—') + '</td>'
+        + '<td><span class="' + (ko ? 'v2-ko' : 'v2-ok') + '">' + lmfDuree(att) + '</span></td>'
+        + '</tr>';
     });
-    h += '<div class="v2-lg" style="display:block;font-size:11px;color:var(--text-mut)">'
-      + 'Deux sources au même SLA avec des attentes très différentes désignent l\'organisation, '
-      + 'pas l\'apporteur.</div></div>';
+    h += '</tbody></table></div>'
+      + '<div class="lmf-note" style="margin:-6px 0 14px">Deux sources au même SLA avec des '
+      + 'attentes très différentes désignent l\'organisation, pas l\'apporteur.</div>';
   }
+  return h;
+}
+
+// --- Le détail au clic, SANS quitter la vue d'ensemble ------
+//
+// Une cellule du mur était cliquable en apparence mais n'écoutait rien :
+// le panneau n'avait pas été porté (relevé par Antoine le 27/08). Sans
+// lui, le mur montre où ça coince sans jamais dire QUI — il désigne un
+// problème sans donner prise dessus.
+
+function v2Panneau() {
+  const V = state.v2;
+  if (!V || !V.sel) return '';
+  const L = V.sel.leads || [];
+  let h = '<div class="v2-pan"><div class="v2-pan-h"><div><b>'
+    + escapeHtml(V.sel.titre) + '</b><div class="v2-pan-n">' + L.length + ' dossier'
+    + (L.length > 1 ? 's' : '') + '</div></div>'
+    + '<button type="button" class="v2-x" data-v2fermer="1">×</button></div>'
+    + '<div class="v2-pan-b">';
+  if (!L.length) {
+    h += '<div style="padding:20px;text-align:center;color:var(--text-mut);font-size:12px">'
+      + 'Aucun dossier dans cette tranche.</div>';
+  }
+  L.forEach(l => {
+    const n = lmfNiveau(l);
+    const r = lmfReste(l);
+    const cls = n === 'retard' ? 'ko' : n === 'bientot' ? 'warn' : 'ok';
+    const tps = (r == null) ? 'traité' : (r < 0 ? '+ ' + lmfDuree(-r) : lmfDuree(r));
+    h += '<div class="v2-lead ' + cls + '"'
+      + (l.id_client ? ' data-v2client="' + l.id_client + '"' : '') + '>'
+      + '<div class="v2-lead-h"><b>' + escapeHtml(l.nom_affiche || 'Sans nom') + '</b>'
+      + '<em class="' + cls + '">' + tps + '</em></div>'
+      + '<div class="v2-lead-m"><span class="v2-tag">'
+      + escapeHtml(l.source_libelle || l.source || '?') + '</span> '
+      + escapeHtml(l.vehicule_interet || '') + '</div>';
+    if (PEUT_REAFFECTER) {
+      h += '<button type="button" class="v2-reaff" data-v2reaff="' + l.id_lead + '">'
+        + 'Réaffecter</button>';
+    }
+    h += '</div>';
+  });
+  h += '</div></div>';
   return h;
 }
 
@@ -3692,7 +3793,7 @@ function v2Rapport() {
 
   lignes.forEach(ln => {
     const L = v2LeadsDe(ln);
-    const r = L.filter(x => lmfNiveau(x) === 'ko').length;
+    const r = L.filter(x => lmfNiveau(x) === 'retard').length;
     const dl = L.length
       ? Math.round(L.reduce((a, x) => a + (Number(x.attente_min) || 0), 0) / L.length) : null;
 
@@ -3775,110 +3876,83 @@ function v2Rapport() {
 function v2Campagnes() {
   if (!dataCampagnes) return '<div class="lm-empty" style="padding:34px;font-size:12px">'
     + '<span class="lm-spin"></span>Chargement des campagnes…</div>';
-  const R = v2Referentiel();
+  const camp = dataCampagnes || [];
+  if (!camp.length) return '<div class="lm-empty" style="padding:34px 26px;font-size:13px">'
+    + '<b style="display:block;color:var(--text);margin-bottom:6px">Aucune campagne</b>'
+    + '<span style="font-size:12px;color:var(--text-mut)">Rien sur ce périmètre et cette '
+    + 'période. Élargissez le fil ou la période.</span></div>';
+
   const ids = v2Sites().map(s => s.id);
   const parV = (dataCampParVendeur || []).filter(v => ids.indexOf(Number(v.id_site)) >= 0);
-  const camp = dataCampagnes || [];
-  if (!camp.length) return '<div class="lm-empty" style="padding:34px;font-size:12px">'
-    + 'Aucune campagne sur ce périmètre et cette période.</div>';
+  const n = x => Number(x) || 0;
+  const pc = (a, b) => b ? Math.round(a / b * 100) : 0;
+  const cls = p => p >= 90 ? 'v2-ok' : p >= 70 ? 'v2-warn' : 'v2-ko';
 
-  const teinte = p => p >= 95 ? 'var(--green)' : p >= 80 ? '#b8851a' : 'var(--red-soft)';
-  const pct = (a, b) => b ? Math.round(a / b * 100) : 0;
+  // UN TABLEAU, pas une pile de barres empilées : dix campagnes en
+  // barres font une page illisible (« touffu », 27/08). Un tableau
+  // aligne les colonnes, l'œil descend au lieu de chercher.
+  // La seule barre conservée est une MICRO-JAUGE dans la colonne
+  // « traitées » — la seule où la proportion se lit mieux qu'un chiffre.
+  let h = '<div class="v2-rep"><table><thead><tr>'
+    + '<th>Campagne</th><th>Sollicitations</th><th>Traitées</th><th>À traiter</th>'
+    + '<th>Propales</th><th>BDC</th><th>Commandes</th><th>Conversion</th>'
+    + '<th>1<sup>er</sup> contact</th></tr></thead><tbody>';
 
-  // Les totaux d'avancement, sur le périmètre courant.
-  const G = parV.reduce((a, v) => ({ c:a.c + (+v.nb_cibles || 0), t:a.t + (+v.nb_traitees || 0) }),
-    { c:0, t:0 });
-  const gp = pct(G.t, G.c);
-
-  let h = '<div class="v2-grid2">';
-
-  // --- 1. AVANCEMENT ---------------------------------------
-  h += '<div class="v2-flux"><div class="v2-flux-t"><h3>Avancement</h3>'
-     + '<div style="font-size:12px;color:var(--text-soft)"><b style="font-size:20px;'
-     + 'font-weight:700;font-variant-numeric:tabular-nums;color:' + teinte(gp) + '">' + gp + ' %</b>'
-     + ' traité · ' + G.t + ' / ' + G.c + '</div></div>';
+  const T = { s:0, t:0, a:0, p:0, b:0, w:0 };
   camp.forEach(c => {
-    const ci = Number(c.nb_sollicitations) || 0, tr = Number(c.nb_traitees) || 0;
-    const p = pct(tr, ci), r = ci - tr;
-    h += '<div class="v2-r"><div class="v2-n"><b>' + escapeHtml(c.campagne) + '</b>'
-      + '<i>' + ci + ' sollicitations'
-      + (c.delai_median_h != null ? ' · 1er contact en ' + Math.round(c.delai_median_h) + ' h' : '')
-      + '</i>'
-      // La barre porte SA PROPRE LÉGENDE : plus besoin de chercher le
-      // chiffre ailleurs, il est dans le segment qu'il décrit.
-      + '<div class="v2-b"><div class="v2-seg ' + (p >= 95 ? 'v2-s2' : 'v2-s1')
-      + '" style="width:' + p + '%">' + (p > 14 ? tr + ' traitées' : '') + '</div>'
-      + (r ? '<div class="v2-seg v2-sko" style="width:' + (100 - p) + '%">'
-          + (100 - p > 14 ? r + ' à traiter' : '') + '</div>' : '')
-      + '</div></div>'
-      + '<div class="v2-v"><b style="color:' + teinte(p) + '">' + p + ' %</b>'
-      + '<i>' + tr + ' / ' + ci + '</i></div></div>';
+    const s = n(c.nb_sollicitations), tr = n(c.nb_traitees), at = n(c.nb_a_traiter);
+    const cy = n(c.nb_cycles) || 1;
+    const pr = n(c.nb_propales), bd = n(c.nb_bdc), wi = n(c.nb_wins);
+    const pt = pc(tr, s), cv = pc(wi, cy);
+    T.s += s; T.t += tr; T.a += at; T.p += pr; T.b += bd; T.w += wi;
+    h += '<tr><td><b>' + escapeHtml(c.campagne) + '</b></td>'
+      + '<td>' + s + '</td>'
+      + '<td><span class="' + cls(pt) + '">' + pt + ' %</span>'
+      + '<div class="v2-mini"><i class="' + cls(pt) + '" style="width:' + pt + '%"></i></div></td>'
+      + '<td>' + (at ? '<span class="v2-ko">' + at + '</span>' : '<span class="v2-sous">—</span>') + '</td>'
+      + '<td>' + (pr || '<span class="v2-sous">—</span>') + '</td>'
+      + '<td>' + (bd || '<span class="v2-sous">—</span>') + '</td>'
+      + '<td>' + (wi || '<span class="v2-sous">—</span>') + '</td>'
+      + '<td><span class="' + (cv >= 40 ? 'v2-ok' : cv >= 25 ? 'v2-warn' : 'v2-ko') + '">'
+        + cv + ' %</span></td>'
+      + '<td>' + (c.delai_median_h != null
+          ? '<span class="v2-sous">' + Math.round(c.delai_median_h) + ' h</span>'
+          : '<span class="v2-sous">—</span>') + '</td></tr>';
   });
-  h += '<div class="v2-tot"><div class="v2-n"><b>Total</b>'
-    + '<div class="v2-b"><div class="v2-seg ' + (gp >= 95 ? 'v2-s2' : 'v2-s1')
-    + '" style="width:' + gp + '%">' + (gp > 14 ? G.t + ' traitées' : '') + '</div>'
-    + (G.c - G.t ? '<div class="v2-seg v2-sko" style="width:' + (100 - gp) + '%">'
-        + (100 - gp > 14 ? (G.c - G.t) + ' à traiter' : '') + '</div>' : '')
-    + '</div></div><div class="v2-v"><b style="color:' + teinte(gp) + '">' + gp + ' %</b>'
-    + '<i>' + G.t + ' / ' + G.c + '</i></div></div></div>';
+  const ptT = pc(T.t, T.s), cvT = pc(T.w, T.s);
+  h += '</tbody><tfoot><tr><td>Total · ' + camp.length + ' campagnes</td>'
+    + '<td>' + T.s + '</td>'
+    + '<td><span class="' + cls(ptT) + '">' + ptT + ' %</span></td>'
+    + '<td' + (T.a ? ' class="v2-ko"' : '') + '>' + T.a + '</td>'
+    + '<td>' + T.p + '</td><td>' + T.b + '</td><td>' + T.w + '</td>'
+    + '<td>' + cvT + ' %</td><td>—</td></tr></tfoot></table></div>';
 
-  // --- 2. RÉSULTAT -----------------------------------------
-  // Étapes CUMULÉES : `status` est un état COURANT, pas une étape
-  // franchie. Un dossier gagné EST passé par la propale et le BDC.
-  h += '<div class="v2-flux"><div class="v2-flux-t"><h3>Résultat</h3>'
-     + '<div style="font-size:11px;color:var(--text-mut)">100 % = sollicitations</div></div>';
-  camp.forEach(c => {
-    const cy = Number(c.nb_cycles) || 1;
-    const w = Number(c.nb_wins) || 0, b = Number(c.nb_bdc) || 0, pr = Number(c.nb_propales) || 0;
-    const pW = pct(w, cy), pB = pct(b - w, cy), pP = pct(pr - b, cy);
-    h += '<div class="v2-r"><div class="v2-n"><b>' + escapeHtml(c.campagne) + '</b>'
-      + '<i>' + pr + ' propales · ' + b + ' BDC · ' + w + ' commandes</i>'
-      + '<div class="v2-b"><div class="v2-seg v2-s2" style="width:' + pW + '%">'
-        + (pW > 12 ? w : '') + '</div>'
-      + '<div class="v2-seg v2-s4" style="width:' + pB + '%">' + (pB > 12 ? (b - w) : '') + '</div>'
-      + '<div class="v2-seg v2-s1" style="width:' + pP + '%">' + (pP > 12 ? (pr - b) : '') + '</div>'
-      + '<div class="v2-seg v2-s3" style="width:' + (100 - pW - pB - pP) + '%">'
-        + (100 - pW - pB - pP > 16 ? (cy - pr) : '') + '</div></div></div>'
-      + '<div class="v2-v"><b style="color:var(--green)">' + pW + ' %</b>'
-      + '<i>commandés</i></div></div>';
-  });
-  h += '<div class="v2-lg"><span><i style="background:#53bda7"></i>commandé</span>'
-    + '<span><i style="background:#8fc9bb"></i>BDC</span>'
-    + '<span><i style="background:var(--blue-line)"></i>propale</span>'
-    + '<span><i style="background:#e8eef6"></i>sans propale</span></div></div>';
-
-  // --- 3. CLASSEMENT PAR VENDEUR ---------------------------
-  // Une campagne est lancée par le marketing mais TRAITÉE par des
-  // vendeurs : un taux global ne dit pas s'il faut relancer l'équipe
-  // entière ou deux personnes.
+  // Le classement des vendeurs, même forme : un tableau court, trié.
   if (parV.length) {
-    const sv = parV.slice().sort((a, b) =>
-      (Number(b.taux_traite) || 0) - (Number(a.taux_traite) || 0)
-      || (Number(b.nb_cibles) || 0) - (Number(a.nb_cibles) || 0));
-    h += '<div class="v2-flux"><div class="v2-flux-t"><h3>Traitement par vendeur</h3>'
-       + '<div style="font-size:11px;color:var(--text-mut)">du meilleur au moins bon</div></div>';
+    const sv = parV.slice().sort((a, b) => n(b.taux_traite) - n(a.taux_traite)
+                                        || n(b.nb_cibles) - n(a.nb_cibles));
+    h += '<div style="margin-top:14px" class="v2-rep"><table><thead><tr>'
+      + '<th>Vendeur</th><th>Site</th><th>Sollicitations</th><th>Traitées</th>'
+      + '<th>À relancer</th></tr></thead><tbody>';
     sv.forEach((v, i) => {
-      const ci = Number(v.nb_cibles) || 0, tr = Number(v.nb_traitees) || 0;
-      const p = pct(tr, ci), r = ci - tr;
-      h += '<div class="v2-r" style="cursor:pointer" data-v2vend="' + v.id_user + '">'
-        + '<div class="v2-n"><b>' + (i + 1) + '. ' + escapeHtml(v.vendeur_nom || '—') + '</b>'
-        + '<i>' + escapeHtml(v.nom_site || '') + ' · ' + ci + ' sollicitations</i>'
-        + '<div class="v2-b"><div class="v2-seg ' + (p >= 95 ? 'v2-s2' : 'v2-s1')
-        + '" style="width:' + p + '%">' + (p > 14 ? tr + ' traitées' : '') + '</div>'
-        + (r ? '<div class="v2-seg v2-sko" style="width:' + (100 - p) + '%">'
-            + (100 - p > 14 ? r + ' à traiter' : '') + '</div>' : '')
-        + '</div></div>'
-        + '<div class="v2-v"><b style="color:' + teinte(p) + '">' + p + ' %</b>'
-        + '<i>' + tr + ' / ' + ci + '</i></div></div>';
+      const ci = n(v.nb_cibles), tr = n(v.nb_traitees), ar = n(v.nb_a_traiter);
+      const pt = pc(tr, ci);
+      h += '<tr data-v2vend="' + v.id_user + '">'
+        + '<td><b>' + (i + 1) + '. ' + escapeHtml(v.vendeur_nom || '—') + '</b></td>'
+        + '<td class="v2-sous" style="text-align:left">' + escapeHtml(v.nom_site || '') + '</td>'
+        + '<td>' + ci + '</td>'
+        + '<td><span class="' + cls(pt) + '">' + pt + ' %</span>'
+        + '<div class="v2-mini"><i class="' + cls(pt) + '" style="width:' + pt + '%"></i></div></td>'
+        + '<td>' + (ar ? '<span class="v2-ko">' + ar + '</span>'
+            : '<span class="v2-sous">—</span>') + '</td></tr>';
     });
-    h += '</div>';
+    h += '</tbody></table></div>';
   }
 
-  h += '</div>';
   h += '<div class="lmf-note">L\'avancement précède le résultat : une campagne dont 40 % des '
-    + 'cibles ne sont pas traitées n\'a pas un mauvais taux de conversion, elle a un <b>retard de '
-    + 'traitement</b>. Les étapes sont cumulées — un dossier gagné est passé par la propale et le '
-    + 'bon de commande. Cliquez un vendeur pour ouvrir sa file.</div>';
+    + 'cibles ne sont pas traitées n\'a pas un mauvais taux de conversion, elle a un <b>retard '
+    + 'de traitement</b>. Les étapes sont cumulées — un dossier gagné est passé par la propale '
+    + 'et le bon de commande. Cliquez un vendeur pour ouvrir sa file.</div>';
   return h;
 }
 
@@ -4016,7 +4090,7 @@ function renderAll() {
 
   if (V.vue === 'campagnes')    html += v2Campagnes();
   else if (V.vue === 'rapport') html += v2Rapport();
-  else                          html += v2Mur();
+  else                          html += v2Mur() + v2Panneau();
 
   root.innerHTML = html;
   const __tBind = performance.now();
@@ -4140,6 +4214,39 @@ function bindEvents() {
       renderAll(); chargerSection();
     });
   });
+  // 🐛 Le handler des cellules MANQUAIT : le mur était cliquable en
+  //    apparence et ne faisait rien. Sans lui, il désigne un problème
+  //    sans donner prise dessus.
+  root.querySelectorAll('[data-v2cell]').forEach(el => {
+    el.addEventListener('click', () => {
+      const parts = el.getAttribute('data-v2cell').split('|');
+      const k = parts[0], tk = parts[1];
+      const ln = v2Lignes().find(x => String(x.k) === String(k));
+      const tr = V2_TRANCHES.find(x => x.k === tk);
+      if (!ln || !tr) return;
+      state.v2.sel = {
+        titre: ln.l + ' · ' + tr.l,
+        leads: v2LeadsDe(ln).filter(l => v2Tranche(l) === tk)
+      };
+      renderAll();
+    });
+  });
+  root.querySelectorAll('[data-v2fermer]').forEach(el => {
+    el.addEventListener('click', () => { state.v2.sel = null; renderAll(); });
+  });
+  root.querySelectorAll('[data-v2client]').forEach(el => {
+    el.addEventListener('click', (ev) => {
+      if (ev.target.closest('[data-v2reaff]')) return;   // le bouton d'abord
+      openClientFiche(el.getAttribute('data-v2client'), TAB_DEFAULT, el);
+    });
+  });
+  root.querySelectorAll('[data-v2reaff]').forEach(el => {
+    el.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      ouvrirReaffectation(el.getAttribute('data-v2reaff'));
+    });
+  });
+
   root.querySelectorAll('[data-v2vend]').forEach(el => {
     el.addEventListener('click', () => {
       state.v2.niveau = 'vendeur';
