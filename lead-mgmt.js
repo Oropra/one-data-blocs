@@ -1058,6 +1058,7 @@ function applyPeriod(from, to) {
   state.period = { from, to };
   // Les campagnes sont bornées par la période : on invalide leur cache.
   campKey = null; dataCampagnes = null;
+  reacKey = null; dataReactivite = null;
   reloadClassement();
   reloadGraphes();
   reloadCampagnes();
@@ -3122,6 +3123,10 @@ function ensureSites() {
       //    On croise donc avec le périmètre réel, déjà chargé au montage.
       const perim = new Set(userSiteIds.map(Number));
       dataSites = (data || []).filter(r => perim.has(Number(r.id_site)));
+      // ⚠️ Le référentiel dérive de dataSites : le laisser en cache après
+      //    un chargement le figerait sur l'état précédent (vide au
+      //    montage), et le mur n'afficherait AUCUNE ligne.
+      v2Ref = null;
       sitesCharge = true;
     } catch (e) {
       console.error('[leadMgmt] v_lead_sites', e);
@@ -3474,6 +3479,19 @@ function v2Mur() {
   const lignes = v2Lignes();
   if (!lignes.length) return '<div class="lm-empty" style="padding:34px;font-size:12px">'
     + 'Aucune entité sur ce périmètre.</div>';
+  // Un mur sans une seule pastille n'est pas un écran cassé : c'est un
+  // périmètre sans lead en attente. Il doit le DIRE — un vide muet passe
+  // pour un bug, et c'est exactement ce qui vient d'arriver.
+  if (!v2Leads().length) {
+    const n = (dataSites || []).length;
+    return '<div class="lm-empty" style="padding:34px 26px;font-size:13px;line-height:1.6">'
+      + '<b style="display:block;color:var(--text);margin-bottom:6px">Aucun lead en attente '
+      + 'sur ce périmètre</b>'
+      + '<span style="font-size:12px;color:var(--text-mut)">'
+      + n + ' site' + (n > 1 ? 's' : '') + ' dans votre périmètre, mais aucun lead reçu et non '
+      + 'encore contacté. Les leads déjà traités ne figurent pas ici — voyez '
+      + '« Ce que ça produit » pour les volumes de la période.</span></div>';
+  }
   const libCol = { groupe:'Marque', marque:'Affaire', affaire:'Site', site:'Vendeur' }[state.v2.niveau]
               || 'Source';
   const g = 'grid-template-columns:minmax(150px,1.5fr) repeat(' + V2_TRANCHES.length + ',1fr)';
@@ -3509,19 +3527,164 @@ function v2Mur() {
   return h;
 }
 
+// --- CE QUI FAIT PRODUIRE : réactivité et conversion --------
+//
+// Le tableau croisé dit QUI produit quoi. Ce bloc dit QU'EST-CE QUI
+// FAIT produire. C'est la même question à deux profondeurs — d'où un
+// enrichissement du même onglet plutôt qu'un quatrième, qui obligerait
+// à l'aller-retour pour comprendre.
+//
+// ⚠️ La mesure porte sur les SOLLICITATIONS, pas sur les leads :
+//    `premier_contact_le` est vide sur tous les leads (aucun n'a encore
+//    été contacté depuis le modèle du 27/08). La mécanique est
+//    identique, seule la source change — elle basculera d'elle-même.
+
+let dataReactivite = null, dataDelaiSource = null;
+let reacKey = null, reacEnCours = null;
+
+function ensureReactivite() {
+  const ids = v2Sites().map(s => s.id).sort();
+  const key = [state.period.from, state.period.to, ids.join(',')].join('|');
+  if (reacKey === key && dataReactivite) return Promise.resolve();
+  if (reacEnCours) return reacEnCours;
+  reacKey = key;
+  reacEnCours = (async function () {
+    try {
+      const [r, s] = await Promise.all([
+        sb.rpc('get_lead_reactivite', {
+          p_viewer_id_user: Number(userId),
+          p_date_from: state.period.from, p_date_to: state.period.to,
+          p_site_ids: ids.length ? ids : null }),
+        sb.rpc('get_lead_delai_par_source', {
+          p_viewer_id_user: Number(userId),
+          p_date_from: state.period.from, p_date_to: state.period.to,
+          p_site_ids: ids.length ? ids : null })
+      ]);
+      if (r.error) throw r.error;
+      dataReactivite  = r.data || [];
+      dataDelaiSource = (s && !s.error) ? (s.data || []) : [];
+    } catch (e) {
+      console.error('[leadMgmt] réactivité', e);
+      dataReactivite = []; dataDelaiSource = [];
+    } finally {
+      reacEnCours = null;
+      if (window.__renderLeadMgmt) window.__renderLeadMgmt();
+    }
+  })();
+  return reacEnCours;
+}
+
+function v2Reactivite() {
+  if (!dataReactivite) return '<div class="v2-flux" style="margin-bottom:14px">'
+    + '<div class="lm-empty" style="padding:20px;font-size:12px">'
+    + '<span class="lm-spin"></span>Analyse des délais…</div></div>';
+  const R = dataReactivite;
+  if (!R.length) return '';
+
+  const tot  = R.reduce((a, x) => a + (Number(x.nb_dossiers) || 0), 0);
+  const cmd  = R.reduce((a, x) => a + (Number(x.nb_commandes) || 0), 0);
+  const maxT = Math.max.apply(null, R.map(x => Number(x.taux_conversion) || 0));
+
+  // Le manque à gagner : un directeur n'agit pas sur un pourcentage, il
+  // agit sur des voitures. On compare le palier le plus lent au meilleur
+  // des paliers rapides, sur les dossiers réellement concernés.
+  const lent   = R[R.length - 1];
+  const rapide = R.filter(x => Number(x.ordre) <= 2);
+  const nRap = rapide.reduce((a, x) => a + (Number(x.nb_dossiers) || 0), 0);
+  const cRap = rapide.reduce((a, x) => a + (Number(x.nb_commandes) || 0), 0);
+  const txRap = nRap ? (cRap / nRap * 100) : null;
+  const txLent = Number(lent && lent.taux_conversion);
+  const ecart = (txRap != null && !isNaN(txLent)) ? (txRap - txLent) : null;
+  const manque = (ecart != null && ecart > 0)
+    ? Math.round((Number(lent.nb_dossiers) || 0) * ecart / 100) : 0;
+  const partRapide = tot ? Math.round(nRap / tot * 100) : 0;
+
+  let h = '<div class="v2-flux" style="margin-bottom:14px">';
+  h += '<div class="v2-flux-t"><h3>Ce qui fait produire · réactivité</h3>'
+     + '<div style="font-size:11px;color:var(--text-mut)">' + tot + ' dossiers · '
+     + cmd + ' commandes</div></div>';
+
+  R.forEach(x => {
+    const n = Number(x.nb_dossiers) || 0, t = Number(x.taux_conversion) || 0;
+    const w = maxT ? Math.round(t / maxT * 100) : 0;
+    const best = t >= maxT - 0.01;
+    h += '<div class="v2-r"><div class="v2-n"><b>' + escapeHtml(x.palier) + '</b>'
+      + '<i>' + n + ' dossiers · ' + (x.part_dossiers != null ? x.part_dossiers + ' % du total' : '')
+      + '</i>'
+      + '<div class="v2-b"><div class="v2-seg ' + (best ? 'v2-s2' : 'v2-s1')
+      + '" style="width:' + w + '%">' + (w > 16 ? (x.nb_commandes + ' commandes') : '') + '</div>'
+      + '</div></div>'
+      + '<div class="v2-v"><b style="color:' + (best ? 'var(--green)' : 'var(--text)') + '">'
+      + t + ' %</b><i>conversion</i></div></div>';
+  });
+
+  // L'enseignement, en clair. Sans lui, quatre barres ne décident rien.
+  if (ecart != null && ecart > 1) {
+    h += '<div class="v2-lg" style="display:block;line-height:1.6;color:var(--text-soft);'
+      + 'font-size:12px">'
+      + '<b style="color:var(--text)">Les dossiers repris rapidement convertissent '
+      + Math.round(ecart) + ' points de plus.</b> '
+      + (manque ? 'Sur les ' + lent.nb_dossiers + ' dossiers repris au-delà de 48 h, l\'écart '
+          + 'représente environ <b style="color:var(--red-soft)">' + manque + ' commandes</b>. ' : '')
+      + 'Aujourd\'hui <b>' + partRapide + ' %</b> des dossiers sont repris en moins de 12 h.'
+      // La réserve est indispensable : sans elle, l'écran promet une
+      // causalité que la donnée ne démontre pas.
+      + '<div style="margin-top:6px;font-size:11px;color:var(--text-mut)">'
+      + 'Ces chiffres décrivent une corrélation, pas une causalité : un dossier repris vite peut '
+      + 'aussi être un dossier plus chaud au départ. La tendance est nette, la promesse « rappelez '
+      + 'plus vite et vous gagnerez ' + Math.round(ecart) + ' points » ne le serait pas.</div>'
+      + '</div>';
+  }
+  h += '</div>';
+
+  // --- Le délai par source : le canal ou l'équipe ? ---------
+  const S = (dataDelaiSource || []).filter(x => Number(x.nb_en_attente) > 0);
+  if (S.length) {
+    h += '<div class="v2-flux" style="margin-bottom:14px"><div class="v2-flux-t">'
+      + '<h3>Attente par source · leads en cours</h3>'
+      + '<div style="font-size:11px;color:var(--text-mut)">le canal ou l\'équipe ?</div></div>';
+    const maxA = Math.max.apply(null, S.map(x => Number(x.attente_med_min) || 0)) || 1;
+    S.forEach(x => {
+      const att = Number(x.attente_med_min) || 0, sla = Number(x.sla_minutes) || 0;
+      const w = Math.round(att / maxA * 100);
+      const ko = sla && att > sla;
+      h += '<div class="v2-r"><div class="v2-n"><b>'
+        + escapeHtml(x.source_libelle || x.source) + '</b>'
+        + '<i>' + x.nb_en_attente + ' en attente'
+        + (sla ? ' · SLA ' + sla + ' min' : '')
+        + (Number(x.nb_en_retard) ? ' · ' + x.nb_en_retard + ' en retard' : '') + '</i>'
+        + '<div class="v2-b"><div class="v2-seg ' + (ko ? 'v2-sko' : 'v2-s1')
+        + '" style="width:' + w + '%">' + (w > 20 ? lmfDuree(att) : '') + '</div></div></div>'
+        + '<div class="v2-v"><b style="color:' + (ko ? 'var(--red-soft)' : 'var(--text)') + '">'
+        + lmfDuree(att) + '</b><i>attente médiane</i></div></div>';
+    });
+    h += '<div class="v2-lg" style="display:block;font-size:11px;color:var(--text-mut)">'
+      + 'Deux sources au même SLA avec des attentes très différentes désignent l\'organisation, '
+      + 'pas l\'apporteur.</div></div>';
+  }
+  return h;
+}
+
 // --- LE RAPPORT CROISÉ --------------------------------------
 // Le mur montre OÙ ça coince maintenant ; le rapport montre CE QUE ça
 // produit. Même périmètre, d'où une bascule et non un onglet.
 function v2Rapport() {
+  ensureReactivite();
   const lignes = v2Lignes();
-  if (!lignes.length) return '<div class="lm-empty" style="padding:34px;font-size:12px">'
-    + 'Aucune entité sur ce périmètre.</div>';
+  if (!lignes.length) return '<div class="lm-empty" style="padding:34px 26px;font-size:13px">'
+    + '<b style="display:block;color:var(--text);margin-bottom:6px">Rien à croiser</b>'
+    + '<span style="font-size:12px;color:var(--text-mut)">Aucune entité sous ce niveau. '
+    + 'Remontez dans le fil de périmètre.</span></div>';
   const R = v2Referentiel();
   const libCol = { groupe:'Marque', marque:'Affaire', affaire:'Site', site:'Vendeur' }[state.v2.niveau]
               || 'Source';
   const camp = dataCampagnes || [];
 
-  let h = '<div class="v2-rep"><table><thead><tr>'
+  // Les enseignements D'ABORD : quatre barres qui expliquent, puis le
+  // tableau qui détaille. L'inverse obligerait à lire 12 lignes avant de
+  // comprendre ce qui compte.
+  let h = v2Reactivite();
+  h += '<div class="v2-rep"><table><thead><tr>'
     + '<th>' + libCol + '</th><th>Leads reçus</th><th>En retard</th><th>Attente moyenne</th>'
     + '<th>Sollicitations</th><th>À relancer</th><th>Commandes</th><th>Conversion</th>'
     + '</tr></thead><tbody>';
@@ -3724,7 +3887,11 @@ let dataCampagnes = null, dataCampParVendeur = null;
 let campKey = null, campEnCours = null;
 
 function ensureCampagnes() {
-  const key = [state.period.from, state.period.to].join('|');
+  // La clé porte le PÉRIMÈTRE autant que la période : descendre dans le
+  // fil doit recharger des totaux bornés à la sélection, pas afficher
+  // ceux de tout le périmètre du viewer.
+  const ids = v2Sites().map(s => s.id).sort();
+  const key = [state.period.from, state.period.to, ids.join(',')].join('|');
   if (campKey === key && dataCampagnes) return Promise.resolve();
   if (campEnCours) return campEnCours;
   campKey = key;
@@ -3733,10 +3900,12 @@ function ensureCampagnes() {
       const [c, v] = await Promise.all([
         sb.rpc('get_campagnes_sollicitation', {
           p_viewer_id_user: Number(userId),
-          p_date_from: state.period.from, p_date_to: state.period.to }),
+          p_date_from: state.period.from, p_date_to: state.period.to,
+          p_site_ids: ids.length ? ids : null }),
         sb.rpc('get_campagnes_par_vendeur', {
           p_viewer_id_user: Number(userId),
-          p_date_from: state.period.from, p_date_to: state.period.to, p_campagne: null })
+          p_date_from: state.period.from, p_date_to: state.period.to,
+          p_campagne: null, p_site_ids: ids.length ? ids : null })
       ]);
       if (c.error) throw c.error;
       if (v.error) throw v.error;
@@ -3801,6 +3970,7 @@ function chargerSection() {
   ensureSites();
   const V = state.v2 || {};
   if (V.vue === 'campagnes') { ensureCampagnes(); return; }
+  if (V.vue === 'rapport') ensureReactivite();
   // ⚠️ Le mur et le rapport lisent les leads de TOUT le périmètre : un
   //    manager doit voir ceux de ses vendeurs, pas seulement les siens.
   state.mafileCible = (PROFIL === 'vendeur') ? userId : null;
